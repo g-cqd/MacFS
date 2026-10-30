@@ -42,11 +42,11 @@ let package = Package(
     targets: [
         // The format-specific kernel (NTFS fixups) in arm64 assembly, with a portable C version that doubles as the test
         // reference, and the device ioctls. CRC-32C, bit counts and UTF-16 narrowing come from aemi's kernels (ADR-0012).
-        .target(name: "CFSKernels"),
+        .target(name: "CFSKernels", linkerSettings: [.linkedLibrary("z")]),
         .target(
             name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO], swiftSettings: readerSettings
         ),
-        .target(name: "Btrfs", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
+        .target(name: "Btrfs", dependencies: ["FSCore", "CFSKernels", aemiKernel], swiftSettings: readerSettings),
         .target(name: "NTFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         .target(name: "ExtFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         // The one list of formats every mount technology, the app and fsprobe share.
@@ -62,7 +62,7 @@ let package = Package(
             name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", aemiTestKit], swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
-        .testTarget(name: "BtrfsTests", dependencies: ["Btrfs", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", aemiTestKit], swiftSettings: strictSettings),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),

@@ -11,6 +11,8 @@ public final class FileBlockSource: BlockSource {
     public var byteCount: UInt64 { reader.byteCount }
     public var alignment: Int { reader.alignment }
     private let reader: AlignedReader
+    /// Image files (alignment 1) are read straight into the caller's memory; devices go through the aligned reader.
+    private let direct: PosixFile?
 
     /// Opens `path` read-only.
     public convenience init(path: String) throws(DiskError) {
@@ -33,8 +35,10 @@ public final class FileBlockSource: BlockSource {
                 let size = blockCount.checkedMultiplied(by: UInt64(blockSize))
             else { throw .io(errno: errno, "device geometry") }
             reader = AlignedReader(byteCount: size, alignment: Int(blockSize), raw: Self.transfer(file))
+            direct = nil
         } else {
             reader = AlignedReader(byteCount: UInt64(max(0, info.st_size)), alignment: 1, raw: Self.transfer(file))
+            direct = file
         }
     }
 
@@ -56,5 +60,19 @@ public final class FileBlockSource: BlockSource {
 
     public func read(at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
         try reader.read(at: offset, count: count)
+    }
+
+    public func read(at offset: UInt64, into buffer: UnsafeMutableRawBufferPointer) throws(DiskError) {
+        guard let direct else {
+            let bytes = try reader.read(at: offset, count: buffer.count)
+            bytes.withUnsafeBytes { unsafe buffer.copyMemory(from: $0) }
+            return
+        }
+        guard offset <= byteCount, UInt64(buffer.count) <= byteCount - offset else {
+            throw .corrupt("read of \(buffer.count) bytes at \(offset) past the end (\(byteCount))")
+        }
+        do throws(IOError) { try unsafe direct.pread(into: buffer, at: Int(offset)) } catch {
+            throw .io(errno: error.errno, "pread \(buffer.count) at \(offset)")
+        }
     }
 }

@@ -39,40 +39,43 @@ extension BtrfsFileSystem {
         guard attributes.kind != .directory else { throw .isDirectory }
         guard offset < attributes.size, count > 0 else { return [] }
         let end = min(attributes.size, offset + UInt64(count))
-        var output = [UInt8](repeating: 0, count: Int(end - offset))
-        for extent in try extents(id) where extent.end > offset && extent.fileOffset < end {
-            let from = max(offset, extent.fileOffset)
-            let to = min(end, extent.end)
-            let within = from - extent.fileOffset
-            let span = Int(to - from)
-            let target = Int(from - offset)
-            switch extent.storage {
-                case .preallocated:
-                    continue
-                case .regular(let address, _, let start) where extent.compression == 0:
-                    if address == 0 { continue }  // a hole
-                    let logical = address + start + within
-                    let bytes = try trees.source.read(
-                        at: try trees.chunks.physical(logical, length: UInt64(span)), count: span)
-                    output.replaceSubrange(target ..< (target + span), with: bytes)
-                case .regular(_, _, let start):
-                    let data = try decoded(extent)
-                    try copy(data, from: Int(start + within), count: span, into: &output, at: target)
-                case .inline:
-                    try copy(try decoded(extent), from: Int(within), count: span, into: &output, at: target)
+        let extents = try extents(id)
+        // Plain extents straight from the volume into the result, decoded ones copied in; holes and preallocated ranges
+        // stay zero (ReadAssembly).
+        return try ReadAssembly.assemble(count: Int(end - offset)) { (pieces) throws(DiskError) in
+            for extent in extents where extent.end > offset && extent.fileOffset < end {
+                let from = max(offset, extent.fileOffset)
+                let to = min(end, extent.end)
+                let within = from - extent.fileOffset
+                let span = Int(to - from)
+                let target = Int(from - offset)
+                switch extent.storage {
+                    case .preallocated:
+                        continue
+                    case .regular(let address, _, let start) where extent.compression == 0:
+                        if address == 0 { continue }  // a hole
+                        let logical = address + start + within
+                        try pieces.read(
+                            trees.source, at: try trees.chunks.physical(logical, length: UInt64(span)), to: target,
+                            count: span)
+                    case .regular(_, _, let start):
+                        try Self.copy(
+                            try decoded(extent), from: Int(start + within), count: span, into: &pieces, at: target)
+                    case .inline:
+                        try Self.copy(try decoded(extent), from: Int(within), count: span, into: &pieces, at: target)
+                }
             }
         }
-        return output
     }
 
-    private func copy(_ data: [UInt8], from: Int, count: Int, into output: inout [UInt8], at target: Int)
-        throws(DiskError)
-    {
+    private static func copy(
+        _ data: [UInt8], from: Int, count: Int, into pieces: inout ReadAssembly.Pieces, at target: Int
+    ) throws(DiskError) {
         guard from >= 0, from <= data.count else {
             throw .corrupt("extent offset \(from) past its \(data.count) bytes")
         }
         let available = min(count, data.count - from)
-        output.replaceSubrange(target ..< (target + available), with: data[from ..< (from + available)])
+        try pieces.copy(data[from ..< (from + available)], to: target)
     }
 
     public func readLink(_ id: UInt64) throws(DiskError) -> [UInt8] {

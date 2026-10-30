@@ -39,16 +39,17 @@ extension ExtFileSystem {
             return output
         }
         let blockSize = UInt64(superblock.blockSize)
-        var output = [UInt8](repeating: 0, count: Int(end - offset))
-        for run in try runs(inode) {
-            let from = max(offset, run.logical * blockSize)
-            let to = min(end, run.end * blockSize)
-            guard from < to, let physical = run.physical else { continue }
-            let byte = physical * blockSize + (from - run.logical * blockSize)
-            let span = Int(to - from)
-            let bytes = try source.read(at: byte, count: span)
-            let target = Int(from - offset)
-            output.replaceSubrange(target ..< (target + span), with: bytes)
+        let runs = try runs(inode)
+        let source = source
+        // Each run straight from the image into the result; holes and unwritten extents stay zero (ReadAssembly).
+        let output = try ReadAssembly.assemble(count: Int(end - offset)) { (pieces) throws(DiskError) in
+            for run in runs {
+                let from = max(offset, run.logical * blockSize)
+                let to = min(end, run.end * blockSize)
+                guard from < to, let physical = run.physical else { continue }
+                let byte = physical * blockSize + (from - run.logical * blockSize)
+                try pieces.read(source, at: byte, to: Int(from - offset), count: Int(to - from))
+            }
         }
         return output
     }

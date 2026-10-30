@@ -46,26 +46,26 @@ struct NTFSStream: Sendable {
         guard offset < size, count > 0 else { return [] }
         let end = min(size, offset + UInt64(count))
         if let resident { return try resident.bytes(Int(offset), Int(end - offset)) }
-        var output = [UInt8](repeating: 0, count: Int(end - offset))
         let cluster = UInt64(clusterSize)
-        var position = offset
         let readable = min(end, initialized)
-        while position < readable {
-            let vcn = position / cluster
-            let run = try self.run(containing: vcn)
-            let runEnd = min(readable, (run.vcn + run.length) * cluster)
-            let span = Int(runEnd - position)
-            if let lcn = run.cluster {
-                guard let physical = (lcn + vcn - run.vcn).checkedMultiplied(by: cluster) else {
-                    throw .corrupt("cluster \(lcn)")
+        // Each run straight from the volume into the result; sparse runs and the uninitialized tail stay zero.
+        return try ReadAssembly.assemble(count: Int(end - offset)) { (pieces) throws(DiskError) in
+            var position = offset
+            while position < readable {
+                let vcn = position / cluster
+                let run = try self.run(containing: vcn)
+                let runEnd = min(readable, (run.vcn + run.length) * cluster)
+                if let lcn = run.cluster {
+                    guard let physical = (lcn + vcn - run.vcn).checkedMultiplied(by: cluster) else {
+                        throw .corrupt("cluster \(lcn)")
+                    }
+                    try pieces.read(
+                        source, at: physical + position % cluster, to: Int(position - offset),
+                        count: Int(runEnd - position))
                 }
-                let bytes = try source.read(at: physical + position % cluster, count: span)
-                let target = Int(position - offset)
-                output.replaceSubrange(target ..< (target + span), with: bytes)
+                position = runEnd
             }
-            position = runEnd
         }
-        return output
     }
 
     private func run(containing vcn: UInt64) throws(DiskError) -> DataRun {

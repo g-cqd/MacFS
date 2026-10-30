@@ -1,3 +1,4 @@
+import CFSKernels
 import Compression
 import FSCore
 
@@ -14,17 +15,19 @@ enum BtrfsCompression {
         }
     }
 
-    /// One zlib stream. Apple's `COMPRESSION_ZLIB` is raw DEFLATE, so the two-byte zlib header is
-    /// checked and skipped; the Adler-32 trailer is left unread.
+    /// One zlib stream, as Linux reads it (fs/btrfs/zlib.c): the two-byte header checked and skipped, the rest raw DEFLATE
+    /// through the system libz, the Adler-32 trailer not read. libz decodes at twice the rate of Compression.framework here.
     private static func zlib(_ input: [UInt8], size: Int) throws(DiskError) -> [UInt8] {
         guard input.count > 2, input[0] & 0x0F == 8, (UInt16(input[0]) << 8 | UInt16(input[1])) % 31 == 0,
             input[1] & 0x20 == 0
         else { throw .corrupt("zlib extent without a zlib header") }
         var output = [UInt8](repeating: 0, count: size)
-        let produced = unsafe BufferPair.withBases(input, &output) { from, into in
-            unsafe compression_decode_buffer(into, size, from + 2, input.count - 2, nil, COMPRESSION_ZLIB)
+        guard size > 0 else { return output }
+        var produced = 0
+        let status = unsafe BufferPair.withBases(input, &output) { from, into in
+            Int(unsafe fsk_zlib_inflate(from + 2, input.count - 2, into, size, &produced))
         }
-        guard produced <= size else { throw .corrupt("zlib produced more than it was given room for") }
+        guard status == 0 else { throw .corrupt(status == -2 ? "zlib extent ends early" : "malformed zlib extent") }
         // A short result is legal: the tail of a compressed extent past the data is zero.
         return output
     }
@@ -35,21 +38,36 @@ enum BtrfsCompression {
         let bytes = DiskBytes(input)
         let total = Int(try bytes.u32(0))
         guard total <= input.count, total >= 4 else { throw .corrupt("lzo extent of \(total) bytes in \(input.count)") }
-        var output: [UInt8] = []
-        output.reserveCapacity(size)
+        // Every segment decoded in place into one zeroed extent (no copy per sector); what no segment covers stays zero.
+        var output = [UInt8](repeating: 0, count: size)
+        var produced = 0
         var cursor = 4
-        while cursor < total, output.count < size {
+        while cursor < total, produced < size {
             let inSector = sectorSize - cursor % sectorSize
             if inSector < 4 { cursor += inSector }
             guard cursor + 4 <= total else { break }
             let length = Int(try bytes.u32(cursor))
             cursor += 4
             guard length > 0, length <= total - cursor else { throw .corrupt("lzo segment of \(length) bytes") }
-            let segment = try bytes.bytes(cursor, length)
-            output += try LZO1X.decompress(segment, capacity: min(sectorSize, size - output.count))
+            let room = min(sectorSize, size - produced)
+            var failure: DiskError?
+            let start = cursor
+            let decoded = input.withUnsafeBufferPointer { source in
+                output.withUnsafeMutableBufferPointer { target -> Int in
+                    do throws(DiskError) {
+                        return try unsafe LZO1X.decompress(
+                            UnsafeBufferPointer(rebasing: source[start ..< start + length]),
+                            into: UnsafeMutableBufferPointer(rebasing: target[produced ..< produced + room]))
+                    } catch {
+                        failure = error
+                        return 0
+                    }
+                }
+            }
+            if let failure { throw failure }
+            produced += decoded
             cursor += length
         }
-        if output.count < size { output += [UInt8](repeating: 0, count: size - output.count) }
         return output
     }
 }
