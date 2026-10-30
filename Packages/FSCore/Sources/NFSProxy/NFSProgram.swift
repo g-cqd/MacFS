@@ -84,7 +84,7 @@ struct NFSProgram {
                     entry = tree.parentMountID(of: try tree.fileSystem.attributes(of: tree.readerID(for: directory)))
                 default:
                     entry = try tree.checkedMountID(
-                        for: try tree.fileSystem.lookup(name, in: tree.readerID(for: directory)).id)
+                        for: try tree.fileSystem.lookupCanonical(name, in: tree.readerID(for: directory)).id)
             }
             let target = entry == MountedTree.parentOfRoot ? MountedTree.root : entry
             results.u32(NFSStatus.ok)

@@ -2,7 +2,7 @@ import Formats
 import Foundation
 import ToolingCore
 
-// macfs-tool <images|gates|plists|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus]
+// macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus]
 // The command plugins call this; it can also be run directly with `swift run macfs-tool`.
 
 struct Options {
@@ -62,9 +62,46 @@ func plists(_ options: Options) throws -> Int32 {
     return options.check && drifted ? 1 : 0
 }
 
+/// Every test image through its FSKit module (roadmap 0025). Needs the app in /Applications with its modules enabled.
+func mounts(_ options: Options) -> Int32 {
+    if options.dryRun {
+        for target in MountCheck.targets {
+            print(
+                "TestImages/\(target.image).img: attach, mount -F -t \(target.type), compare, refuse a write, release")
+        }
+        return 0
+    }
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent("macfs-mounts-\(getpid())").path
+    let check = MountCheck(
+        runner: SystemProcessRunner(capture: true), root: options.root,
+        mountPoint: { target in
+            let point = base + "/" + target.image
+            try? FileManager.default.createDirectory(atPath: point, withIntermediateDirectories: true)
+            return point
+        },
+        compare: { point, manifest, extra in
+            try TreeComparison.problems(
+                root: point, manifest: try String(contentsOfFile: manifest, encoding: .utf8), extra: extra)
+        },
+        writeRefused: MountCheck.refusesWrites(at:))
+    var failed = false
+    for target in MountCheck.targets {
+        let outcome = check.run(target)
+        if outcome.problems.isEmpty {
+            print("[OK]   \(target.image) (\(target.type))")
+        } else {
+            failed = true
+            print("[FAIL] \(target.image) (\(target.type))")
+            outcome.problems.prefix(10).forEach { print("       \($0)") }
+        }
+    }
+    try? FileManager.default.removeItem(atPath: base)
+    return failed ? 1 : 0
+}
+
 func main() -> Int32 {
     guard let options = parse(Array(CommandLine.arguments.dropFirst())) else {
-        print("usage: macfs-tool <images|gates|plists|summary> [--root DIR] [--dry-run] [--check]")
+        print("usage: macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check]")
         return 64
     }
     do {
@@ -85,6 +122,8 @@ func main() -> Int32 {
                     Gates.plan(root: options.root, tools: try locator().gatePaths()), dryRun: options.dryRun)
             case "plists":
                 return try plists(options)
+            case "mounts":
+                return mounts(options)
             case "summary":
                 let input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
                 TestSummary.reduce(input).forEach { print($0) }

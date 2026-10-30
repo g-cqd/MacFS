@@ -21,7 +21,8 @@ let package = Package(
         .executable(name: "macfs-tool", targets: ["macfs-tool"]),
         .plugin(name: "Images", targets: ["Images"]),
         .plugin(name: "Gates", targets: ["Gates"]),
-        .plugin(name: "Plists", targets: ["Plists"])
+        .plugin(name: "Plists", targets: ["Plists"]),
+        .plugin(name: "Mounts", targets: ["Mounts"])
     ],
     dependencies: [
         .package(path: "../FSCore"),
@@ -53,6 +54,13 @@ let package = Package(
             capability: .command(
                 intent: .custom(verb: "plists", description: "Write or check the FSKit modules' Info.plists"),
                 permissions: [.writeToPackageDirectory(reason: "Write Extensions/*/Info.plist from DiskFormat")]),
+            dependencies: ["macfs-tool"]),
+        .plugin(
+            name: "Mounts",
+            capability: .command(
+                intent: .custom(
+                    verb: "mounts",
+                    description: "Mount every test image through its FSKit module and compare it with its manifest")),
             dependencies: ["macfs-tool"])
     ]
 )

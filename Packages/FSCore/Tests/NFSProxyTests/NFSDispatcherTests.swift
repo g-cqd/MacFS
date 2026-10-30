@@ -46,6 +46,26 @@ import Testing
         #expect(attributes.fileID == 2, "the root is mount identifier 2")
     }
 
+    /// The macOS NFS client passes names as Cocoa gave them, decomposed: they find the precomposed name stored (roadmap 0022).
+    @Test mutating func aDecomposedNameFindsTheStoredOne() throws {
+        var fileSystem = InMemoryFileSystem(root: 5, files: 0)
+        fileSystem.nodes[5]?.children.append(("na\u{EF}ve.txt", 3000))
+        fileSystem.nodes[3000] = InMemoryFileSystem.Node(
+            attributes: NodeAttributes(id: 3000, parent: 5, kind: .regular))
+        let dispatcher = NFSDispatcher(tree: try MountedTree(fileSystem), owner: (uid: 501, gid: 20))
+        let call = client.call(RPCClient.mount, 3, 1) { $0.string("/") }
+        var mount = try client.reply(dispatcher.handle(call))
+        _ = try mount.results.u32()
+        let root = try mount.results.opaque(maximum: 64)
+        var lookup = try client.reply(
+            dispatcher.handle(
+                client.call(RPCClient.nfs, 3, 3) {
+                    $0.opaque(root)
+                    $0.string("nai\u{308}ve.txt")
+                }))
+        #expect(try lookup.results.u32() == 0, "NFS3_OK")
+    }
+
     @Test mutating func lookupThenReadReturnsTheContentAndEOF() throws {
         let root = try rootHandle()
         var lookup = try client.reply(

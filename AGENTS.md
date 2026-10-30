@@ -14,6 +14,7 @@ swift test --package-path Packages/FSCore                                       
 swift test --package-path Packages/Tooling                                        # tooling, documentation law, source structure
 swift package --package-path Packages/Tooling --disable-sandbox gates [--dry-run] # every static gate (see below)
 swift package --package-path Packages/Tooling --disable-sandbox plists [--check]  # FSKit Info.plists from DiskFormat
+swift package --package-path Packages/Tooling --disable-sandbox mounts [--dry-run] # every image through its installed module
 swift package --package-path Packages/FSCore --disable-sandbox --allow-writing-to-package-directory format   # Aemi's formatter
 MACFS_DEV=1 swift run --package-path Packages/FSCore -c release fskbench            # kernels against C baselines
 swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img    # NFS proxy; prints the mount command
@@ -59,6 +60,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **e2fsck's "exit status 0" includes repairs**: a clean e2fsprogs image is one whose expected output is only the passes.
 - **Install only after the Release build's exit status is 0**: Release turns some Debug warnings into errors, and a failed build
   leaves the previous one in the derived-data folder, ready to be installed by mistake.
+- **The first mount right after reinstalling may fail**: the module process is still starting. Run `mounts` again.
+- **Python's byte paths hide normalization bugs**; Cocoa asks in NFD. Compare through `FileManager`, as `mounts` does.
 - **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
@@ -68,5 +71,5 @@ Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, signed FSKit 
 the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the art (0011, 0012, 0029, 0030; ADR-0012), checksums
 everywhere (0015), conformance against the reference implementations and suites (docs/conformance), readers at the native baseline,
 and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
-Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Next by value: 0025 (the mount check as a plugin),
-0016 (htree), 0014 (LZNT1, unblocked), 0031 (XFS). Read each entry's `status:` and `blocked-by:` before starting it.
+Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
+`mounts` checks every image end to end (0025). Next by value: 0016 (htree), 0014 (LZNT1, unblocked), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.

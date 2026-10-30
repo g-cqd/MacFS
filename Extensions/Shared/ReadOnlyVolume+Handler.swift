@@ -81,7 +81,7 @@ extension ReadOnlyVolume: FSVolume.Handler {
         _ make: (FSItem, FSFileName, FSItem.Attributes) -> T?
     ) {
         answer(directory, reply, "lookup") { (directory) throws(DiskError) -> T? in
-            let entry = try tree.fileSystem.lookup(Array(name.data), in: tree.readerID(for: directory.mountID))
+            let entry = try tree.fileSystem.lookupCanonical(Array(name.data), in: tree.readerID(for: directory.mountID))
             let mountID = try tree.checkedMountID(for: entry.id)
             return make(item(mountID), FSFileName(data: Data(entry.name)), try attributes(mountID))
         }
