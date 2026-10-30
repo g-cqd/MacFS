@@ -66,7 +66,9 @@ let package = Package(
             name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", aemiTestKit], swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
-        .testTarget(name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", aemiTestKit], swiftSettings: strictSettings),
+        .testTarget(
+            name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", "CFSKernels", aemiTestKit],
+            swiftSettings: strictSettings),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore", "CFSKernels"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),

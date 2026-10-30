@@ -65,6 +65,13 @@ enum BtrfsCompression {
                 }
             }
             if let failure { throw failure }
+            // Past a short segment's output the kernel's word moves may have left bytes; what no segment covers is zero.
+            if decoded < room {
+                output.withUnsafeMutableBufferPointer { target in
+                    unsafe UnsafeMutableBufferPointer(rebasing: target[produced + decoded ..< produced + room])
+                        .update(repeating: 0)
+                }
+            }
             produced += decoded
             cursor += length
         }

@@ -45,3 +45,6 @@ per-item lookup and attributes, not data, and remains below Apple's module (72,2
 NTFS LZNT1 (roadmap 0014; docs/research/2026-10-30-compression-kernels.md): text 3,340 MB/s, incompressible 13,400 MB/s through
 the reader; the arm64 kernel alone decodes 4,170 MB/s, 3 times its C version at -O3. There is no system LZNT1 codec on macOS to
 hold it to; ntfs-3g's decoder is byte-wise, as the C reference is.
+
+Btrfs LZO through the arm64 LZO1X kernel: text 2,725 MB/s (1,764 with the Swift decoder; liblzo2 decodes 2,261 on the same
+segments, the kernel alone 3,475).

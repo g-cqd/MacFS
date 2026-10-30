@@ -1,4 +1,4 @@
-// arm64 kernels for fskernels.h: the NTFS update sequence ("fixups") and LZNT1 decompression, format-specific, so it stays here while the generic
+// arm64 kernels for fskernels.h: the NTFS update sequence ("fixups"), LZNT1 and LZO1X decompression, format-specific, so it stays here while the generic
 // kernels (CRC-32C, bit counts, UTF-16 narrowing) come from aemi (ADR-0012). Apple arm64 ABI: arguments in x0..x7, x18 is
 // reserved and never touched, only caller-saved registers are used, so no frame is needed. kernels_portable.c holds the C
 // version, the test reference and the non-arm64 build.
@@ -311,6 +311,254 @@ Lz_done:
     ret
 Lz_bad:
     mov     w0, #-1
+    ret
+
+// int64_t fsk_lzo1x_decompress(const uint8_t *source, size_t count, uint8_t *target, size_t capacity)
+//   x0 input cursor, x1 input end, x2 target, x3 target end, x4 output cursor, x5 state (literals after the last match, or
+//   4 after a literal run), x6 instruction, x7 a count, x9 a distance, x10 the literals following a match; x17 holds the
+//   caller's return address so the copies can be subroutines (bl/ret); x8, x11..x13 are scratch. Same results as
+//   fsk_ref_lzo1x_decompress, with every bound it checks: literals up to 16 as one 16-byte move when 16 bytes of input and of
+//   room remain, longer runs in 16-byte blocks; matches 16 or more back in 16-byte moves and 8 to 15 back in 8-byte ones
+//   (each reads only bytes already final) when the room past the match takes the last move's overrun; and the common M2
+//   instruction inline (docs/research/2026-10-30-compression-kernels.md).
+.globl _fsk_lzo1x_decompress
+.p2align 4
+_fsk_lzo1x_decompress:
+    mov     x17, x30
+    add     x1, x0, x1
+    add     x3, x2, x3
+    mov     x4, x2
+    mov     x5, #0
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w6, [x0], #1
+    cmp     w6, #17
+    b.ls    Lo_loop
+    sub     x7, x6, #17             // a first literal run
+    bl      Lo_literals
+    cmp     x7, #4
+    mov     x5, #4
+    csel    x5, x7, x5, lo
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w6, [x0], #1
+Lo_loop:
+    // The fast M2: the instruction text is made of (a 3 to 8 byte match at least 8 back, then 0 to 3 literals). With 8 bytes
+    // of input (the match's byte, the literals, the next instruction) and 16 of room, no bound can fail but the distance:
+    // one 8-byte move for the match, one 4-byte move for the literals, no calls.
+    cmp     w6, #64
+    b.lo    Lo_dispatch
+    sub     x8, x1, x0
+    cmp     x8, #8
+    b.lo    Lo_dispatch
+    sub     x8, x3, x4
+    cmp     x8, #16
+    b.lo    Lo_dispatch
+    ldrb    w11, [x0], #1
+    ubfx    x9, x6, #2, #3
+    add     x9, x9, x11, lsl #3
+    add     x9, x9, #1              // distance
+    sub     x8, x4, x2
+    cmp     x9, x8
+    b.hi    Lo_bad                  // before the start
+    cmp     x9, #8
+    b.lo    Lo_m2_near
+    sub     x12, x4, x9
+    ldr     x8, [x12]
+    str     x8, [x4]
+    lsr     x7, x6, #5
+    add     x7, x7, #1
+    add     x4, x4, x7
+    and     x5, x6, #3              // the literals after it, and the next state
+    ldr     w8, [x0]
+    str     w8, [x4]
+    add     x0, x0, x5
+    add     x4, x4, x5
+    ldrb    w6, [x0], #1
+    b       Lo_loop
+Lo_m2_near:
+    lsr     x7, x6, #5              // fewer than 8 back: the checked copy
+    add     x7, x7, #1
+    and     x10, x6, #3
+    bl      Lo_match
+    b       Lo_tail
+Lo_dispatch:
+    mov     x10, #0
+    cmp     w6, #16
+    b.hs    Lo_ge16
+    cbnz    x5, Lo_short
+    mov     x7, x6                  // a literal run: 3 + the count, or an extended one
+    cbnz    x7, 1f
+    mov     x7, #15
+    bl      Lo_extended
+1:  add     x7, x7, #3
+    bl      Lo_literals
+    mov     x5, #4
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w6, [x0], #1
+    b       Lo_loop
+Lo_short:
+    and     x10, x6, #3             // a 2-byte match (3 after a literal run), from the instruction and one byte
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w11, [x0], #1
+    lsr     x9, x6, #2
+    add     x9, x9, x11, lsl #2
+    add     x9, x9, #1
+    mov     x7, #2
+    cmp     x5, #4
+    b.ne    1f
+    add     x9, x9, #0x800
+    mov     x7, #3
+1:  bl      Lo_match
+    b       Lo_tail
+Lo_ge16:
+    cmp     w6, #64
+    b.lo    Lo_lt64
+    and     x10, x6, #3             // M2: 3 to 8 bytes, up to 2 KiB back
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w11, [x0], #1
+    ubfx    x9, x6, #2, #3
+    add     x9, x9, x11, lsl #3
+    add     x9, x9, #1
+    lsr     x7, x6, #5
+    add     x7, x7, #1
+    bl      Lo_match
+    b       Lo_tail
+Lo_lt64:
+    cmp     w6, #32
+    b.lo    Lo_far
+    and     x7, x6, #31             // M3: up to 16 KiB back
+    cbnz    x7, 1f
+    mov     x7, #31
+    bl      Lo_extended
+1:  sub     x8, x1, x0
+    cmp     x8, #2
+    b.lo    Lo_bad
+    ldrh    w11, [x0], #2
+    and     x10, x11, #3
+    lsr     x9, x11, #2
+    add     x9, x9, #1
+    add     x7, x7, #2
+    bl      Lo_match
+    b       Lo_tail
+Lo_far:
+    and     x7, x6, #7              // M4: 16 to 48 KiB back, or the end marker
+    cbnz    x7, 1f
+    mov     x7, #7
+    bl      Lo_extended
+1:  sub     x8, x1, x0
+    cmp     x8, #2
+    b.lo    Lo_bad
+    ldrh    w11, [x0], #2
+    and     x10, x11, #3
+    and     x9, x6, #8
+    lsl     x9, x9, #11
+    add     x9, x9, x11, lsr #2
+    cbz     x9, Lo_end
+    add     x9, x9, #0x4000
+    add     x7, x7, #2
+    bl      Lo_match
+Lo_tail:
+    mov     x5, x10                 // 0 to 3 literals after the match
+    mov     x7, x10
+    bl      Lo_literals
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w6, [x0], #1
+    b       Lo_loop
+Lo_end:
+    sub     x0, x4, x2
+    ret     x17
+Lo_bad:
+    mov     x0, #-1
+    ret     x17
+
+// x7 bytes from the input; x8, x11, x12 scratch.
+Lo_literals:
+    cbz     x7, 9f
+    sub     x11, x3, x4
+    cmp     x7, x11
+    b.hi    Lo_bad                  // past the capacity
+    sub     x8, x1, x0
+    cmp     x7, x8
+    b.hi    Lo_bad                  // past the input
+    cmp     x7, #16
+    b.hi    2f
+    cmp     x8, #16
+    b.lo    4f
+    cmp     x11, #16
+    b.lo    4f
+    ldr     q0, [x0]
+    str     q0, [x4]
+    add     x0, x0, x7
+    add     x4, x4, x7
+9:  ret
+2:  mov     x12, x7                 // longer: 16-byte blocks, then bytes
+3:  cmp     x12, #16
+    b.lo    5f
+    ldr     q0, [x0], #16
+    str     q0, [x4], #16
+    sub     x12, x12, #16
+    b       3b
+4:  mov     x12, x7
+5:  cbz     x12, 9b
+    ldrb    w8, [x0], #1
+    strb    w8, [x4], #1
+    sub     x12, x12, #1
+    b       5b
+
+// x7 bytes from x9 back; x8, x11..x13 scratch.
+Lo_match:
+    sub     x8, x4, x2
+    cmp     x9, x8
+    b.hi    Lo_bad                  // before the start
+    sub     x11, x3, x4
+    cmp     x7, x11
+    b.hi    Lo_bad                  // past the capacity
+    sub     x12, x4, x9             // from
+    add     x13, x4, x7             // the match's end
+    sub     x11, x11, x7            // room past it
+    cmp     x9, #16
+    b.lo    2f
+    cmp     x11, #16
+    b.lo    4f
+1:  ldr     q0, [x12], #16
+    str     q0, [x4], #16
+    cmp     x4, x13
+    b.lo    1b
+    mov     x4, x13
+    ret
+2:  cmp     x9, #8
+    b.lo    4f
+    cmp     x11, #8
+    b.lo    4f
+3:  ldr     x8, [x12], #8
+    str     x8, [x4], #8
+    cmp     x4, x13
+    b.lo    3b
+    mov     x4, x13
+    ret
+4:  ldrb    w8, [x12], #1
+    strb    w8, [x4], #1
+    cmp     x4, x13
+    b.lo    4b
+    ret
+
+// A length continued by zero bytes, each worth 255, then one non-zero byte: x7 the base in, the length out.
+Lo_extended:
+    cmp     x0, x1
+    b.hs    Lo_bad
+    ldrb    w8, [x0], #1
+    cbnz    w8, 1f
+    add     x7, x7, #255
+    mov     x8, #0x1000000
+    cmp     x7, x8
+    b.hs    Lo_bad
+    b       Lo_extended
+1:  add     x7, x7, x8
     ret
 
 #endif

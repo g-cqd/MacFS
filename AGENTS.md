@@ -81,5 +81,5 @@ everywhere (0015), conformance against the reference implementations and suites 
 and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
-NTFS reads LZNT1 through an arm64 kernel (0014). Next by value: compression kernels for LZO and
-zlib (docs/research/2026-10-30-compression-kernels.md), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.
+NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014; docs/research/2026-10-30-compression-kernels.md).
+Next by value: 0031 (XFS), 0013 (zstd), an inflate kernel (zlib is the system's libz today). Read each entry's `status:` and `blocked-by:` before starting it.

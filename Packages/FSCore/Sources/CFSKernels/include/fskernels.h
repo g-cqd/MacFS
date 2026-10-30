@@ -30,6 +30,13 @@ int32_t fsk_ntfs_apply_fixups(uint8_t *_Nonnull record, size_t size, size_t stri
 /// past the chunk's input. The arm64 kernel and the portable C one (`fsk_ref_lznt1_decompress`) agree byte for byte.
 int32_t fsk_lznt1_decompress(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity);
 
+/// Decodes one LZO1X stream (as Linux's `lzo1x_decompress_safe`; Btrfs LZO segments) from `source[0..<count]` into
+/// `target[0..<capacity]`. Returns the number of bytes decoded, or -1 when the stream is malformed, ends early, or would write
+/// past `capacity` or copy from before the start. Bytes of `target` past the returned count are unspecified (the kernel's
+/// word moves may run past a copy, never past `capacity`). The arm64 kernel and `fsk_ref_lzo1x_decompress` agree on every
+/// result and every byte up to it.
+int64_t fsk_lzo1x_decompress(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity);
+
 /// Inflates raw DEFLATE (`source[0..<count]`, after a zlib header the caller has checked) into `target[0..<capacity]`
 /// through the system libz; `*produced` is the number of bytes written. Returns 0 when the stream ended or the target is full,
 /// -2 when the input ended first, -1 on a malformed stream.

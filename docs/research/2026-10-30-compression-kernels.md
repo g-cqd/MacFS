@@ -29,10 +29,29 @@ arbitrary inputs decode identically in the kernel and the C reference (LZNT1Kern
 guard pages (GuardPageTests: the overrunning moves stop inside the chunk), and 28 mutants of the kernel, 26 killed and 2
 equivalent (a band boundary one position early only recomputes the same split).
 
+## LZO1X (Btrfs)
+
+Data: the bench text in 4 KiB segments compressed by liblzo2's `lzo1x_1` (as mkfs.btrfs writes them), 12,700 segments, 52 MB
+out. Mix: 99.9% of instructions are M2 matches (3 to 8 bytes, mean 6.9, 98% at least 16 back), each followed by 0 to 3
+literals (one, 88% of the time); literal runs are rare. The cost is per instruction.
+
+| Step | MB/s | Why |
+|---|---:|---|
+| liblzo2 `lzo1x_decompress_safe` (gcc -O2, Linux VM, same machine) | 2,261 | the codec bound used so far |
+| C reference (the Swift decoder ported byte for byte), clang -O3 | 2,740 | clang does as well as a first kernel |
+| arm64, the reference's structure with 16- and 8-byte copies as subroutines | 2,740 | **no gain**: calls, rechecked bounds and the dispatch dominate |
+| + M2 inline: 8 bytes of input and 16 of room checked once, one 8-byte and one 4-byte move | 3,475 | about 10 cycles an instruction down to 8 |
+
+Reader end to end (fsprobe, text): 1,764 MB/s with the Swift decoder, 2,725 with the kernel (+55%), above liblzo2's bare rate.
+What is left is the format's own chain: the next instruction's position depends on this one's literal count, a byte load away.
+
+Tests: liblzo2's streams decode to their originals and to the C reference; damaged, cut and too-small-room streams and
+arbitrary bytes give the same result and bytes in both, also flush against guard pages; built M2 streams at every distance to
+20, ending exactly at the capacity or overflowing it. 18 mutants of the kernel: 17 killed, 1 equivalent (the bound on an
+extended length's zero bytes: without it the input still runs out, and the result is the same refusal).
+
 ## Next, by the same method
 
-- **LZO1X (Btrfs)**: the Swift decoder reads 1,764 MB/s end to end; liblzo2 decodes 2,240 on the same segments. Its token loop
-  has the same shape (a state machine per instruction byte, short matches): the same three moves should apply.
 - **zlib (Btrfs)**: the system libz inflates at 1,428 MB/s, the reader 1,147. Inflate is Huffman decoding, latency-bound on the
   bit buffer; the known arm64 gains (Chromium's `inflate_fast` with 16-byte chunk copies and a 64-bit bit buffer) are a larger
   kernel. Measure the reader's 20% first.
