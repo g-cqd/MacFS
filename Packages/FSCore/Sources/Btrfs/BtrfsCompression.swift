@@ -21,11 +21,8 @@ enum BtrfsCompression {
             input[1] & 0x20 == 0
         else { throw .corrupt("zlib extent without a zlib header") }
         var output = [UInt8](repeating: 0, count: size)
-        let produced = output.withUnsafeMutableBufferPointer { target in
-            input.withUnsafeBufferPointer { source in
-                guard let into = target.baseAddress, let from = source.baseAddress else { return 0 }
-                return unsafe compression_decode_buffer(into, size, from + 2, source.count - 2, nil, COMPRESSION_ZLIB)
-            }
+        let produced = unsafe BufferPair.withBases(input, &output) { from, into in
+            unsafe compression_decode_buffer(into, size, from + 2, input.count - 2, nil, COMPRESSION_ZLIB)
         }
         guard produced <= size else { throw .corrupt("zlib produced more than it was given room for") }
         // A short result is legal: the tail of a compressed extent past the data is zero.

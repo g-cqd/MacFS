@@ -18,6 +18,8 @@ let readerSettings: [SwiftSetting] = strictSettings + [.strictMemorySafety()]
 
 let aemiKernel: Target.Dependency = .product(name: "AemiKernel", package: "aemi")
 let aemiIO: Target.Dependency = .product(name: "AemiIO", package: "aemi")
+let aemiKernels: Target.Dependency = .product(name: "AemiKernels", package: "aemi")
+let aemiTestKit: Target.Dependency = .product(name: "AemiTestKit", package: "aemi")
 
 let package = Package(
     name: "FSCore",
@@ -34,13 +36,16 @@ let package = Package(
         .executable(name: "fsprobe", targets: ["fsprobe"])
     ],
     dependencies: [
-        // Pinned to one revision, as AemiRegex and AemiJSON pin it (ADR-0004).
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "04e49d108e43a94fac449f344bfca9eabc5be0e9")
+        // Pinned to one revision, the one AemiRegex pins (ADR-0004).
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "2fbe4e417cca85876ffe6bd55241238a7a61443a")
     ],
     targets: [
-        // arm64 assembly (CRC, PMULL, NEON) with a portable C fallback that doubles as the test reference.
+        // The format-specific kernel (NTFS fixups) in arm64 assembly, with a portable C version that doubles as the test
+        // reference, and the device ioctls. CRC-32C, bit counts and UTF-16 narrowing come from aemi's kernels (ADR-0012).
         .target(name: "CFSKernels"),
-        .target(name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiIO], swiftSettings: readerSettings),
+        .target(
+            name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO], swiftSettings: readerSettings
+        ),
         .target(name: "Btrfs", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         .target(name: "NTFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         .target(name: "ExtFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
@@ -53,7 +58,8 @@ let package = Package(
         .executableTarget(
             name: "macfs-nfsd", dependencies: ["NFSProxy", "Formats", "FSCore"], swiftSettings: strictSettings),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
-        .testTarget(name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels"], swiftSettings: strictSettings),
+        .testTarget(
+            name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", aemiTestKit], swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
         .testTarget(name: "BtrfsTests", dependencies: ["Btrfs", "FSCore"], swiftSettings: strictSettings),
@@ -66,7 +72,7 @@ let package = Package(
     ]
 )
 
-// Kernel benchmarks against the best C baseline (docs/research/2026-10-30-neon-kernels.md), dev-only:
+// aemi's kernels against C baselines and MacFS's former assembly (docs/research/2026-10-30-neon-kernels.md), dev-only:
 //   MACFS_DEV=1 swift run -c release fskbench
 if Context.environment["MACFS_DEV"] != nil {
     package.targets += [
@@ -74,6 +80,7 @@ if Context.environment["MACFS_DEV"] != nil {
             name: "CFSKernelsBaseline", path: "Benchmarks/CFSKernelsBaseline",
             cSettings: [.unsafeFlags(["-O3", "-march=armv8.2-a+crc+crypto"])]),
         .executableTarget(
-            name: "fskbench", dependencies: ["CFSKernels", "CFSKernelsBaseline"], path: "Benchmarks/fskbench")
+            name: "fskbench", dependencies: ["CFSKernelsBaseline", aemiKernels],
+            path: "Benchmarks/fskbench")
     ]
 }

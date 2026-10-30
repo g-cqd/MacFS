@@ -2,13 +2,17 @@ import CFSKernels
 import FSCore
 import Testing
 
-// The arm64 kernels against the portable C reference (kernels_portable.c), which is compiled on
-// every target under the fsk_ref_ names. Lengths cover every tail shape and both fold tiers
-// (768 and 3072 bytes); misaligned starts cover the unaligned loads.
-@_silgen_name("fsk_ref_crc32c_update")
-func referenceCRC(_ crc: UInt32, _ bytes: UnsafePointer<UInt8>?, _ count: Int) -> UInt32
-@_silgen_name("fsk_ref_popcount")
-func referencePopcount(_ bytes: UnsafePointer<UInt8>?, _ count: Int) -> UInt64
+// FSCore's kernel wrappers against independent references: bitwise CRC-32C and `nonzeroBitCount` here, and for the NTFS
+// fixups (the one kernel MacFS keeps in assembly) the portable C version compiled on every target as fsk_ref_. The CRC lengths
+// cover every tail, the 256-byte fold and the 4 KiB chunks of aemi's kernel (ADR-0012); misaligned starts cover unaligned loads.
+func referenceCRC(_ crc: UInt32, _ bytes: ArraySlice<UInt8>) -> UInt32 {
+    var crc = crc
+    for byte in bytes {
+        crc ^= UInt32(byte)
+        for _ in 0 ..< 8 { crc = (crc >> 1) ^ (crc & 1 == 1 ? 0x82F6_3B78 : 0) }
+    }
+    return crc
+}
 @_silgen_name("fsk_ref_ntfs_apply_fixups")
 func referenceFixups(_ record: UnsafeMutablePointer<UInt8>, _ size: Int, _ stride: Int) -> Int32
 
@@ -27,12 +31,12 @@ struct SplitMix {
 @Suite struct KernelReferenceTests {
     @Test func crcMatchesTheReferenceAtEveryLengthAndOffset() {
         var random = SplitMix(state: 1)
-        let data = random.bytes(9000 + 16)
+        let data = random.bytes(16_384 + 16)
         for start in [0, 1, 3, 7] {
-            for length in Array(0 ... 1100) + [2047, 2048, 3071, 3072, 3073, 4064, 4096, 6144, 7000, 9000] {
+            for length in Array(0 ... 600) + [1023, 2047, 4064, 4095, 4096, 4097, 8192, 8448, 12_301, 16_352, 16_384] {
                 let slice = data[start ..< (start + length)]
                 let seed = UInt32(truncatingIfNeeded: random.next())
-                let expected = slice.withUnsafeBufferPointer { referenceCRC(seed, $0.baseAddress, $0.count) }
+                let expected = referenceCRC(seed, slice)
                 #expect(CRC32C.update(seed, slice) == expected, "length \(length) at offset \(start)")
             }
         }
@@ -48,7 +52,7 @@ struct SplitMix {
         var random = SplitMix(state: 2)
         for length in Array(0 ... 200) + [1023, 1024, 65_537] {
             let data = random.bytes(length)
-            let expected = data.withUnsafeBufferPointer { referencePopcount($0.baseAddress, $0.count) }
+            let expected = UInt64(data.reduce(0) { $0 + $1.nonzeroBitCount })
             #expect(BitCount.ones(in: data) == expected, "length \(length)")
         }
     }

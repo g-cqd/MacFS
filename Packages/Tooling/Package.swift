@@ -26,7 +26,7 @@ let package = Package(
     dependencies: [
         .package(path: "../FSCore"),
         // Pattern matching for the repository rules: the family's own engine, pinned like Aemi is pinned.
-        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "923d23f493a161ca8ca630e8b3f982c5fc2f69da")
+        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "d5bac1cf5c1f8da3fc143f2ea9cf97ae4c3f3cf8")
     ],
     targets: [
         .target(
