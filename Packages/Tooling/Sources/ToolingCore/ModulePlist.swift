@@ -37,6 +37,7 @@ public enum ModulePlist {
             "EXExtensionPointIdentifier": "com.apple.fskit.fsmodule",
             "FSShortName": format.shortName,
             "FSSupportsBlockResources": true,
+            "FSSupportsKernelOffloadedIO": true,
             "FSSupportsPathURLs": false,
             "FSSupportsGenericURLResources": false,
             "FSSupportsServerURLs": false,

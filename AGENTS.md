@@ -57,6 +57,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **A typed-throws closure passed to a `rethrows` API crashes Swift 6.4's SIL verifier** (`withUnsafeMutableBytes`): use an untyped one.
 - **A generic `some Collection` copy across modules is not specialized**: it went element by element (34 MB/s). Take concrete types.
 - **e2fsck's "exit status 0" includes repairs**: a clean e2fsprogs image is one whose expected output is only the passes.
+- **Install only after the Release build's exit status is 0**: Release turns some Debug warnings into errors, and a failed build
+  leaves the previous one in the derived-data folder, ready to be installed by mistake.
+- **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
@@ -64,5 +67,6 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, signed FSKit modules that mount and automount (0005, 0006, 0024),
 the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the art (0011, 0012, 0029, 0030; ADR-0012), checksums
 everywhere (0015), conformance against the reference implementations and suites (docs/conformance), readers at the native baseline,
-and a Settings window with a tested status check. Mounted volumes are below Apple's own FSKit module (docs/conformance/performance.md).
-Next by value: 0018 (kernel-offloaded I/O), 0031 (XFS), 0016 (htree), 0025 (the mount check as a plugin), 0014 (LZNT1, unblocked). Read each entry's `status:` and `blocked-by:` before starting it.
+and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
+Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Next by value: 0025 (the mount check as a plugin),
+0016 (htree), 0014 (LZNT1, unblocked), 0031 (XFS). Read each entry's `status:` and `blocked-by:` before starting it.

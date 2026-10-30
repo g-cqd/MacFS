@@ -86,6 +86,8 @@
 		<true/>
 		<key>FSSupportsGenericURLResources</key>
 		<false/>
+		<key>FSSupportsKernelOffloadedIO</key>
+		<true/>
 		<key>FSSupportsPathURLs</key>
 		<false/>
 		<key>FSSupportsServerURLs</key>

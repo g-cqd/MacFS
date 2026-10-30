@@ -37,3 +37,7 @@ extension. Median of five, warm.
 above it (tables above); the difference is the mount path. Apple's module lets the kernel read file blocks itself (FSKit's
 kernel-offloaded I/O), which MacFS's modules do not yet: roadmap 0018, now the first lever. For small files, the Btrfs module pays a
 tree lookup for each attribute request.
+
+With kernel-offloaded I/O (roadmap 0018), the same mounts read large files at 14,538 (ext4), 15,824 (NTFS) and 15,860 (Btrfs)
+MB/s: 93 to 101% of Apple's exFAT module. Small files are unchanged (68,908, 54,460, 48,902 nodes/s): the cost there is FSKit's
+per-item lookup and attributes, not data, and remains below Apple's module (72,277).

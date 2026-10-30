@@ -36,7 +36,7 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
         do throws(DiskError) {
             let fileSystem = try format.open(BlockDeviceSource(device))
             let tree = try MountedTree(fileSystem)
-            let volume = ReadOnlyVolume(tree: tree, shortName: format.shortName, log: log)
+            let volume = ReadOnlyVolume(tree: tree, shortName: format.shortName, log: log, device: device)
             self.volume = volume
             containerStatus = .ready
             log.info("loaded \(device.bsdName, privacy: .public): \(fileSystem.volume.label, privacy: .public)")

@@ -92,9 +92,23 @@ manifest /tmp/tree > ext4-gpt.manifest
 
 # NTFS: mkntfs, then ntfs-3g (the reference driver, through FUSE: the container runs with --cap-add ALL) copies the whole tree.
 [ -e /dev/fuse ] || mknod /dev/fuse c 10 229
-rm -f ntfs.img; truncate -s 64M ntfs.img
+# Filled with 0xAA before a quick format, which leaves free clusters as they were: a reader (or a block map) that shows bytes
+# past a stream's initialized size shows 0xAA, not the zeros ntfs-3g reads.
+rm -f ntfs.img; head -c 67108864 /dev/zero | tr '\0' '\252' > ntfs.img
 mkntfs -Q -q -F -L ntfs ntfs.img 2>/dev/null
-mkdir -p /mnt/ntfs && ntfs-3g ntfs.img /mnt/ntfs && cp -a /tmp/tree/. /mnt/ntfs/ && umount /mnt/ntfs
+# Plus a file extended past its data on the mount itself: ntfs-3g then leaves the stream's initialized size at the data, and
+# the rest must read as zero (a block map may not map past it, roadmap 0018). Only here: mke2fs -d with inline_data drops such
+# a file's trailing hole (docs/conformance/ext.md).
+head -c 100000 /dev/urandom > /tmp/initialized.bin
+mkdir -p /mnt/ntfs && ntfs-3g ntfs.img /mnt/ntfs && cp -a /tmp/tree/. /mnt/ntfs/
+cp /tmp/initialized.bin /mnt/ntfs/big/initialized.bin && truncate -s 300000 /mnt/ntfs/big/initialized.bin
+umount /mnt/ntfs
+# What Windows leaves after a preallocation: stale bytes in the last data cluster past the initialized size. Written over the
+# cluster's tail (ntfs-3g zero-pads it), so only a reader that honours the initialized size reads zeros there.
+lcn=$(ntfsinfo -v -F /big/initialized.bin ntfs.img 2>/dev/null | awk '$1 == "0x0" { print $2; exit }')
+cluster=$(ntfsinfo -m ntfs.img 2>/dev/null | awk -F: '/Cluster Size/ { gsub(/ /, "", $2); print $2; exit }')
+head -c 2400 /dev/zero | tr '\0' '\252' | dd of=ntfs.img bs=1 seek=$((lcn * cluster + 100000)) conv=notrunc 2>/dev/null
+cp /tmp/initialized.bin /tmp/tree/big/initialized.bin && truncate -s 300000 /tmp/tree/big/initialized.bin
 manifest /tmp/tree > ntfs.manifest
 
 # Reference manifests: each image as its reference implementation presents it (docs/conformance). The Linux kernel mounts ext,

@@ -35,15 +35,29 @@ extension BtrfsFileSystem {
         }
     }
 
-    public func read(_ id: UInt64, at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
-        // The inode item alone (size, mode, flags): attributes(of:) would also look up the parent, on every piece of a read.
+    /// What a read needs of an inode item: its kind, size, and whether its data has checksums.
+    struct InodeItem {
+        let kind: NodeKind
+        let size: UInt64
+        let verifiesData: Bool
+    }
+
+    func inodeItem(_ id: UInt64) throws(DiskError) -> InodeItem {
         let (tree, inode) = location(id)
         guard let item = try trees.item(root: try treeRoot(tree), BtrfsKey(inode, BtrfsItem.inode, 0)) else {
             throw .notFound
         }
-        guard NodeKind(posixMode: try item.u32(52)) != .directory else { throw .isDirectory }
-        let size = try item.u64(16)
-        let verifyData = try item.u64(64) & BtrfsItem.noDataChecksumFlag == 0
+        return InodeItem(
+            kind: NodeKind(posixMode: try item.u32(52)), size: try item.u64(16),
+            verifiesData: try item.u64(64) & BtrfsItem.noDataChecksumFlag == 0)
+    }
+
+    public func read(_ id: UInt64, at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
+        // The inode item alone (size, mode, flags): attributes(of:) would also look up the parent, on every piece of a read.
+        let item = try inodeItem(id)
+        guard item.kind != .directory else { throw .isDirectory }
+        let size = item.size
+        let verifyData = item.verifiesData
         guard offset < size, count > 0 else { return [] }
         let end = min(size, offset + UInt64(count))
         let extents = try extents(id)

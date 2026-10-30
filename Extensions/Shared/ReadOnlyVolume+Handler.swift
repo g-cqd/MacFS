@@ -71,13 +71,27 @@ extension ReadOnlyVolume: FSVolume.Handler {
         named name: FSFileName, in directory: FSItem, context: FSContext,
         replyHandler reply: @escaping (FSLookupItemResult?, (any Error)?) -> Void
     ) {
-        answer(directory, reply, "lookup") { (directory) throws(DiskError) -> FSLookupItemResult? in
+        answerLookup(name, in: directory, reply, FSLookupItemResult.init(foundItem:itemName:itemAttributes:))
+    }
+
+    /// A directory's entry by name, made into `T` from the item, its stored name and attributes: both lookups (plain and
+    /// kernel-offloaded) answer through here.
+    func answerLookup<T>(
+        _ name: FSFileName, in directory: FSItem, _ reply: (T?, (any Error)?) -> Void,
+        _ make: (FSItem, FSFileName, FSItem.Attributes) -> T?
+    ) {
+        answer(directory, reply, "lookup") { (directory) throws(DiskError) -> T? in
             let entry = try tree.fileSystem.lookup(Array(name.data), in: tree.readerID(for: directory.mountID))
             let mountID = try tree.checkedMountID(for: entry.id)
-            return FSLookupItemResult(
-                foundItem: item(mountID), itemName: FSFileName(data: Data(entry.name)),
-                itemAttributes: try attributes(mountID))
+            return make(item(mountID), FSFileName(data: Data(entry.name)), try attributes(mountID))
         }
+    }
+
+    /// An item's attributes made into `T`: getattr and the end of a kernel-offloaded I/O answer through here.
+    func answerAttributes<T>(
+        _ item: FSItem, _ reply: (T?, (any Error)?) -> Void, _ what: String, _ make: (FSItem.Attributes) -> T?
+    ) {
+        answer(item, reply, what) { (item) throws(DiskError) -> T? in make(try attributes(item.mountID)) }
     }
 
     func getAttributes(
@@ -85,9 +99,7 @@ extension ReadOnlyVolume: FSVolume.Handler {
         _ desiredAttributes: FSItem.GetAttributesRequest, of item: FSItem, context: FSContext,
         replyHandler reply: @escaping (FSGetAttributesResult?, (any Error)?) -> Void
     ) {
-        answer(item, reply, "getattr") { (item) throws(DiskError) -> FSGetAttributesResult? in
-            FSGetAttributesResult(attributes: try attributes(item.mountID))
-        }
+        answerAttributes(item, reply, "getattr", FSGetAttributesResult.init(attributes:))
     }
 
     // FSKit fixes this signature; the count is the protocol's.

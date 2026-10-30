@@ -4,6 +4,7 @@
 
 | Layer | Where | What |
 |---|---|---|
+| Kernel-offloaded I/O | `Extensions/Shared/ReadOnlyVolume+KernelOffloadedIO.swift`, `BlockMapping` in each reader | The kernel reads mappable files from the device itself; the module says where (ADR-0012, roadmap 0018). Inline, compressed and resident files stay with the module; Btrfs verifies checksums before the kernel reads. |
 | Kernels | `Packages/FSCore/Sources/CFSKernels`, aemi's `AemiKernels` | MacFS's own: the NTFS fixups in arm64 assembly, portable C elsewhere and compiled everywhere as `fsk_ref_*`, the test oracle; the device ioctls. From aemi (ADR-0012): CRC-32C (PMULL folds with three `crc32cx` streams from 4 KiB), bit count (NEON `cnt`), UTF-16LE→ASCII (`umaxv`, `xtn`). |
 | Core | `FSCore` | `DiskError`, `DiskBytes` (bounds-checked loads), `BlockSource` and `FileBlockSource` (image or raw device), `AlignedReader`, `BoundedCache`, `TreeWalk`, the model (`NodeAttributes`, `DirectoryEntry`, `VolumeDescription`) and the seam: `ReadOnlyFileSystem`. |
 | Readers | `Btrfs`, `NTFS`, `ExtFS` | One `ReadOnlyFileSystem` each. Synchronous, thread-safe, caches bounded. |

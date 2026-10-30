@@ -12,5 +12,9 @@ and htree directories read linearly, symlinks (fast and slow), metadata checksum
 directory blocks). Refused, by name: meta_bg, compression, external journal devices, dirdata, fscrypt contents. Not done: htree
 `dx_tail` checksums and hashed lookup (roadmap 0016), journal replay (a volume that needs recovery reads as of its checkpoint).
 
+Found in the reference tools: `mke2fs -d` (e2fsprogs 1.47.2) with `inline_data` writes a file whose tail is a hole (100,000
+bytes of data, size 300,000) with the size of its last data block (100,352); the kernel reads it so, and so does MacFS. The test
+tree keeps such a file for NTFS only.
+
 Found by the references: `i_crtime` was read from 128-byte inodes (24 e2fsprogs images); e2fsck's "exit status 0" includes
 checksum-only repairs, so "clean" is its expected output, not its exit status.

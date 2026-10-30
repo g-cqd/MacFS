@@ -11,6 +11,8 @@ import ToolingCore
         #expect(attributes["FSShortName"] as? String == format.shortName)
         #expect(attributes["EXExtensionPointIdentifier"] as? String == "com.apple.fskit.fsmodule")
         #expect(attributes["FSSupportsBlockResources"] as? Bool == true)
+        // The kernel reads mapped files itself (roadmap 0018), as Apple's msdos module declares.
+        #expect(attributes["FSSupportsKernelOffloadedIO"] as? Bool == true)
         #expect((attributes["FSMediaTypes"] as? [String: Any])?.isEmpty == false)
     }
 

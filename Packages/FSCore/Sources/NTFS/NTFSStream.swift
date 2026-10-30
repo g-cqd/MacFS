@@ -41,6 +41,17 @@ struct NTFSStream: Sendable {
         self.runs = runs
     }
 
+    /// The runs as byte ranges on the volume, sparse runs as zero; nil when the stream is resident or initialized short of its
+    /// size (block maps, roadmap 0018).
+    var mappedRanges: [MappedRange]? {
+        guard resident == nil, initialized == size else { return nil }
+        let cluster = UInt64(clusterSize)
+        return runs.map { run in
+            MappedRange(
+                logical: run.vcn * cluster, length: run.length * cluster, physical: run.cluster.map { $0 * cluster })
+        }
+    }
+
     /// Up to `count` bytes at `offset`; fewer at the end. Bytes past the initialized size read as zero.
     func read(_ source: any BlockSource, at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
         guard offset < size, count > 0 else { return [] }

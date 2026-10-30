@@ -12,12 +12,15 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
     let tree: MountedTree
     let shortName: String
     let log: Logger
+    /// The device the volume lives on: block maps name it for the kernel's own reads (roadmap 0018).
+    let device: FSBlockDeviceResource
     private let items = Mutex<[UInt64: ReadOnlyItem]>([:])
 
-    init(tree: MountedTree, shortName: String, log: Logger) {
+    init(tree: MountedTree, shortName: String, log: Logger, device: FSBlockDeviceResource) {
         self.tree = tree
         self.shortName = shortName
         self.log = log
+        self.device = device
         let description = tree.fileSystem.volume
         let identifier = FSVolume.Identifier(uuid: description.foundationUUID)
         super
@@ -58,6 +61,12 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
         attributes.changeTime = Self.timespec(node.changed)
         attributes.birthTime = Self.timespec(node.created)
         attributes.flags = node.isHidden ? UInt32(UF_HIDDEN) : 0
+        // A file not stored as its bytes (inline, compressed, resident) is read by the module; every other one by the kernel
+        // itself, through its block map. FSKit reads this once per file (roadmap 0018).
+        if node.kind == .regular {
+            let mappable = (tree.fileSystem as? any BlockMapping).flatMap { try? $0.isMappable(node.id) } ?? false
+            attributes.inhibitKernelOffloadedIO = !mappable
+        }
         return attributes
     }
 
