@@ -19,13 +19,13 @@ Init ==
     /\ pc = [p \in Procs |-> "idle"]
     /\ volume = CHOOSE v \in Dom_volume : TRUE
 
-\* loadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:30
+\* loadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:32
 loadResource_0(p) ==
     /\ pc[p] = "idle"
     /\ volume' \in Dom_volume
     /\ pc' = [pc EXCEPT ![p] = "idle"]
 
-\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:48
+\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:50
 unloadResource_0(p) ==
     /\ pc[p] = "idle"
     /\ volume' = "nil"

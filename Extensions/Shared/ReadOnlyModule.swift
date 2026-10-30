@@ -19,12 +19,14 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
 
     func probeResource(resource: FSResource, replyHandler: @escaping (FSProbeResult?, (any Error)?) -> Void) {
         guard let device = resource as? FSBlockDeviceResource else { return replyHandler(.notRecognized, nil) }
-        guard let description = format.probe(BlockDeviceSource(device)) else {
-            return replyHandler(.notRecognized, nil)
+        let description = format.probe(BlockDeviceSource(device))
+        switch ProbeAnswer(description) {
+            case .notRecognized:
+                replyHandler(.notRecognized, nil)
+            case .usable(let name):
+                let container = description.map { FSContainerIdentifier(uuid: $0.foundationUUID) }
+                replyHandler(container.map { .usable(name: name, containerID: $0) } ?? .notRecognized, nil)
         }
-        let container = FSContainerIdentifier(uuid: description.foundationUUID)
-        // Read-only is a limitation, so the honest answer is "usable but limited" (ADR-0006).
-        replyHandler(.usableButLimited(name: description.label, containerID: container), nil)
     }
 
     func loadResource(

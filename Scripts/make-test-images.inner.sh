@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g-progs e2fsprogs coreutils findutils >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g-progs e2fsprogs sgdisk coreutils findutils >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -57,6 +57,16 @@ make_ext ext3 64M -t ext3
 make_ext ext4 128M -t ext4
 make_ext ext4-inline 128M -t ext4 -O inline_data
 make_ext ext4-bigalloc 128M -t ext4 -b 4096 -O bigalloc -C 16384
+# A partitioned disk: one GPT partition of type "Linux filesystem" at 1 MiB, so Disk Arbitration matches the
+# module by partition type (FSMediaTypes), not as a partitionless whole disk.
+# mke2fs zeroes the start of the file even with an offset, so the partition table is written after it; the file
+# system ends at 121 MiB, clear of the backup GPT in the last 17 KiB. Built in /tmp, then copied sparse.
+rm -f ext4-gpt.img /tmp/ext4-gpt.img; truncate -s 128M /tmp/ext4-gpt.img
+mke2fs -q -F -L ext4-gpt -t ext4 -d /tmp/tree -E offset=1048576 /tmp/ext4-gpt.img 120M
+# Not -q: with it this sgdisk exits 0 and writes no table.
+sgdisk -o -n 1:2048:0 -t 1:8300 /tmp/ext4-gpt.img >/dev/null
+cp --sparse=always /tmp/ext4-gpt.img ext4-gpt.img && rm /tmp/ext4-gpt.img
+manifest /tmp/tree > ext4-gpt.manifest
 
 # NTFS: ntfscp writes files into an unmounted image (no FUSE in a container), so the /tmp/tree is flat.
 rm -rf /tmp/ntree && mkdir /tmp/ntree

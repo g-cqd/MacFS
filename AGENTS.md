@@ -37,6 +37,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **After a failed `xcodebuild`, use a fresh `-derivedDataPath`**: a stale one embedded extensions without their Info.plist.
 - **`FSError` is FSKit's.** The readers' error is `DiskError`.
 - **One aemi revision everywhere** (ADR-0004): AemiRegex decides it; move FSCore with it.
+- **In zsh, `log` is a builtin.** Use `/usr/bin/log show|stream`; the builtin swallows the arguments and prints nothing.
+- **After reinstalling the app, kill the old module processes with SIGKILL**: they ignore SIGTERM and keep serving the old code.
+- **`mke2fs -E offset=` zeroes the start of the image**: write a partition table after it. **`sgdisk -q` writes nothing** here.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
