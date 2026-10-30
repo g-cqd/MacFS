@@ -1,0 +1,99 @@
+# XcodeGen spec. `xcodegen generate` writes MacFS.xcodeproj (gitignored); never edit the project by hand.
+name: MacFS
+options:
+  bundleIdPrefix: dev.gcqd.MacFS
+  deploymentTarget:
+    macOS: "27.0"
+  createIntermediateGroups: true
+  # The newest project format Xcode 27 writes.
+  projectFormat: xcode16_3
+  xcodeVersion: "27.0"
+
+packages:
+  FSCore:
+    path: Packages/FSCore
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    # com.apple.developer.fskit.fsmodule is restricted: it needs a provisioning profile with the FSKit
+    # Module capability (docs/research/2026-10-30-fskit-requirements.md). Builds without signing verify
+    # the code; Scripts sign for a real install.
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: NP94WB3P75
+
+targetTemplates:
+  FSKitModule:
+    type: extensionkit-extension
+    platform: macOS
+    sources:
+      - path: Extensions/Shared
+      - path: Extensions/${target_name}
+        excludes: ["Info.plist"]
+    dependencies:
+      - package: FSCore
+        product: Formats
+      - package: FSCore
+        product: MountKit
+      - package: FSCore
+        product: FSCore
+      - sdk: FSKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.gcqd.MacFS.${target_name}
+        INFOPLIST_FILE: Extensions/${target_name}/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Extensions/Shared/Module.entitlements
+        ENABLE_APP_SANDBOX: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: NO
+
+targets:
+  BtrfsFS:
+    templates: [FSKitModule]
+
+  ExtFSModule:
+    templates: [FSKitModule]
+
+  NTFSFS:
+    templates: [FSKitModule]
+
+  MacFS:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: FSCore
+        product: Formats
+      - package: FSCore
+        product: MountKit
+      - package: FSCore
+        product: FSCore
+      - sdk: FSKit.framework
+      - target: BtrfsFS
+      - target: ExtFSModule
+      - target: NTFSFS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.gcqd.MacFS
+        PRODUCT_NAME: MacFS
+        CODE_SIGN_ENTITLEMENTS: App/MacFS.entitlements
+        ENABLE_APP_SANDBOX: YES
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: MacFS
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+
+schemes:
+  MacFS:
+    build:
+      targets:
+        MacFS: all
+    run:
+      config: Debug

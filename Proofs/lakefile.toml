@@ -1,0 +1,5 @@
+name = "MacFSProofs"
+defaultTargets = ["MacFSProofs"]
+
+[[lean_lib]]
+name = "MacFSProofs"

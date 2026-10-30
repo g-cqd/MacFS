@@ -1,0 +1,5 @@
+TestImages/
+.build/
+*.xcodeproj/
+DerivedData/
+.DS_Store
