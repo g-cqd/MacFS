@@ -7,10 +7,11 @@ records what an agent cannot derive from the source: commands, gates, traps and 
 
 ```sh
 swift package --package-path Packages/Tooling --disable-sandbox images            # test images, manifests, reference manifests
-swift package --package-path Packages/Tooling --disable-sandbox images --corpus   # e2fsprogs and btrfs-progs test suites (TestCorpus/)
+swift package --package-path Packages/Tooling --disable-sandbox images --corpus   # e2fsprogs, btrfs-progs and zstd test suites (TestCorpus/)
 swift package --package-path Packages/Tooling --disable-sandbox images --bench    # bench images and the native tree (BenchImages/)
 swift run --package-path Packages/FSCore -c release fsprobe --tree BenchImages/tree # the native baseline; --under PATH for a reader
 swift test --package-path Packages/FSCore                                         # readers, kernels, MountKit (needs the images)
+swift test --package-path Packages/FSCore --sanitize=address --sanitize=undefined --filter 'Zstd|LZNT1|LZO1X|GuardPage'  # C and asm kernels under ASan/UBSan (corpus needed)
 swift test --package-path Packages/Tooling                                        # tooling, documentation law, source structure
 swift package --package-path Packages/Tooling --disable-sandbox gates [--dry-run] # every static gate (see below)
 swift package --package-path Packages/Tooling --disable-sandbox plists [--check]  # FSKit Info.plists from DiskFormat
@@ -68,6 +69,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **Kernels: profile, then time the kernel alone on real data against its C reference** (agreement checked first). A change
   that cuts instructions may gain nothing when the chain is latency (LZNT1's literal runs); guard-page tests are what catch
   an overrunning move, never output comparisons.
+- **SwiftPM and Xcode compile release C at -Os**: CFSKernels asks for -O3 (8 to 11% on zstd). Measure kernels as they are built.
+- **A decoder's error paths need the reference's verdict, not "no trap"**: TestCorpus/zstd holds libzstd's one-shot verdicts on
+  damaged frames and every single-bit flip; the CLI's streaming decoder is not that oracle (it accepts a frame shorter than its
+  declared size). Memory-safety checks need the sanitizers: a mutant that overruns the workspace still returns an error.
+- **zsh: `rm -f *.zst` with no match aborts the whole command line**; `setopt nullglob` or quote it.
 - **A dx root may end in a stale leaf tail** (`dt_reserved` is never cleared): tell directory blocks apart by position.
 - **Python's byte paths hide normalization bugs**; Cocoa asks in NFD. Compare through `FileManager`, as `mounts` does.
 - **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
@@ -81,5 +87,6 @@ everywhere (0015), conformance against the reference implementations and suites 
 and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
-NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014; docs/research/2026-10-30-compression-kernels.md).
-Next by value: 0031 (XFS), 0013 (zstd), an inflate kernel (zlib is the system's libz today). Read each entry's `status:` and `blocked-by:` before starting it.
+NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through a C kernel held to libzstd (0013;
+docs/research/2026-10-30-compression-kernels.md). Next by value: 0031 (XFS), zstd's sequence loop in assembly, an inflate
+kernel (zlib is the system's libz today). Read each entry's `status:` and `blocked-by:` before starting it.

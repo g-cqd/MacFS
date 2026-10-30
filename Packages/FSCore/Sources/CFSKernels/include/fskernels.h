@@ -37,6 +37,18 @@ int32_t fsk_lznt1_decompress(const uint8_t *_Nonnull source, size_t count, uint8
 /// result and every byte up to it.
 int64_t fsk_lzo1x_decompress(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity);
 
+/// Decodes the zstd frame at the start of `source[0..<count]` (RFC 8878; Btrfs zstd extents, roadmap 0013) into
+/// `target[0..<capacity]`, with `workspace` (`fsk_zstd_workspace_size()` bytes, any contents) for its literals and tables.
+/// Returns the bytes decoded and sets `*consumed` to the frame's length (bytes after it, such as a sector's padding, are not
+/// read); 0 for a skippable frame. Bytes of `target` past the returned count are unspecified (16-byte moves may run past a
+/// copy, never past `capacity`). -1 when the frame is malformed, its checksum differs, or it would write past `capacity`;
+/// -2 when it needs a dictionary.
+int64_t fsk_zstd_decompress_frame(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity,
+                                  void *_Nonnull workspace, size_t *_Nonnull consumed);
+size_t fsk_zstd_workspace_size(void);
+/// XXH64 with seed 0 (the zstd content checksum's hash).
+uint64_t fsk_xxh64(const uint8_t *_Nonnull bytes, size_t count);
+
 /// Inflates raw DEFLATE (`source[0..<count]`, after a zlib header the caller has checked) into `target[0..<capacity]`
 /// through the system libz; `*produced` is the number of bytes written. Returns 0 when the stream ended or the target is full,
 /// -2 when the input ended first, -1 on a malformed stream.

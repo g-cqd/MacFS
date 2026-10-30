@@ -9,7 +9,7 @@ rm -rf /tmp/bench && mkdir -p /tmp/bench/text /tmp/bench/random /tmp/bench/small
 for i in $(seq 1 20); do seq $((i * 1000000)) $((i * 1000000 + 1300000)) > /tmp/bench/text/t$i.txt; done
 for i in $(seq 1 10); do head -c 20000000 /dev/urandom > /tmp/bench/random/r$i.bin; done
 for d in $(seq 1 100); do mkdir /tmp/bench/small/d$d; for f in $(seq 1 200); do echo "$d $f" > /tmp/bench/small/d$d/f$f; done; done
-for variant in plain zlib lzo; do
+for variant in plain zlib lzo zstd; do
     rm -f btrfs-$variant.img; truncate -s 1G btrfs-$variant.img
     case $variant in
         plain) mkfs.btrfs -q -L bench --rootdir /tmp/bench btrfs-$variant.img ;;

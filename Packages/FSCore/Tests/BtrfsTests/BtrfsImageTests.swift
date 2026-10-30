@@ -4,7 +4,7 @@ import Testing
 @testable import Btrfs
 
 @Suite struct BtrfsImageTests {
-    static let images = ["btrfs", "btrfs-zlib", "btrfs-lzo", "btrfs-xxhash", "btrfs-subvol"]
+    static let images = ["btrfs", "btrfs-zlib", "btrfs-lzo", "btrfs-zstd", "btrfs-xxhash", "btrfs-subvol"]
 
     @Test(arguments: images)
     func wholeTreeMatchesTheManifest(_ name: String) throws {
@@ -20,15 +20,6 @@ import Testing
         let big = try fileSystem.lookup(Array("big".utf8), in: fileSystem.rootID)
         let counting = try fileSystem.lookup(Array("counting.txt".utf8), in: big.id)
         #expect(try fileSystem.extents(counting.id).contains { $0.compression == method })
-    }
-
-    @Test func zstdIsReportedAsUnsupported() throws {
-        let fileSystem = try BtrfsFileSystem(source: try ImageOracle.image("btrfs-zstd"))
-        let big = try fileSystem.lookup(Array("big".utf8), in: fileSystem.rootID)
-        let counting = try fileSystem.lookup(Array("counting.txt".utf8), in: big.id)
-        #expect(throws: DiskError.unsupported("zstd-compressed extents")) {
-            try fileSystem.read(counting.id, at: 0, count: 10)
-        }
     }
 
     @Test func lookupMissesAndTypes() throws {

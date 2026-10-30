@@ -43,7 +43,11 @@ let package = Package(
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
         // test references, and the device ioctls. CRC-32C, bit counts and UTF-16 narrowing come from aemi's kernels (ADR-0012).
-        .target(name: "CFSKernels", linkerSettings: [.linkedLibrary("z")]),
+        // Release C is -Os by default; the C kernels (zstd above all) are 8 to 11% faster at -O3 (docs/research/
+        // 2026-10-30-compression-kernels.md). Allowed here: FSCore is only ever a root or a local package.
+        .target(
+            name: "CFSKernels", cSettings: [.unsafeFlags(["-O3"], .when(configuration: .release))],
+            linkerSettings: [.linkedLibrary("z")]),
         .target(
             name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO], swiftSettings: readerSettings
         ),

@@ -50,6 +50,32 @@ arbitrary bytes give the same result and bytes in both, also flush against guard
 20, ending exactly at the capacity or overflowing it. 18 mutants of the kernel: 17 killed, 1 equivalent (the bound on an
 extended length's zero bytes: without it the input still runs out, and the result is the same refusal).
 
+## zstd (Btrfs, roadmap 0013)
+
+Written in C from RFC 8878 (no zstd on macOS), then measured against libzstd 1.5.7 (Homebrew, the same version as the test
+oracle) on the bench text and on source code, each cut in 128 KiB frames at level 3 as Btrfs writes them.
+
+| Step | Text MB/s | Code MB/s | What |
+|---|---:|---:|---|
+| libzstd 1.5.7 | 1,110 | 1,310 | the bound |
+| first correct version | 388 | 350 | `back_read` 28% (not inlined; bit by bit at every stream's end), one Huffman symbol at a time 22%, `memcpy` calls 22% |
+| inlined reads, an 8-byte load at the stream's end, 4 Huffman streams in lockstep, 16-byte moves | 962 | 757 | |
+| a 64-bit container with reloads everywhere | 846 | 823 | faster for Huffman, **slower** for sequences: the reload's load sits on the chain from one sequence to the next |
+| the container for Huffman, the bit position for sequences | 1,028 | 805 | |
+| sequence cells carrying base value and extra bits | 1,042 | 898 | no side tables per sequence. Reading the three fields (or states) in one read measured **slower** (951 / 716) |
+| zero-bit reads skip the load (their early return had been lost) | 1,220 | 862 | most literal and match codes have no extra bits |
+| the first 16 bytes of a match or a literal run copied unconditionally | 1,236 | 933 | trip counts stop mispredicting; 32 bytes cost text 10% |
+
+Then the build: SwiftPM and Xcode compile release C at -Os, which cost 8 to 11%; CFSKernels asks for -O3. Through the reader,
+Btrfs zstd text reads at 1,202 MB/s (1,035 at -Os).
+
+Correctness held throughout: the CLI's frames, the golden files, 1,000 decodecorpus frames, libzstd's one-shot verdicts on 2,400
+damaged frames and 87,008 single-bit flips, all under ASan and UBSan with one workspace reused across frames (stale tables).
+Mutants: about 70 over the decoder. Killed by the verdicts, the sanitizers or hand-built frames, except those that are
+equivalent (a check a later one subsumes: the FSE count sum and the spread's end, the early declared-size refusal, the
+single-segment window, literals overrunning their buffer, one of two weight-count guards) and one unreached: a compressed block
+larger than its window whose output fits, which needs an encoder to build. Three checks proved redundant and were removed.
+
 ## Next, by the same method
 
 - **zlib (Btrfs)**: the system libz inflates at 1,428 MB/s, the reader 1,147. Inflate is Huffman decoding, latency-bound on the

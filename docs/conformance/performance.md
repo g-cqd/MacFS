@@ -48,3 +48,6 @@ hold it to; ntfs-3g's decoder is byte-wise, as the C reference is.
 
 Btrfs LZO through the arm64 LZO1X kernel: text 2,725 MB/s (1,764 with the Swift decoder; liblzo2 decodes 2,261 on the same
 segments, the kernel alone 3,475).
+
+Btrfs zstd (roadmap 0013): text 1,202 MB/s through the reader. The C kernel alone decodes the bench text in 128 KiB level-3
+frames at 1,236 MB/s, libzstd 1.5.7 at 1,110; source code at 933 against 1,310 (its sequences vary more).

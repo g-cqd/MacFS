@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra attr sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra attr zstd sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -195,6 +195,26 @@ for seed in 00000000-0000-0000-0000-000000000000 01020304-0506-0708-090a-0b0c0d0
         done < /tmp/dxnames
     done
 done
+# zstd frames from the zstd CLI (the reference implementation) and their originals (roadmap 0013): levels 1 to 22 (22 with
+# a long window), with and without a checksum and a content size, sizes around the 128 KiB block, and two frames back to back.
+rm -rf zstd && mkdir zstd && mkdir -p /tmp/zin
+seq 1 200000 > /tmp/zin/counting
+head -c 300000 /dev/urandom > /tmp/zin/random
+head -c 300000 /dev/zero > /tmp/zin/zeros
+(seq 1 30000; head -c 100000 /dev/urandom; seq 1 30000) > /tmp/zin/mixed
+cat /scripts/*.sh /scripts/*.c > /tmp/zin/scripts
+for size in 0 1 2 3 4 5 100 131071 131072 131073 262145; do seq 1 100000 | head -c $size > /tmp/zin/size$size; done
+for input in /tmp/zin/*; do
+    name=$(basename "$input")
+    for level in 1 3 9 19; do
+        zstd -q -f -$level "$input" -o "zstd/$name-$level.zst" && cp "$input" "zstd/$name-$level.raw"
+    done
+    zstd -q -f --ultra -22 --long=27 "$input" -o "zstd/$name-22.zst" && cp "$input" "zstd/$name-22.raw"
+    zstd -q -f -3 -C "$input" -o "zstd/$name-check.zst" && cp "$input" "zstd/$name-check.raw"
+    zstd -q -c -3 --no-check < "$input" > "zstd/$name-nosize.zst" && cp "$input" "zstd/$name-nosize.raw"
+done
+cat zstd/counting-1.zst zstd/mixed-19.zst > zstd/two-frames.zst && cat /tmp/zin/counting /tmp/zin/mixed > zstd/two-frames.raw
+rm -rf /tmp/zin
 # LZO1X streams from liblzo2 (the reference implementation) and their originals: the decoder's oracle.
 rm -rf lzo && mkdir lzo && gcc -O2 -o /tmp/lzo-fixtures /scripts/lzo-fixtures.c -llzo2 && /tmp/lzo-fixtures
 mkfs.btrfs --version | head -1 > versions.txt

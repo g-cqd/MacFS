@@ -10,7 +10,7 @@ enum BtrfsCompression {
             case 0: return input
             case 1: return try zlib(input, size: size)
             case 2: return try lzo(input, size: size, sectorSize: sectorSize)
-            case 3: throw .unsupported("zstd-compressed extents")
+            case 3: return try zstd(input, size: size)
             default: throw .corrupt("compression method \(method)")
         }
     }
@@ -29,6 +29,14 @@ enum BtrfsCompression {
         }
         guard status == 0 else { throw .corrupt(status == -2 ? "zlib extent ends early" : "malformed zlib extent") }
         // A short result is legal: the tail of a compressed extent past the data is zero.
+        return output
+    }
+
+    /// One zstd frame, as Linux writes it (fs/btrfs/zstd.c): the frame, then zeros to the end of its sector, which are not
+    /// read. A short result is legal, as for zlib: the extent's tail past the data is zero.
+    private static func zstd(_ input: [UInt8], size: Int) throws(DiskError) -> [UInt8] {
+        var (output, _) = try Zstd.decompressFrame(input, capacity: size)
+        if output.count < size { output += [UInt8](repeating: 0, count: size - output.count) }
         return output
     }
 
