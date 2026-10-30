@@ -32,5 +32,5 @@ The `*Handler` protocols take an `FSContext` (caller's ids) and return result ob
 
 ## Not verified here
 
-Whether the account can be granted the capability (Everest reports provisioning failures for the same entitlement). Whether automount
+Whether the account can be granted the capability: it can (roadmap 0006; Everest's failure was not reproduced here). Whether automount
 follows `FSMediaTypes` without `FSProbeExecutable` (msdos uses `msdos.util`; the template omits it). No module was loaded.
