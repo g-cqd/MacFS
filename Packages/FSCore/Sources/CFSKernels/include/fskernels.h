@@ -1,6 +1,8 @@
-// The format-specific kernel of the readers, and the device ioctls Swift cannot import. The fixups are hand-written arm64
-// assembly (kernels_arm64.S), portable C elsewhere (kernels_portable.c); the generic kernels (CRC-32C, bit counts, UTF-16
-// narrowing) are aemi's (ADR-0012).
+// The format-specific kernel of the readers, and the device ioctls Swift cannot import. The fixups, LZNT1 and LZO1X are
+// hand-written arm64 assembly (kernels_arm64.S), portable C elsewhere (kernels_portable.c); zstd is C (zstd.c) with its
+// sequence loop in arm64 assembly (kernels_zstd_arm64.S), the C loop kept as its reference (`fsk_ref_zstd_decompress_frame`,
+// exported for the tests, not declared here); the generic kernels (CRC-32C, bit counts, UTF-16 narrowing) are aemi's
+// (ADR-0012).
 // Every function here is pure: it reads and writes only through the pointers it is given,
 // within the lengths it is given, and keeps no state. The Swift wrappers in FSCore check
 // the results (ADR-0003).

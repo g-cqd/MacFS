@@ -66,3 +66,8 @@ mkdir -p zstd/damaged
 mkdir -p zstd/flips
 ls zstd/decodecorpus/frames/*.zst | while read -r f; do size=$(stat -c %s "$f"); [ "$size" -ge 100 ] && [ "$size" -le 600 ] && echo "$f"; done | head -40 > /tmp/small
 /tmp/zstd-verdict --flips $(cat /tmp/small) > zstd/flips/index.tsv
+# Sequences no CLI frame holds: more than 57 bits each, not the last of their block, some in table cells whose states start
+# above 0 (the arm64 kernel's Lzs_wide path), encoded by the same libzstd (ZSTD_compressSequences), with their original.
+mkdir -p zstd/wide
+gcc -O2 -I/tmp/src/zstd/lib -o /tmp/zstd-wide /scripts/zstd-wide.c /tmp/src/zstd/lib/libzstd.a
+/tmp/zstd-wide zstd/wide

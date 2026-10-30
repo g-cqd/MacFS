@@ -11,7 +11,18 @@ typedef struct { uint8_t symbol, bits; uint16_t baseline; } fse_cell;
 typedef struct { uint8_t symbol, bits; } huf_cell;
 // A sequence table's cell, decoded ahead: the next state's baseline and bits, and the symbol's own base value and extra bits
 // (what LL_BASE/LL_BITS, ML_BASE/ML_BITS or 1 << code give), so a sequence reads no other table.
+// On arm64 the kernel (kernels_zstd_arm64.S) reads the cell's width first, the bits it reads in all (state bits + extra
+// bits), so that a sequence's bits are one sum; elsewhere the C loop reads the extra bits as they are (measured faster:
+// the C loop's `width - bits` cost it a fifth on t1, docs/research/2026-10-30-compression-kernels.md).
+#if defined(__aarch64__)
+typedef struct { uint8_t width, bits; uint16_t baseline; uint32_t value; } seq_cell;
+#define CELL_EXTRA(cell) ((uint32_t)(cell).width - (cell).bits)
+#define SEQ_CELL(bits, extra, baseline, value) ((seq_cell){(uint8_t)((bits) + (extra)), (bits), (baseline), (value)})
+#else
 typedef struct { uint16_t baseline; uint8_t bits, extra; uint32_t value; } seq_cell;
+#define CELL_EXTRA(cell) ((cell).extra)
+#define SEQ_CELL(bits, extra, baseline, value) ((seq_cell){(baseline), (bits), (uint8_t)(extra), (value)})
+#endif
 
 typedef struct {
     uint8_t literals[BLOCK_MAX + 32];
@@ -19,7 +30,32 @@ typedef struct {
     seq_cell ll[1 << 9], ml[1 << 9], of[1 << 8];
     uint32_t llLog, mlLog, ofLog, hufLog;
     int hasHuffman, hasLL, hasML, hasOF;
+    int reference;  // the C sequence loop, not the arm64 kernel (fsk_ref_zstd_decompress_frame)
 } zstd_workspace;
+
+#if defined(__aarch64__)
+// The arm64 sequence kernel's view of one block's sequences (kernels_zstd_arm64.S, which reads it at these offsets): the three
+// tables, the bitstream (8 bytes or more), the literals, the output and the repeat offsets. It decodes and executes all
+// `count` sequences (1 or more), leaves the stream used up exactly, and writes back `lit`, `at` and `rep`; 0, or -1 for every
+// case where the C loop below returns -1. The trailing literals stay with the caller.
+typedef struct {
+    const seq_cell *ll, *of, *ml;
+    const uint8_t *stream;
+    size_t streamSize;
+    const uint8_t *lit, *litEnd;
+    uint8_t *base, *at, *end;
+    size_t count;
+    uint32_t rep[3];
+    uint32_t llLog, ofLog, mlLog;
+} zstd_sequences;
+_Static_assert(__builtin_offsetof(zstd_sequences, streamSize) == 32 && __builtin_offsetof(zstd_sequences, base) == 56 &&
+                   __builtin_offsetof(zstd_sequences, count) == 80 && __builtin_offsetof(zstd_sequences, rep) == 88 &&
+                   __builtin_offsetof(zstd_sequences, llLog) == 100 && sizeof(seq_cell) == 8 &&
+                   __builtin_offsetof(seq_cell, bits) == 1 && __builtin_offsetof(seq_cell, baseline) == 2 &&
+                   __builtin_offsetof(seq_cell, value) == 4,
+               "the layout kernels_zstd_arm64.S reads");
+int32_t fsk_zstd_sequences(zstd_sequences *sequences);
+#endif
 
 size_t fsk_zstd_workspace_size(void) { return sizeof(zstd_workspace); }
 
@@ -447,7 +483,7 @@ static void seq_fill(seq_cell *table, const fse_cell *cells, uint32_t size, int 
         if (kind == LITERALS) { value = LL_BASE[symbol]; extra = LL_BITS[symbol]; }
         else if (kind == MATCHES) { value = ML_BASE[symbol]; extra = ML_BITS[symbol]; }
         else { value = 1u << symbol; extra = symbol; }
-        table[u] = (seq_cell){cells[u].baseline, cells[u].bits, (uint8_t)extra, value};
+        table[u] = SEQ_CELL(cells[u].bits, extra, cells[u].baseline, value);
     }
 }
 
@@ -547,6 +583,17 @@ static int sequences(zstd_workspace *w, const uint8_t *in, size_t size, size_t l
     if (read_table((modes >> 2) & 3, in + at, size - at, &used, w->ml, &w->mlLog, &w->hasML, ML_DEFAULT, 53, 6, ML_MAX, 9, MATCHES)) return -1;
     at += used;
     if (at > size) return -1;
+#if defined(__aarch64__)
+    if (!w->reference && size - at >= 8) {
+        zstd_sequences k = {w->ll, w->of, w->ml, in + at, size - at, lit, litEnd, o->base, o->at, o->end, count,
+                            {rep[0], rep[1], rep[2]}, w->llLog, w->ofLog, w->mlLog};
+        if (fsk_zstd_sequences(&k)) return -1;
+        memcpy(rep, k.rep, sizeof k.rep);
+        lit = k.lit;
+        o->at = k.at;
+        goto trailing;
+    }
+#endif
     pos_stream s;
     if (pos_init(&s, in + at, size - at)) return -1;
     uint32_t llState = (uint32_t)pos_read(&s, w->llLog), ofState = (uint32_t)pos_read(&s, w->ofLog),
@@ -555,9 +602,9 @@ static int sequences(zstd_workspace *w, const uint8_t *in, size_t size, size_t l
         // The cells carry each symbol's base value and extra bits: offset bits first, then match, then literals. (Reading the
         // three fields, or the three states, in one read measured slower: docs/research/2026-10-30-compression-kernels.md.)
         seq_cell lc = w->ll[llState], oc = w->of[ofState], mc = w->ml[mlState];
-        size_t offset = oc.value + pos_read(&s, oc.extra);
-        size_t match = mc.value + pos_read(&s, mc.extra);
-        size_t lits = lc.value + pos_read(&s, lc.extra);
+        size_t offset = oc.value + pos_read(&s, CELL_EXTRA(oc));
+        size_t match = mc.value + pos_read(&s, CELL_EXTRA(mc));
+        size_t lits = lc.value + pos_read(&s, CELL_EXTRA(lc));
         if (offset > 3) {
             rep[2] = rep[1]; rep[1] = rep[0]; rep[0] = (uint32_t)(offset - 3);
         } else {
@@ -579,6 +626,9 @@ static int sequences(zstd_workspace *w, const uint8_t *in, size_t size, size_t l
     }
     // An over-read decodes garbage, every copy still bounded, and ends here: the stream must be used up exactly.
     if (s.position != 0) return -1;
+#if defined(__aarch64__)
+trailing:;
+#endif
     size_t rest = (size_t)(litEnd - lit);
     if (rest > (size_t)(o->end - o->at)) return -1;
     memcpy(o->at, lit, rest);
@@ -587,9 +637,8 @@ static int sequences(zstd_workspace *w, const uint8_t *in, size_t size, size_t l
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
-int64_t fsk_zstd_decompress_frame(const uint8_t *source, size_t count, uint8_t *target, size_t capacity, void *workspace,
-                                  size_t *consumed) {
-    zstd_workspace *w = (zstd_workspace *)workspace;
+static int64_t frame(const uint8_t *source, size_t count, uint8_t *target, size_t capacity, zstd_workspace *w,
+                     size_t *consumed) {
     w->hasHuffman = w->hasLL = w->hasML = w->hasOF = 0;
     size_t at = 0;
     if (count < 4) return -1;
@@ -674,4 +723,21 @@ int64_t fsk_zstd_decompress_frame(const uint8_t *source, size_t count, uint8_t *
     }
     *consumed = at;
     return (int64_t)produced;
+}
+
+int64_t fsk_zstd_decompress_frame(const uint8_t *source, size_t count, uint8_t *target, size_t capacity, void *workspace,
+                                  size_t *consumed) {
+    zstd_workspace *w = (zstd_workspace *)workspace;
+    w->reference = 0;
+    return frame(source, count, target, capacity, w, consumed);
+}
+
+// The same decoder with the C sequence loop on every target: the reference the arm64 kernel is tested against.
+int64_t fsk_ref_zstd_decompress_frame(const uint8_t *source, size_t count, uint8_t *target, size_t capacity,
+                                      void *workspace, size_t *consumed);
+int64_t fsk_ref_zstd_decompress_frame(const uint8_t *source, size_t count, uint8_t *target, size_t capacity,
+                                      void *workspace, size_t *consumed) {
+    zstd_workspace *w = (zstd_workspace *)workspace;
+    w->reference = 1;
+    return frame(source, count, target, capacity, w, consumed);
 }

@@ -68,8 +68,11 @@ let package = Package(
         .executableTarget(
             name: "macfs-nfsd", dependencies: ["NFSProxy", "Formats", "FSCore"], swiftSettings: strictSettings),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
+        // A call that checks the assembly kernels keep the callee-saved registers (KernelABITests). Tests only.
+        .target(name: "KernelABI", dependencies: ["CFSKernels"], path: "Tests/KernelABI"),
         .testTarget(
-            name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", aemiTestKit], swiftSettings: strictSettings),
+            name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", "KernelABI", aemiTestKit],
+            swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
         .testTarget(

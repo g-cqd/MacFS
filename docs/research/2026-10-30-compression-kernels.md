@@ -76,9 +76,52 @@ equivalent (a check a later one subsumes: the FSE count sum and the spread's end
 single-segment window, literals overrunning their buffer, one of two weight-count guards) and one unreached: a compressed block
 larger than its window whose output fits, which needs an encoder to build. Three checks proved redundant and were removed.
 
+### The sequence loop in arm64 (kernels_zstd_arm64.S)
+
+Literals and tables stay in C; the loop that decodes and executes the sequences, where the code frames spend their time, is
+assembly, called once a block when the stream holds 8 bytes or more. Same frames, `/usr/bin/time -l` cycle counts less those
+of a build that skips sequences, divided by the 79.5 M sequences of the text:
+
+| Step | Text MB/s | Code MB/s | What |
+|---|---:|---:|---|
+| C loop (above) | 1,253 | 933 | |
+| first arm64 version | 1,154 | 1,419 | each field its own read and refill: one chain of shifts per field |
+| one read of the three fields' bits, and a refill branch instead of a clamp | 1,275 | 1,500 | the cells say `width` (state bits + extra bits) first: their sum gives the bits a sequence takes, one refill, the fields cut from one window word by shifts reckoned modulo 64. The stream's start test is a branch predicted taken; as a `csel` it sat on the chain |
+| libzstd 1.5.7 | 1,110 | 1,300 | |
+
+About 14.7 cycles a sequence to decode (11.9 without the state chain), 17.6 with execution. What the M2 charges: a shifted
+operand adds a cycle (2 for `add x, x, y, lsr #n`), so does a `cmp`+`csel` pair on the chain; `lslv`, `ubfx` and an extended
+add cost 1. The window holds 57 to 64 unread bits: a sequence of more than 57 (long fields and rare codes together) takes a
+slower path that reads in two parts (`Lzs_wide`). Execution checks room once (`literals + match + 16`) and the offset as
+`offset - 1 < produced` unsigned, which refuses 0 too; within 16 bytes of the end a careful path copies exactly. Matches 1 to 15
+back expand by a TBL pattern and its stride.
+
+The C loop keeps its old cell layout off arm64: the `width` layout cost it a fifth (933 to 851 code). `zstd.c` has both under
+`#if defined(__aarch64__)`, asserts the offsets the assembly reads, and keeps the C loop as the reference
+(`fsk_ref_zstd_decompress_frame`). The x86_64 build (Rosetta, against Homebrew's x86 libzstd) decodes the same as libzstd.
+
+Through the reader, Btrfs zstd text: 1,217 MB/s (1,202 before): text is mostly literals, as the frames' 2% shows; the gain is
+on sequence-dense data.
+
+Tests (ZstdKernelTests, kernel against the C loop): every CLI fixture, decodecorpus and golden frame, damaged frames, every bit
+flip of the flips corpus, cut frames and too little room, all with the same result, consumed length and bytes; output and input
+flush against guard pages; a libzstd frame of sequences wider than 57 bits that are not their block's last, some in cells whose
+states start above 0 (`Scripts/zstd-wide.c`, `ZSTD_compressSequences`, built in the container; no CLI frame has one); hand-built
+blocks for single checks: a stream ending in a zero byte, an offset one past the output in the fast and the careful path,
+literals past those decoded, a stream read 50 KB below its start. KernelABITests calls each assembly kernel (the zstd loop,
+LZO1X, LZNT1, the fixups) with every callee-saved register (x19 to x29, sp, d8 to d15) set to a value of its own and checks them
+after: a kernel that restores the wrong pair passes every result test. ASan and UBSan over all of it.
+
+58 mutants of the kernel, run in a C harness (the same corpora, about 2 s): 51 killed there, 1 by KernelABITests (x25 and x26
+not restored), 6 equivalent: baseline width 15 instead of 16 (baselines are below 512), slack 15 instead of 16 twice (the 16-byte
+moves fit either way), two pattern bytes past the stride (rewritten before they are read), and the fast path's literal check,
+which the block's 128 KiB output cap and the literals buffer's slack make unreachable before the trailing check refuses. Two
+checks proved redundant, and went: rep[0] - 1 = 0 for the repeat code 3 (the offset check refuses it) and the careful path's
+separate offset-0 test.
+
 ## Next, by the same method
 
 - **zlib (Btrfs)**: the system libz inflates at 1,428 MB/s, the reader 1,147. Inflate is Huffman decoding, latency-bound on the
   bit buffer; the known arm64 gains (Chromium's `inflate_fast` with 16-byte chunk copies and a 64-bit bit buffer) are a larger
   kernel. Measure the reader's 20% first.
-- **zstd (roadmap 0013)**: not read yet; a kernel would start from the reference decoder's FSE/Huffman loops.
+- **zstd (roadmap 0013)**: the sequences are in assembly (above); literals' Huffman streams are the next cost on text.
