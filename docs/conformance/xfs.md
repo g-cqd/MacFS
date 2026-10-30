@@ -17,5 +17,5 @@ kernel-offloaded I/O. Refused, by name: v4 volumes (deprecated, and this kernel 
 reference), volumes that need repair, unknown incompatible features, realtime files. Not done: the log is not replayed (a volume
 that needs recovery reads as of its checkpoint), hashed directory lookup, extended attributes.
 
-Mutants: 47 over the reader, all killed but two the code made redundant (the directory leaf-offset filter, removed; the extent
+Mutants: about 35 distinct over the reader, all killed but two the code made redundant (the directory leaf-offset filter, removed; the extent
 sort, replaced by the order check).
