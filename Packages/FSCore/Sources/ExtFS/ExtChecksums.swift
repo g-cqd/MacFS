@@ -70,20 +70,65 @@ struct ExtChecksums: Sendable {
         }
     }
 
-    /// A directory block: a 12-byte tail entry (inode 0, length 12, type 0xDE) holds the checksum of what precedes it.
-    /// An indexed directory's htree nodes have none (theirs is a `dx_tail`, roadmap 0016); any other block must.
-    func verifyDirectoryBlock(_ block: DiskBytes, directory: UInt64, seed: UInt32, indexed: Bool) throws(DiskError) {
+    /// A directory block, as Linux's `__ext4_read_dirblock` tells them apart. In an indexed directory, logical block 0 and any
+    /// block whose first entry spans it are index blocks, checked by their `dx_tail` (`ext4_dx_csum`). Every other block is a
+    /// leaf: a 12-byte tail entry (inode 0, length 12, type 0xDE) holds the checksum of what precedes it, and a leaf without
+    /// one is refused. The kind is decided by position, not by the last bytes: a root the kernel made from a full linear block
+    /// keeps that block's old tail bytes in `dt_reserved` (roadmap 0016).
+    func verifyDirectoryBlock(
+        _ block: DiskBytes, directory: UInt64, logical: UInt64, seed: UInt32, indexed: Bool
+    ) throws(DiskError) {
+        if indexed, let countOffset = try Self.indexCountOffset(block, logical: logical, directory: directory) {
+            return try verifyIndexBlock(block, countOffset: countOffset, directory: directory, seed: seed)
+        }
         let tail = block.count - 12
         guard tail >= 0 else { throw .corrupt("directory \(directory): block of \(block.count) bytes") }
         let (inode, length) = (try block.u32(tail), try block.u16(tail + 4))
         let (nameLength, type) = (try block.u8(tail + 6), try block.u8(tail + 7))
-        let isTail = inode == 0 && length == 12 && nameLength == 0 && type == 0xDE
-        guard isTail else {
-            if indexed { return }
+        guard inode == 0, length == 12, nameLength == 0, type == 0xDE else {
             throw .checksum("directory \(directory): block without a checksum tail")
         }
         guard CRC32C.update(seed, try block.region(0, tail)) == (try block.u32(tail + 8)) else {
             throw .checksum("directory \(directory): block")
         }
+    }
+
+    /// Where an index block's `dx_countlimit` sits (8 in an interior node, after the fake entry; 32 in the root, after ".",
+    /// ".." and `dx_root_info`), or nil for a leaf (`get_dx_countlimit`).
+    static func indexCountOffset(_ block: DiskBytes, logical: UInt64, directory: UInt64) throws(DiskError) -> Int? {
+        let first = recordLength(try block.u16(4), blockSize: block.count)
+        if first == block.count { return 8 }
+        guard logical == 0 else { return nil }
+        let (dotLength, dot) = (try block.u8(6), try block.u8(8))
+        let (dotDot, dotDotLength) = (try block.u16(16), try block.u8(18))
+        let (reserved, infoLength) = (try block.u32(24), try block.u8(29))
+        let isRoot =
+            first == 12 && dotLength == 1 && dot == 0x2E && dotDotLength == 2
+            && recordLength(dotDot, blockSize: block.count) == block.count - 12 && reserved == 0 && infoLength == 8
+        guard isRoot else { throw .corrupt("directory \(directory): an htree whose first block is not its root") }
+        return 32
+    }
+
+    /// `ext4_rec_len_from_disk`: lengths of 64 KiB blocks do not fit 16 bits.
+    static func recordLength(_ stored: UInt16, blockSize: Int) -> Int {
+        guard blockSize >= 65536 else { return Int(stored) }
+        if stored == 0xFFFF || stored == 0 { return blockSize }
+        return Int(stored & 0xFFFC) | Int(stored & 3) << 16
+    }
+
+    /// `ext4_dx_csum`: CRC-32C over the block up to the last used entry, then `dt_reserved`, then a zero checksum field. The
+    /// tail follows `limit` entries, used or not.
+    private func verifyIndexBlock(
+        _ block: DiskBytes, countOffset: Int, directory: UInt64, seed: UInt32
+    ) throws(DiskError) {
+        let (limit, count) = (Int(try block.u16(countOffset)), Int(try block.u16(countOffset + 2)))
+        let tail = countOffset + 8 * limit
+        guard count <= limit, tail + 8 <= block.count else {
+            throw .checksum("directory \(directory): index block without room for its checksum")
+        }
+        var value = CRC32C.update(seed, try block.region(0, countOffset + 8 * count))
+        value = CRC32C.update(value, try block.region(tail, 4))
+        value = CRC32C.update(value, [0, 0, 0, 0][...])
+        guard value == (try block.u32(tail + 4)) else { throw .checksum("directory \(directory): index block") }
     }
 }

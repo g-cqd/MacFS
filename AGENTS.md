@@ -61,6 +61,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **Install only after the Release build's exit status is 0**: Release turns some Debug warnings into errors, and a failed build
   leaves the previous one in the derived-data folder, ready to be installed by mistake.
 - **The first mount right after reinstalling may fail**: the module process is still starting. Run `mounts` again.
+- **Offline `resize2fs` never makes meta_bg** (it moves blocks); the kernel's online resize does. `resize2fs` is in
+  e2fsprogs-extra, and it does not grow an image file: truncate it first.
+- **A dx root may end in a stale leaf tail** (`dt_reserved` is never cleared): tell directory blocks apart by position.
 - **Python's byte paths hide normalization bugs**; Cocoa asks in NFD. Compare through `FileManager`, as `mounts` does.
 - **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
@@ -72,4 +75,5 @@ the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the a
 everywhere (0015), conformance against the reference implementations and suites (docs/conformance), readers at the native baseline,
 and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
-`mounts` checks every image end to end (0025). Next by value: 0016 (htree), 0014 (LZNT1, unblocked), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.
+`mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
+Next by value: 0014 (LZNT1, unblocked), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.

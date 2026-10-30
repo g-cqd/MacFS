@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -19,6 +19,8 @@ for i in $(seq 0 11); do
     printf 'island %02d' "$i" | dd of=/tmp/tree/big/islands.bin bs=1 seek=$((i * 65536)) conv=notrunc 2>/dev/null
 done
 for i in $(seq 1 300); do echo "file $i" > /tmp/tree/dir/sub/f$i.txt; done
+# Non-ASCII names in an htree directory: there the signed and unsigned directory hashes differ (roadmap 0016).
+for i in $(seq 1 20); do echo "accent $i" > "/tmp/tree/dir/sub/é$i.txt"; done
 echo inside > "/tmp/tree/spaces and ünïcödé/naïve.txt"
 echo subvolume > /tmp/tree/vol/in-subvolume.txt
 ln -s ../hello.txt /tmp/tree/dir/link
@@ -61,10 +63,12 @@ kernel_touch() {  # $1 image, $2 byte offset of the file system
     umount /mnt/ref
 }
 
-make_ext() {  # $1 name, $2 size, rest: mke2fs options
+make_ext() {  # $1 name, $2 size, rest: mke2fs options; HASH= a directory hash, SIGNED=1 the signed variant
     name=$1; size=$2; shift 2
     rm -f "$name.img"
     mke2fs -q -F -L "$name" -d /tmp/tree "$@" "$name.img" "$size"
+    if [ -n "${HASH:-}" ]; then tune2fs -E hash_alg="$HASH" "$name.img" >/dev/null; fi
+    if [ -n "${SIGNED:-}" ]; then debugfs -w -R "ssv flags 1" "$name.img" >/dev/null 2>&1; fi
     # mke2fs -d writes linear directories; e2fsck -D rebuilds them as htrees where dir_index is on.
     # Exit 1 means "file system modified", which is the point.
     e2fsck -f -y -D "$name.img" >/dev/null 2>&1 || [ $? -eq 1 ]
@@ -72,12 +76,35 @@ make_ext() {  # $1 name, $2 size, rest: mke2fs options
     manifest /tmp/tree > "$name.manifest"
 }
 make_ext ext2 64M -t ext2 -b 1024
-make_ext ext3 64M -t ext3
+# Directory hashes (roadmap 0016): half-MD4 is the default; ext3 hashes with TEA, ext4-uuid-seed with the legacy hash, and
+# ext4-bigalloc signed (the flag set and the htrees rebuilt by e2fsck; an arm64 container defaults to unsigned).
+HASH=tea make_ext ext3 64M -t ext3
 make_ext ext4 128M -t ext4
 make_ext ext4-inline 128M -t ext4 -O inline_data
-make_ext ext4-bigalloc 128M -t ext4 -b 4096 -O bigalloc -C 16384
+SIGNED=1 make_ext ext4-bigalloc 128M -t ext4 -b 4096 -O bigalloc -C 16384
 # Every other ext4 image stores its checksum seed (csum_seed); this one derives it from the UUID, the other path (0015).
-make_ext ext4-uuid-seed 128M -t ext4 -O ^metadata_csum_seed
+HASH=legacy make_ext ext4-uuid-seed 128M -t ext4 -O ^metadata_csum_seed
+# meta_bg (roadmap 0016): each metagroup's descriptors in the first block of its first group (backups in its second and last),
+# not one table after the superblock. 1 KiB blocks, 1024 per group: 64 groups, 16 descriptors per block, 4 metagroups; eight
+# inodes per group spread the tree's inodes over three of them. Without sparse_super every group has a superblock backup, so
+# each metagroup's descriptors sit one block in, after it.
+make_ext ext4-meta-bg 64M -t ext4 -b 1024 -g 1024 -N 512 -O meta_bg,^resize_inode,^sparse_super
+# What the kernel makes of a mounted volume with no reserved descriptor blocks that outgrows its table: meta_bg from
+# s_first_meta_bg on, the old table before it (offline, resize2fs moves blocks instead). Filled by the kernel after growing:
+# its allocator spreads directories into the new groups, and it turns dir/sub into an htree itself.
+rm -f ext4-grown.img
+mke2fs -q -F -L ext4-grown -t ext4 -b 1024 -g 1024 -N 1024 -O ^resize_inode ext4-grown.img 16M
+truncate -s 64M ext4-grown.img
+loop=$(losetup -f) && losetup "$loop" ext4-grown.img && mount -t ext4 "$loop" /mnt/ref
+resize2fs "$loop" >/dev/null
+cp -a /tmp/tree/. /mnt/ref/
+# 10,000 names, hard links to one file (no inodes needed): more leaves than one 1 KiB root indexes, so the kernel gives the
+# htree a second level of interior nodes (roadmap 0016). The manifest is the mounted tree as the kernel shows it.
+mkdir /mnt/ref/many && echo many > /mnt/ref/many/n0
+for i in $(seq 1 9999); do ln /mnt/ref/many/n0 /mnt/ref/many/n$i; done
+manifest /mnt/ref | grep -v '^lost+found' > ext4-grown.manifest
+umount /mnt/ref && losetup -d "$loop"
+kernel_touch ext4-grown.img 0
 # A partitioned disk: one GPT partition of type "Linux filesystem" at 1 MiB, so Disk Arbitration matches the
 # module by partition type (FSMediaTypes), not as a partitionless whole disk.
 # mke2fs zeroes the start of the file even with an offset, so the partition table is written after it; the file
@@ -120,7 +147,7 @@ reference() {  # $1 root, $2 tool, $3 fields
         -exec sh -c 'if [ -L "$1" ]; then readlink "$1"; elif [ -f "$1" ]; then sha256sum < "$1" | cut -d" " -f1; else echo -; fi' _ {} \; \
         | LC_ALL=C sort)
 }
-for name in ext2 ext3 ext4 ext4-inline ext4-bigalloc ext4-uuid-seed ext4-gpt; do
+for name in ext2 ext3 ext4 ext4-inline ext4-bigalloc ext4-uuid-seed ext4-meta-bg ext4-grown ext4-gpt; do
     offset=0; [ "$name" = ext4-gpt ] && offset=1048576
     mount -t ext4 -o loop,ro,noload,offset=$offset "$name.img" /mnt/ref
     reference /mnt/ref "Linux $(uname -r) ext4" "type mode uid gid nlink size dirsize mtime ctime content" > "$name.reference"
@@ -136,6 +163,25 @@ for name in btrfs btrfs-zlib btrfs-lzo btrfs-zstd btrfs-xxhash btrfs-subvol; do
 done
 rm -rf /tmp/restored
 rm -rf /tmp/tree
+# Directory hashes from e2fsprogs (debugfs dx_hash), the htree lookup's oracle (roadmap 0016): versions 0 to 5 (legacy,
+# half-MD4, TEA, then the same unsigned), names of 1 to 70 bytes (across the 16- and 32-byte blocks the hashes take in turn),
+# non-ASCII names (where signedness shows) and two seeds. Lines: version, seed, name in hex, hash, minor hash.
+phrase=Thequickbrownfox-jumps_over.the~lazy+dog=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh
+: > /tmp/dxnames
+for n in $(seq 1 70); do printf '%s\n' "$phrase" | cut -c1-"$n" >> /tmp/dxnames; done
+printf '%s\n' é naïve.txt ünïcödé-ÿ 日本語のファイル名.txt "$(printf '\377\200abc')" >> /tmp/dxnames
+: > dxhash.txt
+for seed in 00000000-0000-0000-0000-000000000000 01020304-0506-0708-090a-0b0c0d0e0f10; do
+    for version in 0 1 2 3 4 5; do
+        while IFS= read -r name; do
+            out=$(debugfs -R "dx_hash -h $version -s $seed $name" ext4.img 2>/dev/null | tail -1)
+            hex=$(printf '%s' "$name" | od -An -tx1 | tr -d ' \n')
+            # From the end of the line: the name may hold anything (sed's . does not match invalid UTF-8).
+            hashes=$(echo "$out" | awk '{ print $(NF - 2), $NF }' | tr -d ')')
+            printf '%s\t%s\t%s\t%s\n' "$version" "$seed" "$hex" "$hashes" | tr ' ' '\t' >> dxhash.txt
+        done < /tmp/dxnames
+    done
+done
 # LZO1X streams from liblzo2 (the reference implementation) and their originals: the decoder's oracle.
 rm -rf lzo && mkdir lzo && gcc -O2 -o /tmp/lzo-fixtures /scripts/lzo-fixtures.c -llzo2 && /tmp/lzo-fixtures
 mkfs.btrfs --version | head -1 > versions.txt

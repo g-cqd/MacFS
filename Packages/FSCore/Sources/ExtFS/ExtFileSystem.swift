@@ -27,9 +27,23 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         else {
             throw .corrupt("\(groups) groups of \(superblock.blockCount) blocks on a \(source.byteCount)-byte device")
         }
-        // The descriptor table starts in the block after the superblock's.
-        let tableStart = (superblock.firstDataBlock + 1) * UInt64(superblock.blockSize)
-        let raw = DiskBytes(try source.read(at: tableStart, count: Int(groups) * superblock.descriptorSize))
+        // Descriptor blocks where the layout puts them (one table, or one block per metagroup), consecutive ones in one read.
+        let blockSize = UInt64(superblock.blockSize)
+        let needed = (Int(groups) * superblock.descriptorSize + superblock.blockSize - 1) / superblock.blockSize
+        var runs: [(first: UInt64, count: Int)] = []
+        for index in 0 ..< UInt64(needed) {
+            let block = superblock.descriptors.descriptorBlock(index)
+            guard block < superblock.blockCount else { throw .corrupt("descriptor block \(index) at block \(block)") }
+            if let last = runs.last, last.first + UInt64(last.count) == block {
+                runs[runs.count - 1].count += 1
+            } else {
+                runs.append((block, 1))
+            }
+        }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(needed * superblock.blockSize)
+        for run in runs { bytes += try source.read(at: run.first * blockSize, count: run.count * superblock.blockSize) }
+        let raw = DiskBytes(bytes)
         var tables: [UInt64] = []
         tables.reserveCapacity(Int(groups))
         for group in 0 ..< Int(groups) {

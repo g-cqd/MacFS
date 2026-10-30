@@ -64,8 +64,9 @@ extension ExtFileSystem {
         let inode = try inode(id)
         guard inode.kind == .symlink else { throw .notSymlink }
         guard inode.size < 4096 else { throw .corrupt("symlink of \(inode.size) bytes") }
-        // A fast symlink keeps its target in i_block and owns no blocks (beyond an xattr block).
-        let xattrSectors: UInt64 = inode.xattrBlock != 0 ? UInt64(superblock.blockSize / 512) : 0
+        // A fast symlink keeps its target in i_block and owns no blocks beyond an xattr block, which with bigalloc counts a
+        // whole cluster (ext4_inode_is_fast_symlink).
+        let xattrSectors: UInt64 = inode.xattrBlock != 0 ? UInt64(superblock.clusterSize / 512) : 0
         if inode.flags & ExtInode.inlineDataFlag == 0, inode.sectors == xattrSectors, inode.size < 60 {
             return try inode.blockArea.bytes(0, Int(inode.size))
         }

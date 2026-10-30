@@ -14,14 +14,10 @@ extension ExtFileSystem {
                 if data.count > 60 { try ExtDirectoryBlock.entries(try data.slice(from: 60), into: &entries) }
                 return entries
             }
-            let indexed = inode.flags & ExtInode.indexFlag != 0
-            for run in try runs(inode) {
-                guard let physical = run.physical else { continue }
+            let runs = try runs(inode)
+            for run in runs where run.physical != nil {
                 for index in 0 ..< run.count {
-                    let bytes = try block(physical + index)
-                    if let checksums = superblock.checksums, let seed = inode.checksumSeed {
-                        try checksums.verifyDirectoryBlock(bytes, directory: directory, seed: seed, indexed: indexed)
-                    }
+                    let bytes = try directoryBlock(run.logical + index, of: inode, runs: runs)
                     try ExtDirectoryBlock.entries(bytes, into: &entries)
                     guard entries.count <= 1 << 22 else {
                         throw .corrupt("directory \(directory) has too many entries")
@@ -32,8 +28,22 @@ extension ExtFileSystem {
         }
     }
 
+    /// A name in a directory: from its listing when cached, else through its index when it has one (a few blocks), else
+    /// from its listing, read and cached.
     public func lookup(_ name: [UInt8], in directory: UInt64) throws(DiskError) -> DirectoryEntry {
-        guard let entry = try listing(directory).first(where: { $0.name == name }) else { throw .notFound }
+        var found: ExtDirectoryBlock.Entry?
+        if let cached = listings[directory] {
+            found = cached.first { $0.name == name }
+        } else {
+            let inode = try inode(directory)
+            guard inode.kind == .directory else { throw .notDirectory }
+            switch try indexedLookup(name, in: inode) {
+                case .found(let entry): found = entry
+                case .absent: found = nil
+                case .notIndexed: found = try listing(directory).first { $0.name == name }
+            }
+        }
+        guard let entry = found else { throw .notFound }
         return DirectoryEntry(
             name: entry.name, id: entry.inode, kind: ExtDirectoryBlock.kind(entry.type), nextCookie: 0)
     }

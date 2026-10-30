@@ -10,6 +10,7 @@ struct ExtSuperblock: Sendable {
     // Incompatible features: refused unless listed as understood.
     private static let understoodIncompat: UInt32 = [
         0x0002,  // filetype
+        0x0010,  // meta_bg (descriptors placed per metagroup; DescriptorLayout)
         0x0004,  // needs recovery (the journal is not replayed; see ExtFileSystem)
         0x0040,  // extents
         0x0080,  // 64bit
@@ -24,7 +25,7 @@ struct ExtSuperblock: Sendable {
     ]
     .reduce(0, |)
     private static let namedIncompat: [(UInt32, String)] = [
-        (0x0001, "compression"), (0x0008, "an external journal device"), (0x0010, "meta_bg"), (0x1000, "dirdata")
+        (0x0001, "compression"), (0x0008, "an external journal device"), (0x1000, "dirdata")
     ]
 
     let inodeCount: UInt32
@@ -33,14 +34,26 @@ struct ExtSuperblock: Sendable {
     let freeInodes: UInt32
     let firstDataBlock: UInt64
     let blockSize: Int
+    /// The allocation unit: a block, or with bigalloc a cluster of `2^s_log_cluster_size` KiB.
+    let clusterSize: Int
     let blocksPerGroup: UInt32
     let inodesPerGroup: UInt32
     let inodeSize: Int
     let incompat: UInt32
+    /// Compatible features: `dir_index` (0x20) makes indexed directories' indexes count.
+    let compat: UInt32
     let hasMetadataChecksums: Bool
     /// The metadata checksums, when the volume has them (`metadata_csum`).
     let checksums: ExtChecksums?
     let descriptorSize: Int
+    /// `s_first_meta_bg`: under meta_bg, the first metagroup whose descriptors are in its own groups; those before it keep the
+    /// table after the superblock (what `resize2fs` leaves when it grows a volume past its table).
+    let firstMetaBG: UInt32
+    let descriptors: DescriptorLayout
+    /// `s_flags`: 1 when directory hashes treat bytes as signed, 2 when unsigned.
+    let flags: UInt32
+    /// `s_hash_seed`, the directory hashes' seed.
+    let hashSeed: [UInt32]
     let uuid: [UInt8]
     let label: String
 
@@ -70,6 +83,11 @@ struct ExtSuperblock: Sendable {
         let logBlock = try bytes.u32(0x18)
         guard logBlock <= 6 else { throw .corrupt("block size 2^\(10 + logBlock)") }
         blockSize = 1024 << Int(logBlock)
+        let logCluster = try bytes.u32(0x1C)
+        guard roCompat & 0x0200 == 0 || (logCluster >= logBlock && logCluster <= 29) else {
+            throw .corrupt("cluster size 2^\(10 + logCluster)")
+        }
+        clusterSize = roCompat & 0x0200 != 0 ? 1024 << Int(logCluster) : blockSize
         blocksPerGroup = try bytes.u32(0x20)
         inodesPerGroup = try bytes.u32(0x28)
         let revision = try bytes.u32(0x4C)
@@ -83,6 +101,16 @@ struct ExtSuperblock: Sendable {
         guard descriptorSize >= 32, descriptorSize <= 1024, descriptorSize.nonzeroBitCount == 1 else {
             throw .corrupt("group descriptor of \(descriptorSize) bytes")
         }
+        firstMetaBG = try bytes.u32(0x104)
+        flags = try bytes.u32(0x160)
+        compat = try bytes.u32(0x5C)
+        hashSeed = try (0 ..< 4).map { (index) throws(DiskError) -> UInt32 in try bytes.u32(0xEC + 4 * index) }
+        let sparseSuper2 = compat & 0x0200 != 0
+        descriptors = DescriptorLayout(
+            blockSize: blockSize, descriptorsPerBlock: blockSize / descriptorSize, blocksPerGroup: blocksPerGroup,
+            firstDataBlock: firstDataBlock, metaBG: incompat & 0x0010 != 0, firstMetaBG: firstMetaBG,
+            sparseSuper: roCompat & 0x0001 != 0,
+            sparseSuper2: sparseSuper2 ? (try bytes.u32(0x24C), try bytes.u32(0x250)) : nil)
         uuid = try bytes.bytes(0x68, 16)
         label = String(decoding: try bytes.bytes(0x78, 16).prefix { $0 != 0 }, as: UTF8.self)
         // s_checksum_seed when csum_seed is set (the UUID may then change), else crc32c(~0, uuid).
@@ -93,4 +121,44 @@ struct ExtSuperblock: Sendable {
 
     var is64Bit: Bool { incompat & 0x0080 != 0 }
     var groupCount: UInt64 { (blockCount - firstDataBlock + UInt64(blocksPerGroup) - 1) / UInt64(blocksPerGroup) }
+
+    /// Where the group descriptors live: Linux's `ext4_bg_has_super` and `descriptor_loc` (fs/ext4/super.c, balloc.c).
+    struct DescriptorLayout: Sendable {
+        var blockSize: Int
+        var descriptorsPerBlock: Int
+        var blocksPerGroup: UInt32
+        var firstDataBlock: UInt64
+        var metaBG: Bool
+        var firstMetaBG: UInt32
+        var sparseSuper: Bool
+        var sparseSuper2: (UInt32, UInt32)?
+
+        /// Whether a group starts with a superblock backup: every group without sparse_super; with it, groups 0, 1 and the
+        /// powers of 3, 5 and 7; with sparse_super2, group 0 and the two groups the superblock names.
+        func hasSuperblock(_ group: UInt64) -> Bool {
+            if group == 0 { return true }
+            if let (first, second) = sparseSuper2 { return group == UInt64(first) || group == UInt64(second) }
+            guard sparseSuper, group > 1 else { return true }
+            guard group & 1 == 1 else { return false }
+            return [UInt64(3), 5, 7]
+                .contains { base in
+                    var power: UInt64 = base
+                    while power < group { power *= base }
+                    return power == group
+                }
+        }
+
+        /// The block holding descriptor block `index`. Without meta_bg, and for metagroups before `firstMetaBG`, the
+        /// table follows the superblock's block (block 1 with 1 KiB blocks, else 0). Under meta_bg, metagroup `index`
+        /// keeps its descriptors in the first block of its first group, after that group's superblock backup if any.
+        func descriptorBlock(_ index: UInt64) -> UInt64 {
+            let superblockBlock = UInt64(1024 / blockSize)
+            guard metaBG, index >= UInt64(firstMetaBG) else { return superblockBlock + index + 1 }
+            let group = index * UInt64(descriptorsPerBlock)
+            var skip: UInt64 = hasSuperblock(group) ? 1 : 0
+            // 1 KiB blocks with data from block 0 (bigalloc): group 0's first block is the boot block, then the superblock.
+            if blockSize == 1024, index == 0, firstDataBlock == 0 { skip += 1 }
+            return group * UInt64(blocksPerGroup) + firstDataBlock + skip
+        }
+    }
 }

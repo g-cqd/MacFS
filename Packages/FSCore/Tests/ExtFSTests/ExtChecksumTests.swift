@@ -57,6 +57,12 @@ struct PatchedSource: BlockSource {
             return UInt64(try area.u16(12 + 8)) << 32 | UInt64(try area.u32(12 + 4))
         }
 
+        /// The physical block of an inode's logical block, by the reader's own map.
+        func physical(_ inode: ExtInode, _ logical: UInt64) throws -> UInt64 {
+            let run = try fileSystem.runs(inode).first { $0.logical <= logical && logical < $0.end }
+            return try #require(run?.physical) + logical - (run?.logical ?? 0)
+        }
+
         /// The byte at `offset` with its lowest bit flipped.
         func flipped(_ offset: UInt64) throws -> PatchedSource {
             let byte = try source.read(at: offset, count: 1)[0]
@@ -139,6 +145,38 @@ struct PatchedSource: BlockSource {
         let fileSystem = try ExtFileSystem(source: patched)
         Self.expectChecksumError(
             { _ = try fileSystem.entries(of: directory.number, from: 0, limit: 100) }, "tailless block")
+    }
+
+    /// An htree's index blocks carry a `dx_tail` after their entries (roadmap 0016): a changed hash in the root is caught.
+    @Test func aChangedHtreeRootIsAChecksumError() throws {
+        let layout = try Layout("ext4")
+        let sub = try layout.inode("dir/sub")
+        #expect(sub.flags & ExtInode.indexFlag != 0)
+        let root = try layout.physical(sub, 0)
+        let patched = try layout.flipped(root * layout.blockSize + 32 + 8)  // the second dx_entry's hash
+        let fileSystem = try ExtFileSystem(source: patched)
+        Self.expectChecksumError({ _ = try fileSystem.entries(of: sub.number, from: 0, limit: 1000) }, "htree root")
+    }
+
+    /// An htree's leaves are plain directory blocks and need their tail like any other, as in Linux.
+    @Test func anHtreeLeafWithoutItsTailIsAChecksumError() throws {
+        let layout = try Layout("ext4")
+        let sub = try layout.inode("dir/sub")
+        let leaf = try layout.physical(sub, 1)
+        let patched = try layout.flipped(leaf * layout.blockSize + layout.blockSize - 12 + 7)
+        let fileSystem = try ExtFileSystem(source: patched)
+        Self.expectChecksumError({ _ = try fileSystem.entries(of: sub.number, from: 0, limit: 1000) }, "htree leaf")
+    }
+
+    /// The kernel turns a full linear directory into an htree in place and writes only `dt_checksum`: the old leaf tail's
+    /// bytes stay in `dt_reserved`, so the root's last 12 bytes look like a leaf tail. It is an index block all the same.
+    @Test func aKernelMadeHtreeRootIsAnIndexBlock() throws {
+        let layout = try Layout("ext4-grown")
+        let sub = try layout.inode("dir/sub")
+        #expect(sub.flags & ExtInode.indexFlag != 0)
+        let root = DiskBytes(try layout.source.read(at: try layout.physical(sub, 0) * layout.blockSize, count: 1024))
+        #expect(try root.u16(1024 - 8) == 12 && root.u8(1024 - 5) == 0xDE, "the stale tail should be there")
+        #expect(try layout.fileSystem.entries(of: sub.number, from: 0, limit: 1000).count == 320)
     }
 
     @Test func withoutTheFeatureNothingIsChecked() throws {

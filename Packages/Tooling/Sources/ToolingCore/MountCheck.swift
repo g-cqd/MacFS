@@ -24,10 +24,12 @@ public struct MountCheck: Sendable {
     /// Every test image a module reads whole. Not here: ext4-gpt (its attach yields the disk and its partition) and
     /// btrfs-zstd (zstd extents are not read yet, roadmap 0013).
     public static let targets: [Target] = {
-        let ext = ["ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-uuid-seed"]
-            .map {
-                Target(image: $0, type: DiskFormat.ext.shortName, extra: ["lost+found"])
-            }
+        let ext = [
+            "ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-uuid-seed", "ext4-meta-bg", "ext4-grown"
+        ]
+        .map {
+            Target(image: $0, type: DiskFormat.ext.shortName, extra: ["lost+found"])
+        }
         let btrfs = ["btrfs", "btrfs-zlib", "btrfs-lzo", "btrfs-xxhash", "btrfs-subvol"]
             .map {
                 Target(image: $0, type: DiskFormat.btrfs.shortName, extra: [])

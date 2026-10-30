@@ -4,7 +4,9 @@ import Testing
 @testable import ExtFS
 
 @Suite struct ExtImageTests {
-    static let images = ["ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-uuid-seed"]
+    static let images = [
+        "ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-uuid-seed", "ext4-meta-bg", "ext4-grown"
+    ]
 
     @Test(arguments: images)
     func wholeTreeMatchesTheManifest(_ name: String) throws {
@@ -34,6 +36,22 @@ import Testing
         #expect(
             hundred.flags & ExtInode.inlineDataFlag != 0 && hundred.size > 60,
             "needs bytes beyond i_block, in system.data")
+    }
+
+    /// meta_bg must reach descriptors past the first metagroup, or the images prove only the old layout (roadmap 0016).
+    @Test func metaBGImagesUseGroupsPastTheirFirstMetagroup() throws {
+        for (name, firstMetaBG) in [("ext4-meta-bg", 0), ("ext4-grown", 1)] {
+            let fileSystem = try ExtFileSystem(source: try ImageOracle.image(name))
+            let superblock = fileSystem.superblock
+            #expect(superblock.incompat & 0x0010 != 0, "\(name) should have meta_bg")
+            #expect(superblock.firstMetaBG == UInt32(firstMetaBG), "\(name)")
+            let perBlock = UInt64(superblock.blockSize / superblock.descriptorSize)
+            var highest: UInt64 = 0
+            for entry in try fileSystem.entries(of: fileSystem.rootID, from: 0, limit: 1000) {
+                highest = max(highest, (entry.id - 1) / UInt64(superblock.inodesPerGroup) / perBlock)
+            }
+            #expect(highest >= 1, "\(name): every top-level inode is in the first metagroup")
+        }
     }
 
     @Test func aDamagedSuperblockIsRefused() throws {
