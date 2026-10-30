@@ -42,11 +42,17 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **After reinstalling the app, kill the old module processes with SIGKILL**: they ignore SIGTERM and keep serving the old code.
 - **`mke2fs -E offset=` zeroes the start of the image**: write a partition table after it. **`sgdisk -q` writes nothing** here.
 - **`AEMI_DEV=1` rewrites aemi's `Package.resolved`.** Revert it before stashing or committing in aemi.
+- **An aemi change reaches MacFS in order:** aemi `main`, then AemiRegex's pin (its tests), then FSCore and Tooling together. Measure
+  an unpublished aemi with `MACFS_DEV=1 swift package edit aemi --path …`, and `unedit` before committing.
+- **Gate an aemi kernel push on every check by exit status:** `swift test`, `scripts/checksum-kernels-check.sh` and its `--linux`
+  run. The Linux path is built with other features than macOS's and broke once when only `swift test` gated (aemi diary 03).
+- **A mutant that does not compile proves nothing**, and neither does one that changes speed but not output (a narrowing that stops
+  early falls back to the transcoder): pick mutants the result can see.
 - **At `-Os`, write SIMD accumulators out.** An array of them in a loop is not unrolled or kept in registers (aemi ADR 0020).
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
 
 Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, signed FSKit modules that mount and automount (0005, 0006, 0024),
-the NFS proxy (0007), tooling and gates. The app is built, not launched. Next by value: 0011/0012 (kernels), 0015 (checksums),
-0023 (fuzzing), 0025 (the mount check as a plugin). Read each entry's `status:` and `blocked-by:` before starting it.
+the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the art (0011, 0012, 0029, 0030; ADR-0012). The app is
+built, not launched. Next by value: 0015 (checksums, now that the CRC is cheap), 0023 (fuzzing), 0025 (the mount check as a plugin). Read each entry's `status:` and `blocked-by:` before starting it.

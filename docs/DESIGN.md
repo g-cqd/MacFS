@@ -4,7 +4,7 @@
 
 | Layer | Where | What |
 |---|---|---|
-| Kernels | `Packages/FSCore/Sources/CFSKernels` | arm64 assembly: CRC-32C (three streams, PMULL fold, two tiers), NTFS fixups, bit count (NEON `cnt`), UTF-16LE→ASCII (`umaxv`, `xtn`). Portable C for other targets, compiled everywhere as `fsk_ref_*`, the test oracle. |
+| Kernels | `Packages/FSCore/Sources/CFSKernels`, aemi's `AemiKernels` | MacFS's own: the NTFS fixups in arm64 assembly, portable C elsewhere and compiled everywhere as `fsk_ref_*`, the test oracle; the device ioctls. From aemi (ADR-0012): CRC-32C (PMULL folds with three `crc32cx` streams from 4 KiB), bit count (NEON `cnt`), UTF-16LE→ASCII (`umaxv`, `xtn`). |
 | Core | `FSCore` | `DiskError`, `DiskBytes` (bounds-checked loads), `BlockSource` and `FileBlockSource` (image or raw device), `AlignedReader`, `BoundedCache`, `TreeWalk`, the model (`NodeAttributes`, `DirectoryEntry`, `VolumeDescription`) and the seam: `ReadOnlyFileSystem`. |
 | Readers | `Btrfs`, `NTFS`, `ExtFS` | One `ReadOnlyFileSystem` each. Synchronous, thread-safe, caches bounded. |
 | Registry | `Formats` | `DiskFormat`: names, short names, probe (a full open), open. The one list every consumer uses. |

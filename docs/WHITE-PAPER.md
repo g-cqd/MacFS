@@ -50,8 +50,9 @@ decode: each is refused with `unsupported` or `accessDenied`, never read as if i
 
 Every change that can affect performance is benchmarked before and after, release build, median and spread, against the fairest native
 baseline available (`fskbench`; ADR-0003). Assembly is written only where a measurement against intrinsics shows it pays, and is held to
-the same reference tests as everything else. "Fastest" is not a word this project uses: the CRC-32C kernel is a third of the published
-state of the art (research 2026-10-30-neon-kernels), and the roadmap says so.
+the same reference tests as everything else. Kernels that are not about a file system go to aemi, where every consumer gets them, and
+are measured there against this repository's former assembly (ADR-0012): CRC-32C now folds at 86 to 90 GB/s in cache and at the
+memory's 59 from DRAM. "Fastest" is not a word this project uses; the numbers and the machine are.
 
 ## Process
 

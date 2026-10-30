@@ -48,3 +48,27 @@ was checked in Python against the bitwise CRC before any assembly.
 An LZ77 match copy (`docs/research/probes/lz-match-copy.c.txt`): 16-byte vector stores when the distance is 16 or more, otherwise a
 16-byte pattern rotated by one `tbl` per store. Correct against the byte loop for every distance 1 to 40 and length 0 to 100 at a guard
 page. On LZO it moved nothing (1110 to 1122 MB/s in three variants): matches are a few bytes, and the call costs what the vector saves.
+
+## Later the same day: in aemi, and past the published numbers (ADR-0012)
+
+The kernels moved to aemi as C intrinsics (aemi ADR 0020; its diaries 2026-10-30-02 and -03 hold the probes). What it took to
+match and then pass the assembly, each measured:
+
+- **`eor3`.** Clang's schedule split the pairs Apple cores fuse (`pmull2 acc` then `eor acc, acc, ...`); SHA3's `veor3q_u64` joins
+  both products and the block in one instruction: 52 to 59 GB/s on 64 MiB. In the assembly it gives nothing: it had the pairs.
+- **59 GB/s is the memory, not the kernel.** One block in cache folds at 67 to 70 GB/s; from DRAM every variant meets 59.
+- **The hybrid** (roadmap 0029, corsix's `v9s3x2e` idea): three `crc32cx` streams beside the eight folds in a 4 KiB chunk
+  [V | S0 | S1 | S2], each region shifted into place by the identity above with K = x^(8n-33) mod P for n = 384, 768, 1152.
+  Each chunk starts from seed 0 and the running value is shifted past it by n = 4096, so chunks overlap: 86 to 90 GB/s in cache.
+  Chunks of 16 or 64 KiB, whose regions lie kilobytes apart, fell to 38 and 43 from DRAM.
+- **Short inputs** pay calls, not arithmetic: a compile-time feature check and an inlined tail of one `crc32cw`/`ch`/`cb` each.
+
+| (GB/s, M2 Pro) | former assembly | aemi |
+|---|---:|---:|
+| one 4 KiB block, in cache | 67.0 | 86.3 |
+| one 64 KiB block, in cache | 64.9 | 88.1 |
+| 64 MiB from DRAM | 58.4 | 58.7 |
+| 12 / 64 / 256-byte pieces | 5.91 / 13.8 / 45.7 | 5.14 / 14.8 / 47.3 |
+| UTF-16 narrowing, long / 12-unit names | 22.8 / 6.74 | 35.4 / 8.97 |
+
+corsix reports 77 to 85 on M1, a different core: the numbers are not a comparison of code.

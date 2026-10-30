@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 blocked-by: []
 date: 2026-10-30
 ---
@@ -14,3 +14,10 @@ replace `BitCount` and `UTF16Name`'s kernel with `AemiKernels.bitCount` and `asc
 Other candidates read and not moved, each for a stated reason: `DiskBytes` (aemi has `CheckedBytes` since its ADR 0018: the move is
 the other way, MacFS adopting it if its throwing checks fit), `BoundedCache` (no second consumer named yet), `AlignedReader` (raw
 devices only; a second consumer would put it in AemiIO), the Tooling rules (the family's own gates live per repository today).
+
+## Done
+
+aemi `2fbe4e4`, AemiRegex `d5bac1c`, one pin (ADR-0004). `CRC32C`, `BitCount` and `UTF16Name` call `AemiKernels`; the assembly for
+them is the benchmark's baseline (ADR-0012). On the way, aemi took `GuardedBytes` and a guard-page suite over every kernel (its ADR
+0021), a fix for its ScratchPool test, which failed 26 runs in 30 on a correct pool, and an arm64 Linux CI job. `DiskBytes` against
+`CheckedBytes`: not adopted, since `CheckedBytes` traps where the readers must throw `DiskError.corrupt` on hostile disks.

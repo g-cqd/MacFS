@@ -11,6 +11,6 @@ Read Btrfs, NTFS and ext2/3/4 volumes on macOS, natively and read-only.
   own client.
 - **Planned:** a WebDAV option, kernel-offloaded I/O, writes.
 
-Hot loops are arm64 assembly (CRC-32C with a PMULL fold, NEON bit count and UTF-16 narrowing), each tested against a C reference and
-benchmarked against compiler intrinsics. See [docs/WHITE-PAPER.md](docs/WHITE-PAPER.md), [docs/DESIGN.md](docs/DESIGN.md) and
+Hot loops are SIMD kernels: CRC-32C (PMULL folds with scalar streams beside them), NEON bit count and UTF-16 narrowing from aemi, and
+the NTFS fixups in arm64 assembly; each is tested against a reference, at inaccessible page edges, and benchmarked (ADR-0012). See [docs/WHITE-PAPER.md](docs/WHITE-PAPER.md), [docs/DESIGN.md](docs/DESIGN.md) and
 [AGENTS.md](AGENTS.md).

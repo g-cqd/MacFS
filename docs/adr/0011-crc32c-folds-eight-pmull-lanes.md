@@ -1,6 +1,7 @@
 ---
-status: accepted
+status: superseded
 supersedes: ["0003"]
+superseded-by: ["0012"]
 date: 2026-10-30
 ---
 
