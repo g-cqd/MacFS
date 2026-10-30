@@ -2,7 +2,7 @@
 
 What each reader is held to, and how. Four kinds of reference, in this order of authority:
 
-1. **The reference implementation**, which defines behaviour where documents are silent: the Linux kernel for ext2/3/4, ntfs-3g
+1. **The reference implementation**, which defines behaviour where documents are silent: the Linux kernel for ext2/3/4 and XFS, ntfs-3g
    for NTFS, btrfs-progs for Btrfs (this kernel has no Btrfs driver), liblzo2 and zlib for the codecs. Each test image has a
    `<image>.reference` manifest written by that implementation (`Scripts/make-test-images.inner.sh`): every node's type, mode,
    owner, link count, size, times and content, with a `fields` line naming what that implementation owns. `*ConformanceTests`
@@ -16,4 +16,4 @@ What each reader is held to, and how. Four kinds of reference, in this order of 
    `ReferenceSuiteTests`: on every image a reader ends with a result or a `DiskError`, never a trap or a hang; where e2fsck's
    expected output is only its passes (16 images), the whole tree reads, or the reader names what it does not support.
 
-Pages: [ext](ext.md), [NTFS](ntfs.md), [Btrfs](btrfs.md), [performance](performance.md).
+Pages: [ext](ext.md), [NTFS](ntfs.md), [Btrfs](btrfs.md), [XFS](xfs.md), [performance](performance.md).

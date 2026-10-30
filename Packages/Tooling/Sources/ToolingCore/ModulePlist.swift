@@ -15,7 +15,7 @@ public enum ModulePlist {
     /// whole unpartitioned disk.
     private static func mediaTypes(for format: DiskFormat) -> [String: Any] {
         switch format {
-            case .btrfs, .ext:
+            case .btrfs, .ext, .xfs:
                 [
                     "0FC63DAF-8483-4772-8E79-3D69D8477DE4": media("0FC63DAF-8483-4772-8E79-3D69D8477DE4"),
                     "Linux": media("Linux"),

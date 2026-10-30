@@ -2,6 +2,7 @@ import Btrfs
 import ExtFS
 public import FSCore
 import NTFS
+import XFS
 
 /// The formats MacFS reads, and how each is recognized and opened.
 ///
@@ -11,6 +12,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
     case btrfs
     case ntfs
     case ext
+    case xfs
 
     /// The `mount -t` name and FSKit `FSShortName`. Never one macOS already uses: the system's own
     /// read-only `ntfs` would otherwise be shadowed or shadow this one (ADR-0006).
@@ -19,6 +21,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
             case .btrfs: "btrfs"
             case .ntfs: "ntfsro"
             case .ext: "ext4"
+            case .xfs: "xfs"
         }
     }
 
@@ -28,6 +31,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
             case .btrfs: "BtrfsFS"
             case .ntfs: "NTFSFS"
             case .ext: "ExtFSModule"
+            case .xfs: "XFSModule"
         }
     }
 
@@ -38,6 +42,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
             case .btrfs: "Btrfs"
             case .ntfs: "NTFS"
             case .ext: "ext2/3/4"
+            case .xfs: "XFS"
         }
     }
 
@@ -46,6 +51,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
             case .btrfs: try BtrfsFileSystem(source: source)
             case .ntfs: try NTFSFileSystem(source: source)
             case .ext: try ExtFileSystem(source: source)
+            case .xfs: try XFSFileSystem(source: source)
         }
     }
 
@@ -54,6 +60,7 @@ public enum DiskFormat: String, CaseIterable, Sendable {
             case .btrfs: BtrfsFileSystem.probe(source) != nil
             case .ntfs: NTFSFileSystem.probe(source)
             case .ext: ExtFileSystem.probe(source)
+            case .xfs: XFSFileSystem.probe(source)
         }
     }
 

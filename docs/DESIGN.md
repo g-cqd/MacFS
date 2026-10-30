@@ -32,6 +32,11 @@ NEON bit count.
 holes), indirect blocks, inline data (`system.data`), linear and htree directories by linear scan. Refused: meta_bg, compression,
 journal devices, dirdata. The journal is not replayed.
 
+**XFS (v5).** Big-endian; inode numbers encode allocation group, block and slot. Inodes v3 with their CRC (bigtime and
+nrext64 when set), data forks local, as extent lists or B+trees (`BMA3` blocks, checksum and owner checked), directories by
+their data blocks in every form, symlinks inline or remote (`XSLM`), unwritten extents read as zero. Refused: v4, needsrepair,
+realtime files. The log is not replayed (docs/conformance/xfs.md).
+
 ## What is not built
 
 Kernel-offloaded I/O, writes, the WebDAV proxy, disk discovery in the app, mounting from the app, the kernel-extension tier.

@@ -3,6 +3,7 @@ import FSCore
 /// One on-disk inode (`struct ext4_inode`).
 struct ExtInode: Sendable {
     static let indexFlag: UInt32 = 0x0000_1000
+    // @dl:accept -- each format's header parsed field by field; the shape is the format's, not shared logic
     static let encryptedFlag: UInt32 = 0x0000_0800
     static let hugeFileFlag: UInt32 = 0x0004_0000
     static let extentsFlag: UInt32 = 0x0008_0000

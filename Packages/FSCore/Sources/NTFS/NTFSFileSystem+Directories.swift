@@ -80,21 +80,18 @@ extension NTFSFileSystem {
         let units = Array(String(decoding: name, as: UTF8.self).utf16)
         guard let found = try listing(directory).find(units: units, folded: fold(units)) else { throw .notFound }
         return DirectoryEntry(
+            // @dl:accept -- each reader maps its own directory entries to DirectoryEntry; the fields happen to share names
             name: found.fileName.name, id: found.record, kind: kind(found.fileName, record: found.record),
             nextCookie: 0)
     }
 
     public func entries(of directory: UInt64, from cookie: UInt64, limit: Int) throws(DiskError) -> [DirectoryEntry] {
         let names = try listing(directory).names
-        guard cookie < UInt64(names.count) else { return [] }
-        let start = Int(cookie)
-        let end = min(names.count, start + max(0, limit))
-        return (start ..< end)
-            .map { position in
-                let name = names[position]
-                return DirectoryEntry(
-                    name: name.fileName.name, id: name.record, kind: kind(name.fileName, record: name.record),
-                    nextCookie: UInt64(position + 1))
-            }
+        return try DirectoryPage.page(count: names.count, from: cookie, limit: limit) { (position) throws(DiskError) in
+            let name = names[position]
+            return DirectoryEntry(
+                name: name.fileName.name, id: name.record, kind: kind(name.fileName, record: name.record),
+                nextCookie: UInt64(position + 1))
+        }
     }
 }

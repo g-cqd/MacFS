@@ -57,6 +57,7 @@ struct ExtSuperblock: Sendable {
     let uuid: [UInt8]
     let label: String
 
+    // @dl:accept -- each format's header parsed field by field; the shape is the format's, not shared logic
     static func looksLikeOne(_ bytes: [UInt8]) -> Bool {
         (try? DiskBytes(bytes).u16(0x38)) == magic
     }

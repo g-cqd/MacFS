@@ -13,4 +13,9 @@ public protocol BlockMapping: ReadOnlyFileSystem {
 
 extension BlockMapping {
     public func prepareMappedRead(_ id: UInt64, offset: UInt64, length: UInt64) throws(DiskError) {}
+
+    /// The refusal every `blockMap` starts with, for a file that is not stored as its bytes.
+    public func requireMappable(_ id: UInt64) throws(DiskError) {
+        guard try isMappable(id) else { throw .unsupported("inode \(id) is not stored as its bytes") }
+    }
 }

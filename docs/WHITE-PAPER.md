@@ -5,7 +5,7 @@ the rule, or asks to change it in writing. Principles live here, never a log: th
 
 ## What this is
 
-Foreign file systems on macOS, natively: Btrfs, NTFS and ext2/3/4 today. One set of readers (`Packages/FSCore`) sits under several ways
+Foreign file systems on macOS, natively: Btrfs, NTFS, ext2/3/4 and XFS today. One set of readers (`Packages/FSCore`) sits under several ways
 of reaching Finder: FSKit modules (the native path, ADR-0005), loopback proxies through macOS's own network file system clients
 (planned: NFS first, WebDAV as one option among others), and the app's own browser, which needs nothing installed. A kernel extension is
 a researched and recorded alternative, not a shipped one.

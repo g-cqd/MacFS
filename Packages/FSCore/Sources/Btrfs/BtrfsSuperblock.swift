@@ -46,10 +46,12 @@ struct BtrfsSuperblock: Sendable {
         let incompat = try bytes.u64(0xBC)
         for (flag, name) in Self.refusedIncompat where incompat & flag != 0 { throw .unsupported(name) }
         fsid = try bytes.bytes(0x20, 16)
+        // @dl:accept -- each format's header parsed field by field; the shape is the format's, not shared logic
         metadataFSID = incompat & Self.metadataUUIDFlag != 0 ? try bytes.bytes(0x23B, 16) : fsid
         generation = try bytes.u64(0x48)
         rootTree = try bytes.u64(0x50)
         chunkTree = try bytes.u64(0x58)
+        // @dl:accept -- each format's header parsed field by field; the shape is the format's, not shared logic
         totalBytes = try bytes.u64(0x70)
         bytesUsed = try bytes.u64(0x78)
         rootDirectoryObject = try bytes.u64(0x80)

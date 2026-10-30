@@ -64,6 +64,9 @@ targets:
   NTFSFS:
     templates: [FSKitModule]
 
+  XFSModule:
+    templates: [FSKitModule]
+
   MacFS:
     type: application
     platform: macOS
@@ -82,6 +85,7 @@ targets:
       - target: BtrfsFS
       - target: ExtFSModule
       - target: NTFSFS
+      - target: XFSModule
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.gcqd.MacFS

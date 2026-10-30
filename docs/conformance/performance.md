@@ -51,3 +51,6 @@ segments, the kernel alone 3,475).
 
 Btrfs zstd (roadmap 0013): text 1,202 MB/s through the reader. The C kernel alone decodes the bench text in 128 KiB level-3
 frames at 1,236 MB/s, libzstd 1.5.7 at 1,110; source code at 933 against 1,310 (its sequences vary more).
+
+XFS (roadmap 0031; bench image written by the kernel): large files 14,769 MB/s (text) and 15,282 (random), small files 619,105
+nodes/s; ext4 on the same tree 14,973, 15,792 and 678,394.

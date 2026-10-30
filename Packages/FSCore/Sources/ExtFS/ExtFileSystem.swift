@@ -10,7 +10,7 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     let source: any BlockSource
     let superblock: ExtSuperblock
     private let inodeTables: [UInt64]
-    private let blocks = BoundedCache<UInt64, DiskBytes>(capacity: 1024)
+    private let blocks: CachedBlocks
     let mappings = BoundedCache<UInt64, [ExtRun]>(capacity: 512)
     let listings = BoundedCache<UInt64, [ExtDirectoryBlock.Entry]>(capacity: 256)
 
@@ -21,6 +21,7 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     public init(source: any BlockSource) throws(DiskError) {
         self.source = source
         superblock = try ExtSuperblock(try source.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
+        blocks = CachedBlocks(source, blockSize: superblock.blockSize, blockCount: superblock.blockCount)
         let groups = superblock.groupCount
         guard groups > 0, groups <= 1 << 32,
             superblock.blockCount <= source.byteCount / UInt64(superblock.blockSize) + 1
@@ -60,16 +61,7 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         )
     }
 
-    func block(_ number: UInt64) throws(DiskError) -> DiskBytes {
-        try blocks.value(for: number) { () throws(DiskError) -> DiskBytes in
-            guard number < superblock.blockCount,
-                let offset = number.checkedMultiplied(by: UInt64(superblock.blockSize))
-            else {
-                throw .corrupt("block \(number) of \(superblock.blockCount)")
-            }
-            return DiskBytes(try source.read(at: offset, count: superblock.blockSize))
-        }
-    }
+    func block(_ number: UInt64) throws(DiskError) -> DiskBytes { try blocks.block(number) }
 
     func inode(_ number: UInt64) throws(DiskError) -> ExtInode {
         guard number >= 1, number <= UInt64(superblock.inodeCount) else { throw .notFound }

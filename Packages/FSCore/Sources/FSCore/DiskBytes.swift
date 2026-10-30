@@ -40,6 +40,7 @@ public struct DiskBytes: Sendable {
 
     public func u8(_ offset: Int) throws(DiskError) -> UInt8 { storage[try check(offset, 1)] }
     // The range is checked first, so the unchecked load below stays inside `storage`.
+    // @dl:accept -- little- and big-endian loads mirror each other by design
     public func u16(_ offset: Int) throws(DiskError) -> UInt16 {
         let at = try check(offset, 2)
         return storage.withUnsafeBytes { unsafe $0.loadLE16(at) }
@@ -51,6 +52,20 @@ public struct DiskBytes: Sendable {
     public func u64(_ offset: Int) throws(DiskError) -> UInt64 {
         let at = try check(offset, 8)
         return storage.withUnsafeBytes { unsafe $0.loadLE64(at) }
+    }
+    // Big-endian (XFS): one byte-swapped load each, checked like the little-endian ones.
+    // @dl:accept -- little- and big-endian loads mirror each other by design
+    public func be16(_ offset: Int) throws(DiskError) -> UInt16 {
+        let at = try check(offset, 2)
+        return storage.withUnsafeBytes { unsafe $0.loadBE16(at) }
+    }
+    public func be32(_ offset: Int) throws(DiskError) -> UInt32 {
+        let at = try check(offset, 4)
+        return storage.withUnsafeBytes { unsafe $0.loadBE32(at) }
+    }
+    public func be64(_ offset: Int) throws(DiskError) -> UInt64 {
+        let at = try check(offset, 8)
+        return storage.withUnsafeBytes { unsafe $0.loadBE64(at) }
     }
     public func i8(_ offset: Int) throws(DiskError) -> Int8 { Int8(bitPattern: try u8(offset)) }
 

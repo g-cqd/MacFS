@@ -16,4 +16,15 @@ import Testing
         #expect(throws: DiskError.self) { try bytes.region(-1, 1) }
         #expect(throws: DiskError.self) { try bytes.region(0, -1) }
     }
+
+    /// Big-endian fields (XFS, roadmap 0031), within a view and bounds-checked like the little-endian ones.
+    @Test func bigEndianFieldsReadMostSignificantByteFirst() throws {
+        let bytes = try DiskBytes(Array(0 ..< 32)).slice(4, 16)
+        #expect(try bytes.be16(0) == 0x0405)
+        #expect(try bytes.be32(1) == 0x0506_0708)
+        #expect(try bytes.be64(8) == 0x0C0D_0E0F_1011_1213)
+        #expect(try bytes.u16(0) == 0x0504, "the little-endian read of the same bytes")
+        #expect(throws: DiskError.self) { try bytes.be64(9) }
+        #expect(throws: DiskError.self) { try bytes.be16(15) }
+    }
 }

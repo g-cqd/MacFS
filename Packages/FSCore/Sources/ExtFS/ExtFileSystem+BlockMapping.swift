@@ -5,12 +5,13 @@ public import FSCore
 extension ExtFileSystem: BlockMapping {
     public func isMappable(_ id: UInt64) throws(DiskError) -> Bool {
         let inode = try inode(id)
+        // @dl:accept -- each reader's block map starts the same way; the mapping itself is the format's
         return inode.kind == .regular && inode.flags & (ExtInode.inlineDataFlag | ExtInode.encryptedFlag) == 0
     }
 
     public func blockMap(_ id: UInt64, offset: UInt64, length: UInt64) throws(DiskError) -> [MappedRange] {
+        try requireMappable(id)
         let inode = try inode(id)
-        guard try isMappable(id) else { throw .unsupported("inode \(id) is not stored as its bytes") }
         let block = UInt64(superblock.blockSize)
         let ranges = try runs(inode)
             .map { run in

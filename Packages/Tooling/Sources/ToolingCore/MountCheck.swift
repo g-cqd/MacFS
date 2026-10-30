@@ -34,7 +34,8 @@ public struct MountCheck: Sendable {
                 Target(image: $0, type: DiskFormat.btrfs.shortName, extra: [])
             }
         let ntfs = ["ntfs", "ntfs-lznt1"].map { Target(image: $0, type: DiskFormat.ntfs.shortName, extra: []) }
-        return ext + btrfs + ntfs
+        let xfs = ["xfs", "xfs-1k"].map { Target(image: $0, type: DiskFormat.xfs.shortName, extra: []) }
+        return ext + btrfs + ntfs + xfs
     }()
 
     let runner: any ProcessRunning

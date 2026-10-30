@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra attr zstd sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra xfsprogs xfsprogs-extra util-linux attr zstd sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -149,6 +149,49 @@ cp /tmp/initialized.bin /mnt/ntfs/big/initialized.bin && truncate -s 300000 /mnt
 umount /mnt/ntfs
 manifest /tmp/tree > ntfs-lznt1.manifest
 
+# XFS (roadmap 0031): mkfs.xfs, then the tree copied in by the kernel's own driver. Beyond the tree: 10,000 names (hard links,
+# no inodes needed) for a node-form directory; data islands for a data fork too large for the inode (a B+tree; 1,500 at 1 KiB
+# blocks give it interior blocks); a symlink too long for the inode (a remote block); attributes, whose fork shrinks the data
+# fork; and a preallocated file over freed random data (unwritten extents, whose stale bytes must read as zero). At the
+# default 4 KiB blocks, and at 1 KiB with 8 KiB directory blocks. 300 MB is mkfs.xfs's minimum; the images stay sparse. The
+# manifest is the mounted tree as the kernel shows it. (v4 volumes: this kernel does not mount them, so there is no reference.)
+make_xfs() {  # $1 name, $2 islands, rest: mkfs.xfs options
+    name=$1; islands=$2; shift 2
+    rm -f "$name.img"; truncate -s 300M "$name.img"
+    mkfs.xfs -q -f -L "$name" "$@" "$name.img"
+    mount -t xfs -o loop "$name.img" /mnt/ref
+    cp -a /tmp/tree/. /mnt/ref/
+    # 40 names: past what the inode holds, within one directory block (block form).
+    mkdir /mnt/ref/forty && for i in $(seq 1 40); do echo "$i" > "/mnt/ref/forty/name-$i"; done
+    mkdir /mnt/ref/many && echo many > /mnt/ref/many/n0
+    for i in $(seq 1 9999); do ln /mnt/ref/many/n0 /mnt/ref/many/n$i; done
+    for i in $(seq 0 $((islands - 1))); do
+        printf 'fragment %04d' "$i" | dd of=/mnt/ref/big/fragments.bin bs=1 seek=$((i * 65536)) conv=notrunc 2>/dev/null
+    done
+    fallocate -l 4194304 /mnt/ref/big/preallocated.bin
+    printf 'middle' | dd of=/mnt/ref/big/preallocated.bin bs=1 seek=2097152 conv=notrunc 2>/dev/null
+    for node in many big/fragments.bin dir hello.txt; do setfattr -n user.macfs -v "an attribute" "/mnt/ref/$node"; done
+    # Random bytes written beneath the file system into the blocks of its unwritten extents: the stale data a reused disk
+    # holds there, which must read as zero. The metadata stays as the kernel wrote it (xfs_repair finds nothing).
+    umount /mnt/ref
+    block=$(xfs_db -r -c "sb 0" -c "p blocksize" "$name.img" | awk '{ print $3 }')
+    xfs_db -r -c "path /big/preallocated.bin" -c "p u3.bmx" "$name.img" | tr ' ' '\n' |
+        sed -n 's/^[0-9]*:\[[0-9]*,\([0-9]*\),\([0-9]*\),1\]$/\1 \2/p' > /tmp/unwritten
+    [ -s /tmp/unwritten ] || { echo "$name: no unwritten extent found" >&2; exit 1; }
+    while read -r start count; do
+        byte=$(xfs_db -r -c "convert fsblock $start byte" "$name.img" | sed 's/.*(\([0-9]*\)).*/\1/')
+        head -c $((count * block)) /dev/urandom | dd of="$name.img" bs="$block" seek=$((byte / block)) conv=notrunc 2>/dev/null
+    done < /tmp/unwritten
+    xfs_repair -n "$name.img" >/dev/null 2>&1 || { echo "$name: xfs_repair -n finds damage" >&2; exit 1; }
+    mount -t xfs -o loop "$name.img" /mnt/ref
+    ln -s "/$(head -c 600 /dev/zero | tr '\0' 'x')/end" /mnt/ref/dir/long-link
+    touch -m -d @1700000000.123456789 /mnt/ref/hello.txt
+    manifest /mnt/ref > "$name.manifest"
+    umount /mnt/ref
+}
+make_xfs xfs 100
+make_xfs xfs-1k 1500 -b size=1024 -n size=8192
+
 # Reference manifests: each image as its reference implementation presents it (docs/conformance). The Linux kernel mounts ext,
 # ntfs-3g mounts NTFS, and btrfs-progs' own reader restores Btrfs (this kernel has no Btrfs driver). The fields line names what
 # that implementation owns: ntfs-3g synthesizes modes and owners, and a restore makes fresh link counts.
@@ -162,6 +205,11 @@ for name in ext2 ext3 ext4 ext4-inline ext4-bigalloc ext4-uuid-seed ext4-meta-bg
     offset=0; [ "$name" = ext4-gpt ] && offset=1048576
     mount -t ext4 -o loop,ro,noload,offset=$offset "$name.img" /mnt/ref
     reference /mnt/ref "Linux $(uname -r) ext4" "type mode uid gid nlink size dirsize mtime ctime content" > "$name.reference"
+    umount /mnt/ref
+done
+for name in xfs xfs-1k; do
+    mount -t xfs -o loop,ro,norecovery "$name.img" /mnt/ref
+    reference /mnt/ref "Linux $(uname -r) xfs" "type mode uid gid nlink size dirsize mtime ctime content" > "$name.reference"
     umount /mnt/ref
 done
 for name in ntfs ntfs-lznt1; do
@@ -223,3 +271,4 @@ ntfs-3g --version 2>&1 | head -1 >> versions.txt
 uname -r | sed "s/^/Linux /" >> versions.txt
 apk info -v lzo 2>/dev/null | head -1 >> versions.txt
 mke2fs -V 2>&1 | head -1 >> versions.txt
+mkfs.xfs -V 2>&1 | head -1 >> versions.txt

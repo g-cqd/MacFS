@@ -5,7 +5,7 @@ import Testing
 @Suite struct DiskFormatTests {
     static let images: [(String, DiskFormat)] = [
         ("btrfs", .btrfs), ("btrfs-zstd", .btrfs), ("ntfs", .ntfs), ("ext2", .ext), ("ext3", .ext), ("ext4", .ext),
-        ("ext4-inline", .ext)
+        ("ext4-inline", .ext), ("xfs", .xfs), ("xfs-1k", .xfs)
     ]
 
     @Test(arguments: images)

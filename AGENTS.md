@@ -1,6 +1,6 @@
 # Working in MacFS
 
-Foreign file systems (Btrfs, NTFS, ext2/3/4) on macOS, read-only. **Read [`docs/WHITE-PAPER.md`](docs/WHITE-PAPER.md) first.** This file
+Foreign file systems (Btrfs, NTFS, ext2/3/4, XFS) on macOS, read-only. **Read [`docs/WHITE-PAPER.md`](docs/WHITE-PAPER.md) first.** This file
 records what an agent cannot derive from the source: commands, gates, traps and the state of the work.
 
 ## Commands
@@ -74,6 +74,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   damaged frames and every single-bit flip; the CLI's streaming decoder is not that oracle (it accepts a frame shorter than its
   declared size). Memory-safety checks need the sanitizers: a mutant that overruns the workspace still returns an error.
 - **zsh: `rm -f *.zst` with no match aborts the whole command line**; `setopt nullglob` or quote it.
+- **A new FSKit module mounts only once enabled**: `pluginkit -e use -i <bundle id>` marked XFSModule enabled, yet mounts said
+  "disabled" until `fskit_agent` was restarted (`kill` it; launchd restarts it). Users enable it in System Settings.
+- **XFS frees a deleted file's blocks in the background**: an allocation right after an `rm` does not reuse them. To put stale
+  data under unwritten extents, the image script writes beneath the file system into those extents' blocks.
+- **This container's kernel has no XFS v4** (`CONFIG_XFS_SUPPORT_V4` off): no reference for v4, so it is refused.
 - **A dx root may end in a stale leaf tail** (`dt_reserved` is never cleared): tell directory blocks apart by position.
 - **Python's byte paths hide normalization bugs**; Cocoa asks in NFD. Compare through `FileManager`, as `mounts` does.
 - **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
@@ -88,5 +93,5 @@ and a Settings window with a tested status check. Mounted small files remain bel
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
 NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through a C kernel held to libzstd (0013;
-docs/research/2026-10-30-compression-kernels.md). Next by value: 0031 (XFS), zstd's sequence loop in assembly, an inflate
-kernel (zlib is the system's libz today). Read each entry's `status:` and `blocked-by:` before starting it.
+docs/research/2026-10-30-compression-kernels.md). XFS reads through its own module (0031). Next by value: zstd's sequence loop in assembly, an inflate kernel (zlib is the
+system's libz today), XFS hashed lookup. Read each entry's `status:` and `blocked-by:` before starting it.

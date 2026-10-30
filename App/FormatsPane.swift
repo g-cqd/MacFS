@@ -26,6 +26,8 @@ struct FormatsPane: View {
                 "Resident, non-resident and sparse streams, reparse and Interix links. Checked against ntfs-3g."
             case .ext:
                 "ext2, ext3 and ext4: extents, inline data, bigalloc, metadata checksums. Checked against the Linux kernel and e2fsprogs."
+            case .xfs:
+                "XFS v5: extent lists and B+trees, every directory form, metadata checksums. Checked against the Linux kernel."
         }
     }
 }

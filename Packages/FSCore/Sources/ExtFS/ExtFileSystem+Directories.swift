@@ -50,15 +50,14 @@ extension ExtFileSystem {
 
     public func entries(of directory: UInt64, from cookie: UInt64, limit: Int) throws(DiskError) -> [DirectoryEntry] {
         let entries = try listing(directory)
-        guard cookie < UInt64(entries.count) else { return [] }
-        let start = Int(cookie)
-        return (start ..< min(entries.count, start + max(0, limit)))
-            .map { position in
-                let entry = entries[position]
-                return DirectoryEntry(
-                    name: entry.name, id: entry.inode, kind: ExtDirectoryBlock.kind(entry.type),
-                    nextCookie: UInt64(position + 1))
-            }
+        // @dl:accept -- each reader maps its own directory entries to DirectoryEntry; the fields happen to share names
+        return try DirectoryPage.page(count: entries.count, from: cookie, limit: limit) {
+            (position) throws(DiskError) in
+            let entry = entries[position]
+            return DirectoryEntry(
+                name: entry.name, id: entry.inode, kind: ExtDirectoryBlock.kind(entry.type),
+                nextCookie: UInt64(position + 1))
+        }
     }
 
     public func attributes(of id: UInt64) throws(DiskError) -> NodeAttributes {

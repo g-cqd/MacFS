@@ -9,7 +9,7 @@ import Testing
     static let images = [
         "ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-meta-bg", "ext4-grown", "ntfs", "ntfs-lznt1",
         "btrfs",
-        "btrfs-zlib", "btrfs-lzo", "btrfs-zstd",
+        "btrfs-zlib", "btrfs-lzo", "btrfs-zstd", "xfs", "xfs-1k",
         "btrfs-xxhash",
         "btrfs-subvol"
     ]

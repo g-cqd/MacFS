@@ -9,7 +9,7 @@ VARIABLES title, format, path, rows, problem, tree, scope, pc
 vars == <<title, format, path, rows, problem, tree, scope, pc>>
 
 Dom_title == Opaque
-Dom_format == {"btrfs", "ntfs", "ext", "nil"}
+Dom_format == {"btrfs", "ntfs", "ext", "xfs", "nil"}
 Dom_path == Opaque
 Dom_rows == Opaque
 Dom_problem == Opaque \cup {"nil"}

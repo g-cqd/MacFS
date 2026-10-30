@@ -54,8 +54,10 @@ let package = Package(
         .target(name: "Btrfs", dependencies: ["FSCore", "CFSKernels", aemiKernel], swiftSettings: readerSettings),
         .target(name: "NTFS", dependencies: ["FSCore", "CFSKernels", aemiKernel], swiftSettings: readerSettings),
         .target(name: "ExtFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
+        .target(name: "XFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         // The one list of formats every mount technology, the app and fsprobe share.
-        .target(name: "Formats", dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS"], swiftSettings: readerSettings),
+        .target(
+            name: "Formats", dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS", "XFS"], swiftSettings: readerSettings),
         // What every mount technology needs on top of a reader: identifiers, listings with "." and "..".
         .target(name: "MountKit", dependencies: ["FSCore"], swiftSettings: readerSettings),
         // The app's logic, apart from its views so it is tested: the status checks (roadmap 0021).
@@ -75,6 +77,7 @@ let package = Package(
             swiftSettings: strictSettings),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore", "CFSKernels"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(name: "XFSTests", dependencies: ["XFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),
         .testTarget(

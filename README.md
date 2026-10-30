@@ -1,6 +1,6 @@
 # MacFS
 
-Read Btrfs, NTFS and ext2/3/4 volumes on macOS, natively and read-only.
+Read Btrfs, NTFS, ext2/3/4 and XFS volumes on macOS, natively and read-only.
 
 - **FSKit modules** (macOS 27): `mount -F -t btrfs|ext4|ntfsro /dev/diskNsM /path` once a signed module is enabled in System Settings →
   General → Login Items & Extensions → File System Extensions. Signing needs the FSKit Module capability (docs/roadmap/0006).
