@@ -62,5 +62,7 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 ## State
 
 Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, signed FSKit modules that mount and automount (0005, 0006, 0024),
-the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the art (0011, 0012, 0029, 0030; ADR-0012). The app is
-built, not launched. Next by value: 0015 (checksums, now that the CRC is cheap), 0023 (fuzzing), 0025 (the mount check as a plugin). Read each entry's `status:` and `blocked-by:` before starting it.
+the NFS proxy (0007), tooling and gates, kernels from aemi at its state of the art (0011, 0012, 0029, 0030; ADR-0012), checksums
+everywhere (0015), conformance against the reference implementations and suites (docs/conformance), readers at the native baseline,
+and a Settings window with a tested status check. Mounted volumes are below Apple's own FSKit module (docs/conformance/performance.md).
+Next by value: 0018 (kernel-offloaded I/O), 0031 (XFS), 0016 (htree), 0025 (the mount check as a plugin), 0014 (LZNT1, unblocked). Read each entry's `status:` and `blocked-by:` before starting it.

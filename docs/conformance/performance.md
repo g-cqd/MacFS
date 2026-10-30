@@ -21,3 +21,19 @@ How it got there (diary 2026-10-30-11): one copy per read instead of four (`Read
 16 GB/s); libz instead of Compression.framework (592 to 1,168); an LZO decoder over pointers with word copies, and segments
 decoded in place (851 to 1,830). Large-file rates are within noise of native; small files read 2.5 to 8 times faster than
 native, since a reader pays no system call per file. Compressed data reaches 82% of its codec's bare rate.
+
+## Mounted (FSKit), the end-to-end path
+
+The same walk over a mounted volume (`mount -F`, signed modules from /Applications), against APFS and against Apple's own FSKit
+module (exFAT, the same tree in a 2 GB image): the fair bound for a module, since every operation crosses from the kernel to the
+extension. Median of five, warm.
+
+| | APFS | Apple exFAT (FSKit) | ext4 | NTFS | Btrfs |
+|---|---:|---:|---:|---:|---:|
+| large files (MB/s) | 16,608 | 15,634 | 14,574 | 14,406 | 13,623 |
+| 20,000 small files (nodes/s) | 77,625 | 72,277 | 68,261 | 54,169 | 48,691 |
+
+**Below the baseline when mounted**: 87 to 93% of Apple's module on data, 67 to 94% on small files. The readers themselves are
+above it (tables above); the difference is the mount path. Apple's module lets the kernel read file blocks itself (FSKit's
+kernel-offloaded I/O), which MacFS's modules do not yet: roadmap 0018, now the first lever. For small files, the Btrfs module pays a
+tree lookup for each attribute request.
