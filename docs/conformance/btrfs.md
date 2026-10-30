@@ -7,6 +7,7 @@
 | zlib (RFC 1950/1951), `fs/btrfs/zlib.c` | Header checked, raw DEFLATE through libz, trailer not read, as Linux does |
 | btrfs-progs v6.14 `tests/` | `ReferenceSuiteTests`: 136 images, none trap or hang; 98 read whole (fsprobe) |
 
-Not done: zstd (roadmap 0013), data checksums from the csum tree (0015), several devices (0020). One fuzz image
+Data checksums are verified as Linux verifies them (roadmap 0015): `BtrfsDataChecksumTests` changes one data byte in the plain,
+xxHash, zlib and LZO images. Not done: zstd (roadmap 0013), several devices (0020). One fuzz image
 (`bko-200403`) declares a file of enormous size that is nearly all hole: reading it whole takes minutes of zero-filling, which
 is correct and bounded by the walk's budget in the tests.

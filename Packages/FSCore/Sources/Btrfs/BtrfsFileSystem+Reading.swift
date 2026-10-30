@@ -14,8 +14,8 @@ extension BtrfsFileSystem {
         }
     }
 
-    /// The whole decoded extent behind a compressed or inline item.
-    private func decoded(_ extent: BtrfsExtent) throws(DiskError) -> [UInt8] {
+    /// The whole decoded extent behind a compressed or inline item. `verifyData` is false for a NODATASUM inode.
+    private func decoded(_ extent: BtrfsExtent, verifyData: Bool) throws(DiskError) -> [UInt8] {
         let sector = trees.superblock.sectorSize
         switch extent.storage {
             case .inline(let data):
@@ -26,6 +26,7 @@ extension BtrfsFileSystem {
                     guard length <= 1 << 20 else { throw .corrupt("compressed extent of \(length) bytes") }
                     let physical = try trees.chunks.physical(address, length: length)
                     let raw = try trees.source.read(at: physical, count: Int(length))
+                    if verifyData { try dataChecksums.verify(compressed: raw, at: address) }
                     return try BtrfsCompression.decompress(
                         raw, method: extent.compression, size: Int(extent.decodedSize), sectorSize: sector)
                 }
@@ -35,10 +36,16 @@ extension BtrfsFileSystem {
     }
 
     public func read(_ id: UInt64, at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
-        let attributes = try attributes(of: id)
-        guard attributes.kind != .directory else { throw .isDirectory }
-        guard offset < attributes.size, count > 0 else { return [] }
-        let end = min(attributes.size, offset + UInt64(count))
+        // The inode item alone (size, mode, flags): attributes(of:) would also look up the parent, on every piece of a read.
+        let (tree, inode) = location(id)
+        guard let item = try trees.item(root: try treeRoot(tree), BtrfsKey(inode, BtrfsItem.inode, 0)) else {
+            throw .notFound
+        }
+        guard NodeKind(posixMode: try item.u32(52)) != .directory else { throw .isDirectory }
+        let size = try item.u64(16)
+        let verifyData = try item.u64(64) & BtrfsItem.noDataChecksumFlag == 0
+        guard offset < size, count > 0 else { return [] }
+        let end = min(size, offset + UInt64(count))
         let extents = try extents(id)
         // Plain extents straight from the volume into the result, decoded ones copied in; holes and preallocated ranges
         // stay zero (ReadAssembly).
@@ -52,17 +59,28 @@ extension BtrfsFileSystem {
                 switch extent.storage {
                     case .preallocated:
                         continue
-                    case .regular(let address, _, let start) where extent.compression == 0:
+                    case .regular(let address, let diskLength, let start) where extent.compression == 0:
                         if address == 0 { continue }  // a hole
                         let logical = address + start + within
-                        try pieces.read(
+                        // Read into the result, then checked there: a mismatch throws, and the result is never returned.
+                        let checksums = dataChecksums
+                        unsafe try pieces.read(
                             trees.source, at: try trees.chunks.physical(logical, length: UInt64(span)), to: target,
-                            count: span)
+                            count: span
+                        ) { (bytes) throws(DiskError) in
+                            guard verifyData else { return }
+                            try unsafe checksums.verify(
+                                diskStart: address, diskLength: diskLength, from: logical, count: UInt64(span),
+                                read: bytes)
+                        }
                     case .regular(_, _, let start):
                         try Self.copy(
-                            try decoded(extent), from: Int(start + within), count: span, into: &pieces, at: target)
+                            try decoded(extent, verifyData: verifyData), from: Int(start + within), count: span,
+                            into: &pieces, at: target)
                     case .inline:
-                        try Self.copy(try decoded(extent), from: Int(within), count: span, into: &pieces, at: target)
+                        try Self.copy(
+                            try decoded(extent, verifyData: verifyData), from: Int(within), count: span, into: &pieces,
+                            at: target)
                 }
             }
         }

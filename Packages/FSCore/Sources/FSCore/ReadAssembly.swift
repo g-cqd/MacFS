@@ -36,6 +36,16 @@ public enum ReadAssembly {
             try unsafe source.read(at: offset, into: region)
         }
 
+        /// The same, then `inspect` sees the bytes where they landed (a checksum over the result, without reading twice).
+        public mutating func read(
+            _ source: any BlockSource, at offset: UInt64, to position: Int, count: Int,
+            inspect: (UnsafeRawBufferPointer) throws(DiskError) -> Void
+        ) throws(DiskError) {
+            let region = unsafe try claim(position, count)
+            try unsafe source.read(at: offset, into: region)
+            try unsafe inspect(UnsafeRawBufferPointer(region))
+        }
+
         /// Bytes already in memory (decoded, inline), copied in at `position` with one `memcpy`. Concrete, not generic: from
         /// another module a generic copy is not specialized and went element by element (34 MB/s on zlib extents).
         public mutating func copy(_ bytes: ArraySlice<UInt8>, to position: Int) throws(DiskError) {

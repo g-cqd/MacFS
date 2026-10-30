@@ -2,7 +2,7 @@ import FSCore
 import Formats
 import Foundation
 
-// fsprobe <image-or-device> [--rounds N] [--under PATH]
+// fsprobe <image-or-device> [--rounds N] [--under PATH] [--keep]
 // fsprobe --tree <directory> [--rounds N]
 //
 // Opens a volume with the reader its format needs, walks every directory and reads every file in 1 MiB pieces,
@@ -15,6 +15,8 @@ guard let path = arguments.first else {
     exit(64)
 }
 let rounds = arguments.firstIndex(of: "--rounds").flatMap { Int(arguments[$0 + 1]) } ?? 1
+// Keep one file system across rounds, as a mounted volume does (its caches warm); by default each round opens it afresh.
+let keep = arguments.contains("--keep")
 // Walk only below this path of the volume: one category of the bench tree at a time (large files, or small ones).
 let under = arguments.firstIndex(of: "--under").map { arguments[$0 + 1] }
 
@@ -39,9 +41,10 @@ do {
         print("\(path): no Btrfs, NTFS or ext volume")
         exit(1)
     }
+    let kept = keep ? try format.open(source) : nil
     for round in 1 ... rounds {
         let began = DispatchTime.now().uptimeNanoseconds
-        let fileSystem = try format.open(source)
+        let fileSystem = try (keep ? kept : nil) ?? format.open(source)
         var nodes = 0
         var bytes: UInt64 = 0
         var start = fileSystem.rootID

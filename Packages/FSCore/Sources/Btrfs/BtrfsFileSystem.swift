@@ -14,6 +14,8 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
     private let treeRoots = BoundedCache<UInt64, UInt64>(capacity: 256)
     let extentCache = BoundedCache<UInt64, [BtrfsExtent]>(capacity: 512)
     let decodedCache = BoundedCache<UInt64, [UInt8]>(capacity: 64)
+    /// Data checksums, verified once per piece of an extent (roadmap 0015).
+    let dataChecksums: BtrfsDataChecksums
 
     /// Whether `source` carries a Btrfs superblock (magic only; mounting validates the rest).
     public static func probe(_ source: any BlockSource) -> (label: String, uuid: [UInt8])? {
@@ -35,6 +37,7 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
             try chunks.add(logical: item.key.offset, item: item.data, deviceID: superblock.deviceID)
         }
         trees = BtrfsTreeReader(source: source, superblock: superblock, chunks: chunks)
+        dataChecksums = BtrfsDataChecksums(trees: trees, root: try Self.rootBlock(trees, tree: BtrfsItem.checksumTree))
         mountedTree = try Self.defaultSubvolume(trees)
         rootID = BtrfsItem.firstFreeObject
         volume = VolumeDescription(
@@ -74,12 +77,17 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
     /// The root block of subvolume tree `tree`.
     func treeRoot(_ tree: UInt64) throws(DiskError) -> UInt64 {
         try treeRoots.value(for: tree) { () throws(DiskError) -> UInt64 in
-            let items = try trees.items(
-                root: trees.superblock.rootTree, from: BtrfsKey(tree, BtrfsItem.rootItem, 0),
-                to: BtrfsKey(tree, BtrfsItem.rootItem, .max))
-            guard let item = items.last else { throw .notFound }
-            return try item.data.u64(176)
+            guard let root = try Self.rootBlock(trees, tree: tree) else { throw .notFound }
+            return root
         }
+    }
+
+    /// The root block the root tree records for `tree`, or nil when it has none.
+    static func rootBlock(_ trees: BtrfsTreeReader, tree: UInt64) throws(DiskError) -> UInt64? {
+        let items = try trees.items(
+            root: trees.superblock.rootTree, from: BtrfsKey(tree, BtrfsItem.rootItem, 0),
+            to: BtrfsKey(tree, BtrfsItem.rootItem, .max))
+        return try items.last?.data.u64(176)
     }
 
     // MARK: Node identifiers
