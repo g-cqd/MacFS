@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra attr sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -137,6 +137,17 @@ cluster=$(ntfsinfo -m ntfs.img 2>/dev/null | awk -F: '/Cluster Size/ { gsub(/ /,
 head -c 2400 /dev/zero | tr '\0' '\252' | dd of=ntfs.img bs=1 seek=$((lcn * cluster + 100000)) conv=notrunc 2>/dev/null
 cp /tmp/initialized.bin /tmp/tree/big/initialized.bin && truncate -s 300000 /tmp/tree/big/initialized.bin
 manifest /tmp/tree > ntfs.manifest
+# LZNT1 (roadmap 0014): the same tree, every file written compressed by ntfs-3g under a root marked compressed
+# (FILE_ATTRIBUTE_COMPRESSED, 0x800, through system.ntfs_attrib_be): compressed units, units stored whole when they do not
+# shrink (random.bin), sparse units, and a compressed file initialized short of its size.
+rm -f ntfs-lznt1.img; truncate -s 64M ntfs-lznt1.img
+mkntfs -Q -q -F -L ntfs-lznt1 ntfs-lznt1.img 2>/dev/null
+ntfs-3g -o compression ntfs-lznt1.img /mnt/ntfs
+setfattr -h -v 0x00000800 -n system.ntfs_attrib_be /mnt/ntfs
+cp -a /tmp/tree/. /mnt/ntfs/
+cp /tmp/initialized.bin /mnt/ntfs/big/initialized.bin && truncate -s 300000 /mnt/ntfs/big/initialized.bin
+umount /mnt/ntfs
+manifest /tmp/tree > ntfs-lznt1.manifest
 
 # Reference manifests: each image as its reference implementation presents it (docs/conformance). The Linux kernel mounts ext,
 # ntfs-3g mounts NTFS, and btrfs-progs' own reader restores Btrfs (this kernel has no Btrfs driver). The fields line names what
@@ -153,9 +164,11 @@ for name in ext2 ext3 ext4 ext4-inline ext4-bigalloc ext4-uuid-seed ext4-meta-bg
     reference /mnt/ref "Linux $(uname -r) ext4" "type mode uid gid nlink size dirsize mtime ctime content" > "$name.reference"
     umount /mnt/ref
 done
-ntfs-3g -o ro ntfs.img /mnt/ref
-reference /mnt/ref "$(ntfs-3g --version 2>&1 | head -1)" "type nlink size dirsize mtime ctime content" > ntfs.reference
-umount /mnt/ref
+for name in ntfs ntfs-lznt1; do
+    ntfs-3g -o ro "$name.img" /mnt/ref
+    reference /mnt/ref "$(ntfs-3g --version 2>&1 | head -1)" "type nlink size dirsize mtime ctime content" > "$name.reference"
+    umount /mnt/ref
+done
 for name in btrfs btrfs-zlib btrfs-lzo btrfs-zstd btrfs-xxhash btrfs-subvol; do
     rm -rf /tmp/restored && mkdir /tmp/restored
     btrfs restore -m -S -x "$name.img" /tmp/restored >/dev/null 2>&1

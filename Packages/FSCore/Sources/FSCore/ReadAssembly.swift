@@ -53,6 +53,15 @@ public enum ReadAssembly {
             bytes.withUnsafeBytes { unsafe region.copyMemory(from: $0) }
         }
 
+        /// `count` bytes at `position` written by `decode` in place (a decoder writing straight into the result, roadmap 0014);
+        /// `decode` must write all of them.
+        public mutating func fill(
+            to position: Int, count: Int, _ decode: (UnsafeMutableRawBufferPointer) throws(DiskError) -> Void
+        ) throws(DiskError) {
+            let region = unsafe try claim(position, count)
+            try unsafe decode(region)
+        }
+
         public mutating func copy(_ bytes: [UInt8], to position: Int) throws(DiskError) {
             try copy(bytes[...], to: position)
         }

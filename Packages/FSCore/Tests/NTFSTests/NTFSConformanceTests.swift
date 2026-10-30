@@ -5,8 +5,9 @@ import Testing
 
 /// Every node of the NTFS image against ntfs-3g's view of it (docs/conformance/ntfs.md).
 @Suite struct NTFSConformanceTests {
-    @Test func everyNodeMatchesNTFS3G() throws {
-        let fileSystem = try NTFSFileSystem(source: try ImageOracle.image("ntfs"))
-        for problem in try ReferenceOracle.compare(fileSystem, reference: "ntfs") { Issue.record("ntfs: \(problem)") }
+    @Test(arguments: NTFSImageTests.images)
+    func everyNodeMatchesNTFS3G(_ name: String) throws {
+        let fileSystem = try NTFSFileSystem(source: try ImageOracle.image(name))
+        for problem in try ReferenceOracle.compare(fileSystem, reference: name) { Issue.record("\(name): \(problem)") }
     }
 }

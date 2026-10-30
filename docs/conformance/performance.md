@@ -41,3 +41,7 @@ tree lookup for each attribute request.
 With kernel-offloaded I/O (roadmap 0018), the same mounts read large files at 14,538 (ext4), 15,824 (NTFS) and 15,860 (Btrfs)
 MB/s: 93 to 101% of Apple's exFAT module. Small files are unchanged (68,908, 54,460, 48,902 nodes/s): the cost there is FSKit's
 per-item lookup and attributes, not data, and remains below Apple's module (72,277).
+
+NTFS LZNT1 (roadmap 0014; docs/research/2026-10-30-compression-kernels.md): text 3,340 MB/s, incompressible 13,400 MB/s through
+the reader; the arm64 kernel alone decodes 4,170 MB/s, 3 times its C version at -O3. There is no system LZNT1 codec on macOS to
+hold it to; ntfs-3g's decoder is byte-wise, as the C reference is.

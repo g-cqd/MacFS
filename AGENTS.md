@@ -63,6 +63,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **The first mount right after reinstalling may fail**: the module process is still starting. Run `mounts` again.
 - **Offline `resize2fs` never makes meta_bg** (it moves blocks); the kernel's online resize does. `resize2fs` is in
   e2fsprogs-extra, and it does not grow an image file: truncate it first.
+- **`set -e` does not stop inside an `&&` list**: `rm -rf tree && cp ...` failed silently when Finder wrote .DS_Store files
+  into the shared directory; the bench script now swaps a finished copy in.
+- **Kernels: profile, then time the kernel alone on real data against its C reference** (agreement checked first). A change
+  that cuts instructions may gain nothing when the chain is latency (LZNT1's literal runs); guard-page tests are what catch
+  an overrunning move, never output comparisons.
 - **A dx root may end in a stale leaf tail** (`dt_reserved` is never cleared): tell directory blocks apart by position.
 - **Python's byte paths hide normalization bugs**; Cocoa asks in NFD. Compare through `FileManager`, as `mounts` does.
 - **`F_LOG2PHYS` is not a probe of FSKit's block maps** (ENOTSUP on Apple's modules too): stream the modules' debug log instead.
@@ -76,4 +81,5 @@ everywhere (0015), conformance against the reference implementations and suites 
 and a Settings window with a tested status check. Mounted small files remain below Apple's own FSKit module (docs/conformance/performance.md).
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
-Next by value: 0014 (LZNT1, unblocked), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.
+NTFS reads LZNT1 through an arm64 kernel (0014). Next by value: compression kernels for LZO and
+zlib (docs/research/2026-10-30-compression-kernels.md), 0031 (XFS), 0013 (zstd). Read each entry's `status:` and `blocked-by:` before starting it.

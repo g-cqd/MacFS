@@ -23,6 +23,13 @@ int32_t fsk_ntfs_apply_fixups(uint8_t *_Nonnull record, size_t size, size_t stri
 
 
 
+/// Decodes one LZNT1 compression unit ([MS-XCA] 2.5; NTFS compressed streams, roadmap 0014): `source[0..<count]` into
+/// exactly `target[0..<capacity]`, every byte written. Chunks decode into 4 KiB each; a chunk that decodes short is zero-filled
+/// to its 4 KiB, and the unit past its last chunk (a zero header, or the input's end) is zero. Returns 0, or -1 when a chunk
+/// overruns its input or the unit, a stored chunk is not 4,096 bytes, or a phrase reaches before its chunk, past its 4 KiB or
+/// past the chunk's input. The arm64 kernel and the portable C one (`fsk_ref_lznt1_decompress`) agree byte for byte.
+int32_t fsk_lznt1_decompress(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity);
+
 /// Inflates raw DEFLATE (`source[0..<count]`, after a zlib header the caller has checked) into `target[0..<capacity]`
 /// through the system libz; `*produced` is the number of bytes written. Returns 0 when the stream ended or the target is full,
 /// -2 when the input ended first, -1 on a malformed stream.

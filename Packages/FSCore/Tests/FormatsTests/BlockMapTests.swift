@@ -7,7 +7,9 @@ import Testing
 /// ascending, contiguous, whole units, and stop at the file's last unit.
 @Suite struct BlockMapTests {
     static let images = [
-        "ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ntfs", "btrfs", "btrfs-zlib", "btrfs-lzo",
+        "ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-meta-bg", "ext4-grown", "ntfs", "ntfs-lznt1",
+        "btrfs",
+        "btrfs-zlib", "btrfs-lzo",
         "btrfs-xxhash",
         "btrfs-subvol"
     ]
@@ -65,8 +67,15 @@ import Testing
             }
         }
         // Small files are inline or resident in most formats; the large random file is stored as its bytes everywhere (even
-        // where compression is on: it does not compress), so the map is exercised on every image.
-        #expect(mappable >= 1 && !unmappable.contains("big/random.bin"), "\(name): \(mappable) mappable")
+        // where compression is on: it does not compress), so the map is exercised on every image. Not on NTFS with LZNT1: a
+        // compressed stream stays compressed even in units stored whole, and the kernel must never be handed its clusters.
+        if name == "ntfs-lznt1" {
+            for path in ["big/random.bin", "big/counting.txt", "big/sparse.bin", "dir/medium.txt"] {
+                #expect(unmappable.contains(path), "\(name): \(path) is compressed and must not be mapped")
+            }
+        } else {
+            #expect(mappable >= 1 && !unmappable.contains("big/random.bin"), "\(name): \(mappable) mappable")
+        }
     }
 
     /// What must not be mapped: inline, compressed and resident data stays with the reader.

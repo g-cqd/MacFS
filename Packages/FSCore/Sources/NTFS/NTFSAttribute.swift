@@ -11,7 +11,9 @@ struct NTFSAttribute: Sendable {
         let compressionUnit: UInt8
     }
 
+    /// `ATTR_IS_COMPRESSED`: LZNT1, the only compression NTFS defines; other values of the mask are refused.
     static let compressed: UInt16 = 0x0001
+    static let compressionMask: UInt16 = 0x00FF
     static let encrypted: UInt16 = 0x4000
 
     let type: UInt32
@@ -20,6 +22,11 @@ struct NTFSAttribute: Sendable {
     let flags: UInt16
     let value: DiskBytes?
     let nonResident: NonResident?
+
+    /// An attribute from its parts.
+    init(type: UInt32, name: [UInt8], flags: UInt16, value: DiskBytes?, nonResident: NonResident?) {
+        (self.type, self.name, self.flags, self.value, self.nonResident) = (type, name, flags, value, nonResident)
+    }
 
     /// Parses the attribute at the start of `bytes`, which ends where the record's attributes end.
     init(_ bytes: DiskBytes) throws(DiskError) {
