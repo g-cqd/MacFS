@@ -36,6 +36,14 @@ import ToolingCore
         #expect(step.arguments.contains { $0.hasPrefix("alpine:") }, "the image is pinned by tag")
     }
 
+    @Test func benchImagesRunTheirOwnPayload() {
+        let plan = TestImages.plan(root: Self.root, container: "/c", bench: true)
+        #expect(plan.steps.count == 1)
+        #expect(plan.steps[0].arguments.last == "/scripts/make-bench-images.inner.sh")
+        #expect(
+            plan.steps[0].arguments.contains("/repo/BenchImages:/work"), "bench images live apart from the test images")
+    }
+
     @Test func gatesCoverEveryToolTheWhitePaperNames() {
         let tools = ToolPaths(
             swift: "/s", swiftlint: "/l", deadwood: "/d", dolly: "/o", arcleak: "/a", fcheck: "/f", modeler: "/m",

@@ -39,26 +39,60 @@ enum LZO1X {
     }
 
     static func decompress(_ input: [UInt8], capacity: Int) throws(DiskError) -> [UInt8] {
-        var source = Input(bytes: input)
-        var output: [UInt8] = []
-        output.reserveCapacity(capacity)
+        // Written in place: the output size is known, and growing an array byte by byte was the decoder's cost
+        // (roadmap 0012). The decoding runs inside one buffer scope so a write is a store, not a uniqueness check.
+        var output = [UInt8](repeating: 0, count: capacity)
+        var failure: DiskError?
+        let written = input.withUnsafeBufferPointer { source in
+            output.withUnsafeMutableBufferPointer { buffer -> Int in
+                var sink = unsafe Sink(buffer: buffer, input: source, capacity: capacity)
+                do throws(DiskError) {
+                    try decode(input, into: &sink)
+                } catch {
+                    failure = error
+                }
+                return sink.written
+            }
+        }
+        if let failure { throw failure }
+        return written == capacity ? output : Array(output[0 ..< written])
+    }
 
-        func literals(_ count: Int, _ source: inout Input) throws(DiskError) {
-            guard count <= capacity - output.count else { throw .corrupt("lzo: output overrun") }
-            guard count <= input.count - source.position else { throw .corrupt("lzo: input overrun") }
-            output.append(contentsOf: input[source.position ..< (source.position + count)])
+    /// The output: every write is checked against `capacity` before it is made. `@safe`: the buffer is the
+    /// array's own storage for the length of one `withUnsafeMutableBufferPointer` call, and no index reaches it
+    /// unchecked.
+    @safe private struct Sink {
+        let buffer: UnsafeMutableBufferPointer<UInt8>
+        let input: UnsafeBufferPointer<UInt8>
+        let capacity: Int
+        var written = 0
+
+        mutating func literals(_ source: inout Input, _ count: Int) throws(DiskError) {
+            guard count <= capacity - written else { throw .corrupt("lzo: output overrun") }
+            let inputCount = unsafe input.count
+            guard count <= inputCount - source.position else { throw .corrupt("lzo: input overrun") }
+            if count > 0, let to = unsafe buffer.baseAddress, let from = unsafe input.baseAddress {
+                unsafe (to + written).update(from: from + source.position, count: count)
+            }
+            written += count
             source.position += count
         }
 
-        func match(distance: Int, count: Int) throws(DiskError) {
-            guard distance >= 1, distance <= output.count else { throw .corrupt("lzo: match before the start") }
-            guard count <= capacity - output.count else { throw .corrupt("lzo: output overrun") }
-            var from = output.count - distance
-            for _ in 0 ..< count {
-                output.append(output[from])
-                from += 1
-            }
+        /// Copies `count` bytes from `distance` back, byte by byte: a match may overlap what it writes. A NEON copy
+        /// measured no faster on LZO's short matches (roadmap 0012).
+        mutating func match(distance: Int, count: Int) throws(DiskError) {
+            guard distance >= 1, distance <= written else { throw .corrupt("lzo: match before the start") }
+            guard count <= capacity - written else { throw .corrupt("lzo: output overrun") }
+            let from = written - distance
+            for index in 0 ..< count { unsafe buffer[written + index] = unsafe buffer[from + index] }
+            written += count
         }
+    }
+
+    private static func decode(_ input: [UInt8], into sink: inout Sink) throws(DiskError) {
+        var source = Input(bytes: input)
+        func literals(_ count: Int, _ source: inout Input) throws(DiskError) { try sink.literals(&source, count) }
+        func match(distance: Int, count: Int) throws(DiskError) { try sink.match(distance: distance, count: count) }
 
         var state = 0
         var first = try source.next()
@@ -110,6 +144,5 @@ enum LZO1X {
             try literals(next, &source)
             instruction = try source.next()
         }
-        return output
     }
 }

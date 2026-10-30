@@ -1,0 +1,28 @@
+import CFSKernels
+import Testing
+
+@_silgen_name("fsk_ref_lz_copy")
+func referenceLZCopy(_ destination: UnsafeMutablePointer<UInt8>, _ distance: Int, _ count: Int)
+
+/// The match copy against the byte-by-byte reference, for every distance a short-period pattern can have and well
+/// beyond, every length through several 16-byte stores, with the destination ending at a page nothing may touch.
+@Suite struct LZCopyTests {
+    @Test func everyDistanceAndLengthMatchesTheReference() {
+        for distance in 1...40 {
+            for count in 0...100 {
+                var expected: [UInt8] = []
+                GuardPageTests.guarded(distance + count) { region in
+                    for index in 0..<(distance + count) { region[index] = UInt8(truncatingIfNeeded: index &* 37 &+ distance) }
+                    referenceLZCopy(region + distance, distance, count)
+                    expected = Array(UnsafeBufferPointer(start: region, count: distance + count))
+                }
+                GuardPageTests.guarded(distance + count) { region in
+                    for index in 0..<(distance + count) { region[index] = UInt8(truncatingIfNeeded: index &* 37 &+ distance) }
+                    fsk_lz_copy(region + distance, distance, count)
+                    let actual = Array(UnsafeBufferPointer(start: region, count: distance + count))
+                    #expect(actual == expected, "distance \(distance), count \(count)")
+                }
+            }
+        }
+    }
+}

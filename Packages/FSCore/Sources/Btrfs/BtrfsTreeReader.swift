@@ -41,22 +41,23 @@ struct BtrfsTreeReader: Sendable {
                 throw .corrupt("tree block at \(address) is at level \(node.level), not \(expected)")
             }
             if node.level == 0 {
-                for index in 0 ..< node.count {
+                // Keys are sorted: start at the first item not below `low`, stop at the first above `high`.
+                var index = try node.firstIndex(where:) { (key) throws(DiskError) -> Bool in key >= low }
+                while index < node.count {
                     let key = try node.key(index)
                     if key > high { return found }
-                    if key >= low {
-                        found.append(Item(key: key, data: try node.itemData(index)))
-                        if found.count >= limit { return found }
-                    }
+                    found.append(Item(key: key, data: try node.itemData(index)))
+                    if found.count >= limit { return found }
+                    index += 1
                 }
                 continue
             }
+            // Child i holds keys from key(i) up to key(i + 1): start at the last child whose first key is not above `low`.
             var children: [UInt64] = []
-            for index in 0 ..< node.count {
-                let first = try node.key(index)
-                if first > high { break }
-                if index + 1 < node.count, try node.key(index + 1) <= low { continue }
+            var index = max(0, try node.firstIndex(where:) { (key) throws(DiskError) -> Bool in key > low } - 1)
+            while index < node.count, try node.key(index) <= high {
                 children.append(try node.child(index))
+                index += 1
             }
             // Pushed in reverse so the leftmost child is visited first.
             for child in children.reversed() { pending.append((child, node.level - 1)) }

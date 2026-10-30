@@ -3,3 +3,4 @@ TestImages/
 *.xcodeproj/
 DerivedData/
 .DS_Store
+BenchImages/

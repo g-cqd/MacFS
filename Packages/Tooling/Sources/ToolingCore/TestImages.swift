@@ -3,13 +3,16 @@ public enum TestImages {
     /// Pinned so the tools that write the oracle do not move under the tests (TestImages/versions.txt records them).
     public static let image = "alpine:3.22"
 
-    public static func plan(root: String, container: String) -> Plan {
-        Plan(steps: [
+    /// `bench` builds the profiling corpus instead (`BenchImages/`, about 4 GiB, roadmap 0012).
+    public static func plan(root: String, container: String, bench: Bool = false) -> Plan {
+        let directory = bench ? "BenchImages" : "TestImages"
+        let payload = bench ? "make-bench-images.inner.sh" : "make-test-images.inner.sh"
+        return Plan(steps: [
             Command(
                 container,
                 [
-                    "run", "--rm", "-v", "\(root)/TestImages:/work", "-v", "\(root)/Scripts:/scripts", image, "sh",
-                    "/scripts/make-test-images.inner.sh"
+                    "run", "--rm", "-v", "\(root)/\(directory):/work", "-v", "\(root)/Scripts:/scripts", image, "sh",
+                    "/scripts/\(payload)"
                 ])
         ])
     }

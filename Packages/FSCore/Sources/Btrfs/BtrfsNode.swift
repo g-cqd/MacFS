@@ -31,6 +31,17 @@ struct BtrfsNode: Sendable {
         self.bytes = bytes
     }
 
+    /// The first index whose key satisfies `predicate`, which must be false then true along the node (`count` when none).
+    func firstIndex(where predicate: (BtrfsKey) throws(DiskError) -> Bool) throws(DiskError) -> Int {
+        var low = 0
+        var high = count
+        while low < high {
+            let middle = (low + high) / 2
+            if try predicate(try key(middle)) { high = middle } else { low = middle + 1 }
+        }
+        return low
+    }
+
     func key(_ index: Int) throws(DiskError) -> BtrfsKey {
         let entry = level == 0 ? Self.leafItemSize : Self.keyPointerSize
         return try BtrfsKey(bytes, at: Self.headerSize + index * entry)

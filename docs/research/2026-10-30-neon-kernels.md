@@ -42,3 +42,9 @@ was checked in Python against the bitwise CRC before any assembly.
 |---|---:|---:|---:|---:|
 | 64 MiB | 24.7 | 52.1 | 58.7 | 59.3 |
 | 4 KiB blocks | 17.9 | 50.4 | 56.8 | 58.5 |
+
+## Candidates measured and not taken (roadmap 0012)
+
+An LZ77 match copy (`docs/research/probes/lz-match-copy.c.txt`): 16-byte vector stores when the distance is 16 or more, otherwise a
+16-byte pattern rotated by one `tbl` per store. Correct against the byte loop for every distance 1 to 40 and length 0 to 100 at a guard
+page. On LZO it moved nothing (1110 to 1122 MB/s in three variants): matches are a few bytes, and the call costs what the vector saves.

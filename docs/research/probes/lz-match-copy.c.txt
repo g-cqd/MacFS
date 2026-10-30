@@ -1,0 +1,65 @@
+// LZ77 match copy (fskernels.h). NEON on arm64: 16-byte stores for distances of 16 and more, a rotating
+// pattern for shorter ones; byte by byte for the tail and elsewhere. fsk_ref_lz_copy is the oracle.
+#include "fskernels.h"
+
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
+void fsk_ref_lz_copy(uint8_t *destination, size_t distance, size_t count);
+
+void fsk_ref_lz_copy(uint8_t *destination, size_t distance, size_t count) {
+    const uint8_t *source = destination - distance;
+    for (size_t i = 0; i < count; i++) destination[i] = source[i];
+}
+
+#if defined(__aarch64__)
+// rotation[d][i] = (i + 16 mod d) mod d: the pattern of period d sixteen bytes further on. Generated, row 0 unused.
+static const uint8_t rotation[16][16] = {
+    { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+    { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0},
+    { 0,  1,  0,  1,  0,  1,  0,  1,  0,  1,  0,  1,  0,  1,  0,  1},
+    { 1,  2,  0,  1,  2,  0,  1,  2,  0,  1,  2,  0,  1,  2,  0,  1},
+    { 0,  1,  2,  3,  0,  1,  2,  3,  0,  1,  2,  3,  0,  1,  2,  3},
+    { 1,  2,  3,  4,  0,  1,  2,  3,  4,  0,  1,  2,  3,  4,  0,  1},
+    { 4,  5,  0,  1,  2,  3,  4,  5,  0,  1,  2,  3,  4,  5,  0,  1},
+    { 2,  3,  4,  5,  6,  0,  1,  2,  3,  4,  5,  6,  0,  1,  2,  3},
+    { 0,  1,  2,  3,  4,  5,  6,  7,  0,  1,  2,  3,  4,  5,  6,  7},
+    { 7,  8,  0,  1,  2,  3,  4,  5,  6,  7,  8,  0,  1,  2,  3,  4},
+    { 6,  7,  8,  9,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  0,  1},
+    { 5,  6,  7,  8,  9, 10,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9},
+    { 4,  5,  6,  7,  8,  9, 10, 11,  0,  1,  2,  3,  4,  5,  6,  7},
+    { 3,  4,  5,  6,  7,  8,  9, 10, 11, 12,  0,  1,  2,  3,  4,  5},
+    { 2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13,  0,  1,  2,  3},
+    { 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,  0,  1}
+};
+#endif
+
+void fsk_lz_copy(uint8_t *destination, size_t distance, size_t count) {
+    const uint8_t *source = destination - distance;
+#if defined(__aarch64__)
+    if (distance >= 16) {
+        // Each 16-byte load ends at or before the store before it began: only finished bytes are read.
+        while (count >= 16) {
+            vst1q_u8(destination, vld1q_u8(source));
+            destination += 16;
+            source += 16;
+            count -= 16;
+        }
+    } else if (count >= 16) {
+        // A period shorter than 16: build sixteen bytes of it from the distance bytes behind, then rotate.
+        uint8_t first[16];
+        for (size_t i = 0; i < 16; i++) first[i] = source[i % distance];
+        uint8x16_t pattern = vld1q_u8(first);
+        const uint8x16_t next = vld1q_u8(rotation[distance]);
+        while (count >= 16) {
+            vst1q_u8(destination, pattern);
+            pattern = vqtbl1q_u8(pattern, next);
+            destination += 16;
+            count -= 16;
+        }
+        source = destination - distance;
+    }
+#endif
+    for (size_t i = 0; i < count; i++) destination[i] = source[i];
+}

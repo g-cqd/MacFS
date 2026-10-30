@@ -10,6 +10,7 @@ struct Options {
     var root = FileManager.default.currentDirectoryPath
     var dryRun = false
     var check = false
+    var bench = false
 }
 
 func parse(_ arguments: [String]) -> Options? {
@@ -22,6 +23,7 @@ func parse(_ arguments: [String]) -> Options? {
             case "--root": options.root = rest.next() ?? options.root
             case "--dry-run": options.dryRun = true
             case "--check": options.check = true
+            case "--bench": options.bench = true
             default: return nil
         }
     }
@@ -71,7 +73,12 @@ func main() -> Int32 {
                     print("[FAIL] neither Apple's container nor docker is installed")
                     return 2
                 }
-                return try report(TestImages.plan(root: options.root, container: container), dryRun: options.dryRun)
+                try FileManager.default.createDirectory(
+                    atPath: options.root + (options.bench ? "/BenchImages" : "/TestImages"),
+                    withIntermediateDirectories: true)
+                return try report(
+                    TestImages.plan(root: options.root, container: container, bench: options.bench),
+                    dryRun: options.dryRun)
             case "gates":
                 return try report(
                     Gates.plan(root: options.root, tools: try locator().gatePaths()), dryRun: options.dryRun)
