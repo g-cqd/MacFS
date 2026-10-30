@@ -29,3 +29,16 @@ whole-vector reductions (`uaddlv`, `umaxv`) that the compiler did not produce fr
 corsix/fast-crc32 (README, fetched 2026-10-30): on Apple M1, PMULL folding with twelve vector accumulators (dougallj) reaches 77.55 GB/s
 and a fused vector-plus-scalar scheme (`v9s3x2e_s3`, EOR3) 85.05 GB/s; Chromium's three-stream scalar code is 25 GB/s, the class of this
 kernel. Roadmap 0011 targets the fused scheme with the 4 KiB case first-class.
+
+## The eight-lane fold (roadmap 0011)
+
+Reflected 128-bit accumulators, lane 0 holding the first eight bytes. The carry-less product of two 64-bit lanes, read as a reflected
+128-bit value, is x·A·B, so folding a lane forward by D bytes multiplies by x^(8D+63) for lane 0 and x^(8D-1) for lane 1; with the
+constant held in the low 32 bits of a lane those become x^(8D+31) and x^(8D-33) mod P. D = 128: `0x6992cea2`, `0x0d3b6092`; D = 16:
+`0xf20c0dfe`, `0x493c7d27`. The whole algorithm (eight accumulators, initial CRC in the first lane, merge, two `crc32cx`, scalar tail)
+was checked in Python against the bitwise CRC before any assembly.
+
+| Case (M2 Pro) | three streams, C | eight-lane fold, C intrinsics | eight-lane fold, asm (`eor`) | with `eor3` |
+|---|---:|---:|---:|---:|
+| 64 MiB | 24.7 | 52.1 | 58.7 | 59.3 |
+| 4 KiB blocks | 17.9 | 50.4 | 56.8 | 58.5 |

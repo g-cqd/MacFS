@@ -22,14 +22,72 @@ Lfold1024:
     .long 0xa51b6135, 0x170076fa
 Lfold256:
     .long 0xdd7e3b0c, 0xb9e02b86
+// Vector fold constants, one 64-bit lane each: lane 0 multiplies an accumulator's first eight bytes,
+// lane 1 its last eight. For a fold over D bytes: x^(8D+31) mod P and x^(8D-33) mod P, bit-reflected.
+.p2align 4
+Lfold_v128:
+    .quad 0x6992cea2, 0x0d3b6092
+Lfold_v16:
+    .quad 0xf20c0dfe, 0x493c7d27
 
 .text
 
+// One 128-bit fold: acc = acc[0..7] * k[0] ^ acc[8..15] * k[1] ^ block (carry-less).
+.macro FOLD acc, block, k
+    pmull   v4.1q, \acc\().1d, \k\().1d
+    pmull2  \acc\().1q, \acc\().2d, \k\().2d
+    eor     \acc\().16b, \acc\().16b, \block\().16b
+    eor     \acc\().16b, \acc\().16b, v4.16b
+.endm
+
 // uint32_t fsk_crc32c_update(uint32_t crc, const uint8_t *bytes, size_t count)
 //   w0 crc, x1 cursor, x2 bytes remaining
+//
+// From 256 bytes: eight 128-bit accumulators (v16..v23) fold 128 bytes per iteration with PMULL, merge by
+// 16-byte folds, and reduce with two crc32cx; the remaining bytes (under 128) go to the scalar code below.
+// Derivation and constants: docs/research/2026-10-30-neon-kernels.md. Only caller-saved registers.
 .globl _fsk_crc32c_update
 .p2align 4
 _fsk_crc32c_update:
+    cmp     x2, #256
+    b.lo    Lcrc_scalar
+    ld1     {v16.16b, v17.16b, v18.16b, v19.16b}, [x1], #64
+    ld1     {v20.16b, v21.16b, v22.16b, v23.16b}, [x1], #64
+    fmov    s2, w0
+    eor     v16.16b, v16.16b, v2.16b
+    sub     x2, x2, #128
+    adrp    x3, Lfold_v128@PAGE
+    add     x3, x3, Lfold_v128@PAGEOFF
+    ldr     q0, [x3]
+    ldr     q1, [x3, #16]
+Lv_loop:
+    cmp     x2, #128
+    b.lo    Lv_merge
+    ld1     {v24.16b, v25.16b, v26.16b, v27.16b}, [x1], #64
+    ld1     {v28.16b, v29.16b, v30.16b, v31.16b}, [x1], #64
+    FOLD    v16, v24, v0
+    FOLD    v17, v25, v0
+    FOLD    v18, v26, v0
+    FOLD    v19, v27, v0
+    FOLD    v20, v28, v0
+    FOLD    v21, v29, v0
+    FOLD    v22, v30, v0
+    FOLD    v23, v31, v0
+    sub     x2, x2, #128
+    b       Lv_loop
+Lv_merge:
+    FOLD    v16, v17, v1
+    FOLD    v16, v18, v1
+    FOLD    v16, v19, v1
+    FOLD    v16, v20, v1
+    FOLD    v16, v21, v1
+    FOLD    v16, v22, v1
+    FOLD    v16, v23, v1
+    fmov    x9, d16
+    mov     x10, v16.d[1]
+    crc32cx w0, wzr, x9
+    crc32cx w0, w0, x10
+Lcrc_scalar:
     cmp     x2, #3072
     b.lo    Lcrc_mid
     adrp    x3, Lfold1024@PAGE

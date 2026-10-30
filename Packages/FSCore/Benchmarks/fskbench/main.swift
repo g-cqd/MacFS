@@ -37,7 +37,8 @@ data.withUnsafeBufferPointer { buffer in
     print("CRC-32C, 64 MiB")
     measure("  C, one __crc32cd stream", bytes: size) { UInt64(base_crc32c_serial(~0, p, size)) }
     measure("  C, three streams + vmull_p64", bytes: size) { UInt64(base_crc32c_threeway(~0, p, size)) }
-    measure("  asm, three streams + pmull", bytes: size) { UInt64(fsk_crc32c_update(~0, p, size)) }
+    measure("  C, eight-lane fold (intrinsics)", bytes: size) { UInt64(base_crc32c_fold8(~0, p, size)) }
+    measure("  asm, eight-lane pmull fold", bytes: size) { UInt64(fsk_crc32c_update(~0, p, size)) }
     for block in [4096, 16384] {
         let blocks = size / block
         print("CRC-32C, \(blocks) blocks of \(block) bytes (Btrfs data and node checksums)")
@@ -49,6 +50,11 @@ data.withUnsafeBufferPointer { buffer in
         measure("  C, three streams", bytes: size) {
             var x: UInt64 = 0
             for b in 0 ..< blocks { x &+= UInt64(base_crc32c_threeway(~0, p + b * block + 32, block - 32)) }
+            return x
+        }
+        measure("  C, eight-lane fold", bytes: size) {
+            var x: UInt64 = 0
+            for b in 0 ..< blocks { x &+= UInt64(base_crc32c_fold8(~0, p + b * block + 32, block - 32)) }
             return x
         }
         measure("  asm", bytes: size) {

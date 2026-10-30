@@ -42,6 +42,33 @@ uint32_t base_crc32c_threeway(uint32_t crc, const uint8_t *bytes, size_t count) 
     return base_crc32c_serial(crc, bytes, count);
 }
 
+// The assembly's eight-lane PMULL fold, in intrinsics: the fair baseline for the kernel since roadmap 0011.
+static inline uint64x2_t fold(uint64x2_t acc, uint64x2_t block, poly64_t k0, poly64_t k1) {
+    poly128_t low = vmull_p64((poly64_t)vgetq_lane_u64(acc, 0), k0);
+    poly128_t high = vmull_p64((poly64_t)vgetq_lane_u64(acc, 1), k1);
+    return veorq_u64(veorq_u64(vreinterpretq_u64_p128(low), vreinterpretq_u64_p128(high)), block);
+}
+
+uint32_t base_crc32c_fold8(uint32_t crc, const uint8_t *bytes, size_t count) {
+    if (count < 256) return base_crc32c_serial(crc, bytes, count);
+    uint64x2_t acc[8];
+    for (int j = 0; j < 8; j++) acc[j] = vld1q_u64((const uint64_t *)(const void *)(bytes + 16 * j));
+    acc[0] = veorq_u64(acc[0], vsetq_lane_u64((uint64_t)crc, vdupq_n_u64(0), 0));
+    bytes += 128;
+    count -= 128;
+    while (count >= 128) {
+        for (int j = 0; j < 8; j++)
+            acc[j] = fold(acc[j], vld1q_u64((const uint64_t *)(const void *)(bytes + 16 * j)), 0x6992cea2u, 0x0d3b6092u);
+        bytes += 128;
+        count -= 128;
+    }
+    uint64x2_t a = acc[0];
+    for (int j = 1; j < 8; j++) a = fold(a, acc[j], 0xf20c0dfeu, 0x493c7d27u);
+    uint32_t c = __crc32cd(0, vgetq_lane_u64(a, 0));
+    c = __crc32cd(c, vgetq_lane_u64(a, 1));
+    return base_crc32c_serial(c, bytes, count);
+}
+
 uint64_t base_popcount(const uint8_t *bytes, size_t count) {
     uint64_t total = 0;
     size_t i = 0;
