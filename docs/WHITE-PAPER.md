@@ -21,8 +21,11 @@ Every claim is named, given a probe that could fail, run, and recorded in the di
   is read (diary 2026-10-30-01). Before trusting a green run, ask what input would make it red.
 - **A test that has never failed proves nothing.** Every test is seen red before it is seen green (TDD below); every gate is broken on
   purpose once (mutation below).
-- **The oracle is never the author.** Expected trees come from the Linux tools that wrote the image (ADR-0007), checksums from published
-  vectors, constants from a derivation checked by an independent implementation.
+- **The oracle is never the author.** Expected trees come from the Linux tools that wrote the image (ADR-0007), every node's metadata
+  from the reference implementation reading it (the Linux kernel, ntfs-3g, btrfs-progs), checksums from published vectors, constants
+  from a derivation checked by an independent implementation, and hostile inputs from the reference test suites (docs/conformance).
+- **The baseline is native.** A reader reads at least as fast as macOS reads the same tree from its own file system, and compressed
+  data as fast as its codec allows (docs/conformance/performance.md).
 - **Unprobed claims are written as open questions, never as facts.** "Reported" for what another project measured; "not verified" for
   what this machine could not run (an FSKit mount needs a signed module, ADR-0006).
 

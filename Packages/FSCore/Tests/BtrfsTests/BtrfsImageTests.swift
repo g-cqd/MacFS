@@ -4,7 +4,9 @@ import Testing
 @testable import Btrfs
 
 @Suite struct BtrfsImageTests {
-    @Test(arguments: ["btrfs", "btrfs-zlib", "btrfs-lzo", "btrfs-xxhash", "btrfs-subvol"])
+    static let images = ["btrfs", "btrfs-zlib", "btrfs-lzo", "btrfs-xxhash", "btrfs-subvol"]
+
+    @Test(arguments: images)
     func wholeTreeMatchesTheManifest(_ name: String) throws {
         let fileSystem = try BtrfsFileSystem(source: try ImageOracle.image(name))
         #expect(fileSystem.volume.label == name)

@@ -14,6 +14,8 @@ extension NTFSFileSystem {
             NTFSReparse.isLink(tag: try reparse.u32(0))
         {
             kind = .symlink
+        } else if kind == .regular, try interixTarget(record) != nil {
+            kind = .symlink
         }
         let parent = id == rootID ? rootID : names.first?.parent ?? rootID
         var attributes = NodeAttributes(id: id, parent: parent, kind: kind)
@@ -33,6 +35,12 @@ extension NTFSFileSystem {
                 }
             case .symlink:
                 attributes.size = UInt64(try readLink(id).count)
+            case .directory:
+                // ntfs-3g's rule: the data size of the $I30 index allocation, or 0 when the index fits in its root.
+                if let index = record.extents(NTFSAttributeType.indexAllocation, named: Self.indexName).first {
+                    attributes.size = index.size
+                    attributes.allocatedSize = index.nonResident?.allocatedSize ?? 0
+                }
             default:
                 break
         }
@@ -52,7 +60,21 @@ extension NTFSFileSystem {
     }
 
     public func readLink(_ id: UInt64) throws(DiskError) -> [UInt8] {
-        guard let value = try record(id).first(NTFSAttributeType.reparsePoint)?.value else { throw .notSymlink }
-        return try NTFSReparse.target(value)
+        let record = try record(id)
+        if let value = record.first(NTFSAttributeType.reparsePoint)?.value { return try NTFSReparse.target(value) }
+        guard let target = try interixTarget(record) else { throw .notSymlink }
+        return target
+    }
+
+    /// The target when the record is an Interix link (ntfs-3g's default): the system attribute, and small data that starts
+    /// with the link tag.
+    func interixTarget(_ record: NTFSRecord) throws(DiskError) -> [UInt8]? {
+        guard let information = record.first(NTFSAttributeType.standardInformation)?.value,
+            try information.u32(32) & NTFSInterix.systemFlag != 0,
+            let data = record.extents(NTFSAttributeType.data).first,
+            data.size >= UInt64(NTFSInterix.linkMagic.count), data.size <= UInt64(NTFSInterix.largestLink)
+        else { return nil }
+        let bytes = try stream(record, NTFSAttributeType.data).read(source, at: 0, count: Int(data.size))
+        return try NTFSInterix.linkTarget(bytes)
     }
 }

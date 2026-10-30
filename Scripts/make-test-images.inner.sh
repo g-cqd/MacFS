@@ -2,7 +2,7 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
-apk add --no-cache btrfs-progs ntfs-3g-progs e2fsprogs sgdisk coreutils findutils >/dev/null
+apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
 printf 'hello btrfs\n' > /tmp/tree/hello.txt
@@ -22,6 +22,8 @@ for i in $(seq 1 300); do echo "file $i" > /tmp/tree/dir/sub/f$i.txt; done
 echo inside > "/tmp/tree/spaces and ünïcödé/naïve.txt"
 echo subvolume > /tmp/tree/vol/in-subvolume.txt
 ln -s ../hello.txt /tmp/tree/dir/link
+# A second name for one file: link counts are part of conformance (the reference manifests carry them).
+ln /tmp/tree/dir/medium.txt /tmp/tree/big/medium-again.txt
 ln -s /absolute/target /tmp/tree/dir/absolute-link
 
 manifest() {  # $1 = root directory; prints path<TAB>type<TAB>size<TAB>sha256-or-target
@@ -48,6 +50,17 @@ make_btrfs btrfs-subvol --subvol vol
 
 # ext2/3/4 via mke2fs -d: indirect blocks with 1 KiB blocks (ext2), a journal (ext3), extents, htree
 # directories, 64-bit and metadata checksums (ext4 defaults), and inline data.
+# mke2fs -d stores whole seconds. The Linux kernel then writes nanosecond times (and so its own inode checksums) into a file,
+# a directory and a symlink, so the readers' time decoding meets the kernel's encoding (docs/conformance/ext.md).
+mkdir -p /mnt/ref
+kernel_touch() {  # $1 image, $2 byte offset of the file system
+    mount -t ext4 -o loop,offset="$2" "$1" /mnt/ref
+    touch -m -d @1700000000.123456789 /mnt/ref/hello.txt
+    touch -m -d @1600000000.987654321 /mnt/ref/dir
+    touch -h -m -d @1500000000.000000001 /mnt/ref/dir/link
+    umount /mnt/ref
+}
+
 make_ext() {  # $1 name, $2 size, rest: mke2fs options
     name=$1; size=$2; shift 2
     rm -f "$name.img"
@@ -55,6 +68,7 @@ make_ext() {  # $1 name, $2 size, rest: mke2fs options
     # mke2fs -d writes linear directories; e2fsck -D rebuilds them as htrees where dir_index is on.
     # Exit 1 means "file system modified", which is the point.
     e2fsck -f -y -D "$name.img" >/dev/null 2>&1 || [ $? -eq 1 ]
+    kernel_touch "$name.img" 0
     manifest /tmp/tree > "$name.manifest"
 }
 make_ext ext2 64M -t ext2 -b 1024
@@ -72,19 +86,47 @@ rm -f ext4-gpt.img /tmp/ext4-gpt.img; truncate -s 128M /tmp/ext4-gpt.img
 mke2fs -q -F -L ext4-gpt -t ext4 -d /tmp/tree -E offset=1048576 /tmp/ext4-gpt.img 120M
 # Not -q: with it this sgdisk exits 0 and writes no table.
 sgdisk -o -n 1:2048:0 -t 1:8300 /tmp/ext4-gpt.img >/dev/null
+kernel_touch /tmp/ext4-gpt.img 1048576
 cp --sparse=always /tmp/ext4-gpt.img ext4-gpt.img && rm /tmp/ext4-gpt.img
 manifest /tmp/tree > ext4-gpt.manifest
 
-# NTFS: ntfscp writes files into an unmounted image (no FUSE in a container), so the /tmp/tree is flat.
-rm -rf /tmp/ntree && mkdir /tmp/ntree
-cp /tmp/tree/hello.txt /tmp/tree/dir/medium.txt /tmp/tree/big/counting.txt /tmp/tree/big/random.bin /tmp/ntree/
-for i in $(seq 1 300); do cp /tmp/tree/dir/sub/f$i.txt /tmp/ntree/; done
-cp "/tmp/tree/spaces and ünïcödé/naïve.txt" /tmp/ntree/
+# NTFS: mkntfs, then ntfs-3g (the reference driver, through FUSE: the container runs with --cap-add ALL) copies the whole tree.
+[ -e /dev/fuse ] || mknod /dev/fuse c 10 229
 rm -f ntfs.img; truncate -s 64M ntfs.img
 mkntfs -Q -q -F -L ntfs ntfs.img 2>/dev/null
-for f in /tmp/ntree/*; do ntfscp ntfs.img "$f" "$(basename "$f")" >/dev/null; done
-manifest /tmp/ntree > ntfs.manifest
-rm -rf /tmp/tree /tmp/ntree
+mkdir -p /mnt/ntfs && ntfs-3g ntfs.img /mnt/ntfs && cp -a /tmp/tree/. /mnt/ntfs/ && umount /mnt/ntfs
+manifest /tmp/tree > ntfs.manifest
+
+# Reference manifests: each image as its reference implementation presents it (docs/conformance). The Linux kernel mounts ext,
+# ntfs-3g mounts NTFS, and btrfs-progs' own reader restores Btrfs (this kernel has no Btrfs driver). The fields line names what
+# that implementation owns: ntfs-3g synthesizes modes and owners, and a restore makes fresh link counts.
+reference() {  # $1 root, $2 tool, $3 fields
+    printf '# reference: %s\n# fields: %s\n' "$2" "$3"
+    (cd "$1" && find . -mindepth 1 -printf '%P\t%y\t%m\t%U\t%G\t%n\t%s\t%T@\t%C@\t' \
+        -exec sh -c 'if [ -L "$1" ]; then readlink "$1"; elif [ -f "$1" ]; then sha256sum < "$1" | cut -d" " -f1; else echo -; fi' _ {} \; \
+        | LC_ALL=C sort)
+}
+for name in ext2 ext3 ext4 ext4-inline ext4-bigalloc ext4-uuid-seed ext4-gpt; do
+    offset=0; [ "$name" = ext4-gpt ] && offset=1048576
+    mount -t ext4 -o loop,ro,noload,offset=$offset "$name.img" /mnt/ref
+    reference /mnt/ref "Linux $(uname -r) ext4" "type mode uid gid nlink size dirsize mtime ctime content" > "$name.reference"
+    umount /mnt/ref
+done
+ntfs-3g -o ro ntfs.img /mnt/ref
+reference /mnt/ref "$(ntfs-3g --version 2>&1 | head -1)" "type nlink size dirsize mtime ctime content" > ntfs.reference
+umount /mnt/ref
+for name in btrfs btrfs-zlib btrfs-lzo btrfs-zstd btrfs-xxhash btrfs-subvol; do
+    rm -rf /tmp/restored && mkdir /tmp/restored
+    btrfs restore -m -S -x "$name.img" /tmp/restored >/dev/null 2>&1
+    reference /tmp/restored "$(btrfs --version | head -1) restore" "type mode uid gid size mtime content" > "$name.reference"
+done
+rm -rf /tmp/restored
+rm -rf /tmp/tree
+# LZO1X streams from liblzo2 (the reference implementation) and their originals: the decoder's oracle.
+rm -rf lzo && mkdir lzo && gcc -O2 -o /tmp/lzo-fixtures /scripts/lzo-fixtures.c -llzo2 && /tmp/lzo-fixtures
 mkfs.btrfs --version | head -1 > versions.txt
 mkntfs --version 2>&1 | head -1 >> versions.txt
+ntfs-3g --version 2>&1 | head -1 >> versions.txt
+uname -r | sed "s/^/Linux /" >> versions.txt
+apk info -v lzo 2>/dev/null | head -1 >> versions.txt
 mke2fs -V 2>&1 | head -1 >> versions.txt

@@ -36,12 +36,36 @@ import ToolingCore
         #expect(step.arguments.contains { $0.hasPrefix("alpine:") }, "the image is pinned by tag")
     }
 
+    /// The reference implementations mount the images (the Linux kernel for ext, ntfs-3g through FUSE for NTFS), and
+    /// ntfs-3g builds the NTFS image from the full tree: both need the container's capabilities.
+    @Test func imagesRunWithTheCapabilitiesToMount() {
+        for kind in TestImages.Kind.allCases {
+            let arguments = TestImages.plan(root: Self.root, container: "/c", kind: kind).steps[0].arguments
+            guard let flag = arguments.firstIndex(of: "--cap-add") else {
+                Issue.record("no --cap-add (\(kind))")
+                continue
+            }
+            #expect(arguments[flag + 1] == "ALL")
+            #expect(flag < arguments.firstIndex(of: TestImages.image)!, "run options come before the image")
+        }
+    }
+
     @Test func benchImagesRunTheirOwnPayload() {
-        let plan = TestImages.plan(root: Self.root, container: "/c", bench: true)
+        let plan = TestImages.plan(root: Self.root, container: "/c", kind: .bench)
         #expect(plan.steps.count == 1)
         #expect(plan.steps[0].arguments.last == "/scripts/make-bench-images.inner.sh")
         #expect(
             plan.steps[0].arguments.contains("/repo/BenchImages:/work"), "bench images live apart from the test images")
+    }
+
+    /// The reference test suites (e2fsprogs' and btrfs-progs' images) are fetched and unpacked in the container, into a
+    /// directory of their own: they are a hostile corpus, not an oracle of trees.
+    @Test func theCorpusIsTheReferenceSuites() {
+        let plan = TestImages.plan(root: Self.root, container: "/c", kind: .corpus)
+        #expect(plan.steps.count == 1)
+        #expect(plan.steps[0].arguments.last == "/scripts/fetch-reference-suites.inner.sh")
+        #expect(plan.steps[0].arguments.contains("/repo/TestCorpus:/work"))
+        #expect(TestImages.Kind.corpus.directory == "TestCorpus")
     }
 
     @Test func gatesCoverEveryToolTheWhitePaperNames() {

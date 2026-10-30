@@ -68,7 +68,8 @@ extension ExtFileSystem {
         attributes.accessed = try inode.time(0x08, extra: 0x8C)
         attributes.changed = try inode.time(0x0C, extra: 0x84)
         attributes.modified = try inode.time(0x10, extra: 0x88)
-        attributes.created = try inode.time(0x90, extra: 0x94)
+        // i_crtime exists only where the extra space covers it (Linux's EXT4_FITS_IN_INODE); 128-byte inodes have none.
+        if 128 + inode.extraSize >= 0x94 { attributes.created = try inode.time(0x90, extra: 0x94) }
         return attributes
     }
 

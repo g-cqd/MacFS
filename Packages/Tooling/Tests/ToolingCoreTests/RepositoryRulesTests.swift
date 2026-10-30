@@ -14,7 +14,10 @@ import ToolingCore
         "docs/roadmap/0001-a.md": "---\nstatus: done\nblocked-by: []\ndate: 2026-10-30\n---\n\n# 0001 — A\n",
         "docs/roadmap/0002-b.md": "---\nstatus: open\nblocked-by: [\"0003\"]\ndate: 2026-10-30\n---\n\n# 0002 — B\n",
         "docs/roadmap/0003-c.md": "---\nstatus: open\nblocked-by: []\ndate: 2026-10-30\n---\n\n# 0003 — C\n",
-        "docs/diary/2026-10-30-01.md": "# Diary — 2026-10-30 (01)\n"
+        "docs/diary/2026-10-30-01.md": "# Diary — 2026-10-30 (01)\n",
+        // What each reader is held to (references, suites, performance), one page per format.
+        "docs/conformance/README.md": "# Conformance\n",
+        "docs/conformance/ext.md": "# ext\n"
     ]
 
     @Test func aWellFormedTreeHasNoProblems() {

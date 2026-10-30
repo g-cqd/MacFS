@@ -2,7 +2,7 @@
 # Runs inside the container (swift package images --bench): the profiling corpus for roadmap 0012, about 600 MB of
 # data in 1 GiB images. Not used by the tests; built in the container's own /tmp like the test trees.
 set -eu
-apk add --no-cache btrfs-progs e2fsprogs coreutils findutils >/dev/null
+apk add --no-cache btrfs-progs e2fsprogs ntfs-3g ntfs-3g-progs coreutils findutils >/dev/null
 cd /work
 rm -rf /tmp/bench && mkdir -p /tmp/bench/text /tmp/bench/random /tmp/bench/small
 # Compressible: 200 MB of numbered lines. Incompressible: 200 MB of random bytes. Metadata: 20,000 files in 100 directories.
@@ -17,4 +17,10 @@ for variant in plain zlib lzo; do
     esac
 done
 rm -f ext4.img; mke2fs -q -F -L bench -t ext4 -d /tmp/bench ext4.img 1G
+# NTFS through ntfs-3g (FUSE; the container runs with --cap-add ALL).
+[ -e /dev/fuse ] || mknod /dev/fuse c 10 229
+rm -f ntfs.img; truncate -s 1G ntfs.img; mkntfs -Q -q -F -L bench ntfs.img 2>/dev/null
+mkdir -p /mnt/ntfs && ntfs-3g ntfs.img /mnt/ntfs && cp -a /tmp/bench/. /mnt/ntfs/ && umount /mnt/ntfs
+# The same tree on the host's own file system: the baseline the readers are measured against (`fsprobe --tree`).
+rm -rf tree && cp -a /tmp/bench tree
 rm -rf /tmp/bench

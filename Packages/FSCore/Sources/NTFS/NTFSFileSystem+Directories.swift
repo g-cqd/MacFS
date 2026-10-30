@@ -2,7 +2,7 @@ import AemiKernel
 public import FSCore
 
 extension NTFSFileSystem {
-    private static let indexName = Array("$I30".utf8)
+    static let indexName = Array("$I30".utf8)
 
     /// Every entry of the `$I30` index: the root's, then every INDX block reachable from it.
     func listing(_ directory: UInt64) throws(DiskError) -> NTFSListing {
@@ -62,9 +62,15 @@ extension NTFSFileSystem {
         return children
     }
 
-    func kind(_ name: NTFSFileName) -> NodeKind {
+    /// The kind an index entry names. Only a system file can be an Interix link, so only those cost a record read.
+    func kind(_ name: NTFSFileName, record: UInt64) -> NodeKind {
         if name.fileAttributes & NTFSFileName.directoryFlag != 0 { return .directory }
         if name.fileAttributes & NTFSFileName.reparseFlag != 0, NTFSReparse.isLink(tag: name.reparseTag) {
+            return .symlink
+        }
+        if name.fileAttributes & NTFSInterix.systemFlag != 0,
+            let file = try? self.record(record), (try? interixTarget(file)) != nil
+        {
             return .symlink
         }
         return .regular
@@ -73,7 +79,9 @@ extension NTFSFileSystem {
     public func lookup(_ name: [UInt8], in directory: UInt64) throws(DiskError) -> DirectoryEntry {
         let units = Array(String(decoding: name, as: UTF8.self).utf16)
         guard let found = try listing(directory).find(units: units, folded: fold(units)) else { throw .notFound }
-        return DirectoryEntry(name: found.fileName.name, id: found.record, kind: kind(found.fileName), nextCookie: 0)
+        return DirectoryEntry(
+            name: found.fileName.name, id: found.record, kind: kind(found.fileName, record: found.record),
+            nextCookie: 0)
     }
 
     public func entries(of directory: UInt64, from cookie: UInt64, limit: Int) throws(DiskError) -> [DirectoryEntry] {
@@ -85,7 +93,7 @@ extension NTFSFileSystem {
             .map { position in
                 let name = names[position]
                 return DirectoryEntry(
-                    name: name.fileName.name, id: name.record, kind: kind(name.fileName),
+                    name: name.fileName.name, id: name.record, kind: kind(name.fileName, record: name.record),
                     nextCookie: UInt64(position + 1))
             }
     }

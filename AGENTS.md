@@ -6,7 +6,10 @@ records what an agent cannot derive from the source: commands, gates, traps and 
 ## Commands
 
 ```sh
-swift package --package-path Packages/Tooling --disable-sandbox images            # test images + manifests (Apple container)
+swift package --package-path Packages/Tooling --disable-sandbox images            # test images, manifests, reference manifests
+swift package --package-path Packages/Tooling --disable-sandbox images --corpus   # e2fsprogs and btrfs-progs test suites (TestCorpus/)
+swift package --package-path Packages/Tooling --disable-sandbox images --bench    # bench images and the native tree (BenchImages/)
+swift run --package-path Packages/FSCore -c release fsprobe --tree BenchImages/tree # the native baseline; --under PATH for a reader
 swift test --package-path Packages/FSCore                                         # readers, kernels, MountKit (needs the images)
 swift test --package-path Packages/Tooling                                        # tooling, documentation law, source structure
 swift package --package-path Packages/Tooling --disable-sandbox gates [--dry-run] # every static gate (see below)
@@ -49,6 +52,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **A mutant that does not compile proves nothing**, and neither does one that changes speed but not output (a narrowing that stops
   early falls back to the transcoder): pick mutants the result can see.
 - **At `-Os`, write SIMD accumulators out.** An array of them in a loop is not unrolled or kept in registers (aemi ADR 0020).
+- **The container runs with `--cap-add ALL`** so the kernel can loop-mount ext images and ntfs-3g can use FUSE (`mknod /dev/fuse`).
+- **`btrfs-image` is in `btrfs-progs-extra`** on Alpine, and `btrfs restore` has no `-q`.
+- **A typed-throws closure passed to a `rethrows` API crashes Swift 6.4's SIL verifier** (`withUnsafeMutableBytes`): use an untyped one.
+- **A generic `some Collection` copy across modules is not specialized**: it went element by element (34 MB/s). Take concrete types.
+- **e2fsck's "exit status 0" includes repairs**: a clean e2fsprogs image is one whose expected output is only the passes.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State

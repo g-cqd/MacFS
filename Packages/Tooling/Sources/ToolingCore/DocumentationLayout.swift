@@ -28,7 +28,7 @@ public enum DocumentationLayout {
                 case "diary":
                     if !diaryName.isMatch(in: name) { problems.append("\(path): name must be YYYY-MM-DD-NN.md") }
                     if lineCount(text) > 256 { problems.append("\(path) has \(lineCount(text)) lines (cap 256)") }
-                case "research", "models":
+                case "research", "models", "conformance":
                     continue
                 default:
                     if path == "docs/WHITE-PAPER.md", lineCount(text) > 200 {

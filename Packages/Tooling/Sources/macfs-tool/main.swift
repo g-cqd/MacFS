@@ -2,7 +2,7 @@ import Formats
 import Foundation
 import ToolingCore
 
-// macfs-tool <images|gates|plists|summary> [--root DIR] [--dry-run] [--check]
+// macfs-tool <images|gates|plists|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus]
 // The command plugins call this; it can also be run directly with `swift run macfs-tool`.
 
 struct Options {
@@ -10,7 +10,7 @@ struct Options {
     var root = FileManager.default.currentDirectoryPath
     var dryRun = false
     var check = false
-    var bench = false
+    var kind = TestImages.Kind.test
 }
 
 func parse(_ arguments: [String]) -> Options? {
@@ -23,7 +23,8 @@ func parse(_ arguments: [String]) -> Options? {
             case "--root": options.root = rest.next() ?? options.root
             case "--dry-run": options.dryRun = true
             case "--check": options.check = true
-            case "--bench": options.bench = true
+            case "--bench": options.kind = .bench
+            case "--corpus": options.kind = .corpus
             default: return nil
         }
     }
@@ -74,10 +75,10 @@ func main() -> Int32 {
                     return 2
                 }
                 try FileManager.default.createDirectory(
-                    atPath: options.root + (options.bench ? "/BenchImages" : "/TestImages"),
+                    atPath: options.root + "/" + options.kind.directory,
                     withIntermediateDirectories: true)
                 return try report(
-                    TestImages.plan(root: options.root, container: container, bench: options.bench),
+                    TestImages.plan(root: options.root, container: container, kind: options.kind),
                     dryRun: options.dryRun)
             case "gates":
                 return try report(
