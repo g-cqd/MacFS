@@ -13,6 +13,7 @@ swift package --package-path Packages/Tooling --disable-sandbox gates [--dry-run
 swift package --package-path Packages/Tooling --disable-sandbox plists [--check]  # FSKit Info.plists from DiskFormat
 swift package --package-path Packages/FSCore --disable-sandbox --allow-writing-to-package-directory format   # Aemi's formatter
 MACFS_DEV=1 swift run --package-path Packages/FSCore -c release fskbench            # kernels against C baselines
+swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img    # NFS proxy; prints the mount command
 xcodegen generate && xcodebuild -scheme MacFS -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
 swift test --package-path Packages/FSCore 2>&1 | swift run --package-path Packages/Tooling macfs-tool summary
 ```
@@ -44,6 +45,6 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 
 ## State
 
-Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, FSKit modules (built, unsigned), the app (built, not launched),
-tooling and gates. Blocked: signing (roadmap 0006, needs the account owner). Next by value: 0007 (NFS proxy), 0011/0012 (kernels),
-0015 (checksums), 0023 (fuzzing). Read each entry's `status:` and `blocked-by:` before starting it.
+Done: kernels, Btrfs, NTFS and ext readers, `Formats`, `MountKit`, signed FSKit modules that mount and automount (0005, 0006, 0024),
+the NFS proxy (0007), tooling and gates. The app is built, not launched. Next by value: 0011/0012 (kernels), 0015 (checksums),
+0023 (fuzzing), 0025 (the mount check as a plugin). Read each entry's `status:` and `blocked-by:` before starting it.

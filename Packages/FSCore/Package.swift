@@ -29,6 +29,8 @@ let package = Package(
         .library(name: "ExtFS", targets: ["ExtFS"]),
         .library(name: "Formats", targets: ["Formats"]),
         .library(name: "MountKit", targets: ["MountKit"]),
+        .library(name: "NFSProxy", targets: ["NFSProxy"]),
+        .executable(name: "macfs-nfsd", targets: ["macfs-nfsd"]),
         .executable(name: "fsprobe", targets: ["fsprobe"])
     ],
     dependencies: [
@@ -46,6 +48,10 @@ let package = Package(
         .target(name: "Formats", dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS"], swiftSettings: readerSettings),
         // What every mount technology needs on top of a reader: identifiers, listings with "." and "..".
         .target(name: "MountKit", dependencies: ["FSCore"], swiftSettings: readerSettings),
+        // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
+        .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore"], swiftSettings: readerSettings),
+        .executableTarget(
+            name: "macfs-nfsd", dependencies: ["NFSProxy", "Formats", "FSCore"], swiftSettings: strictSettings),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels"], swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
@@ -54,7 +60,9 @@ let package = Package(
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
-        .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings)
+        .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(
+            name: "NFSProxyTests", dependencies: ["NFSProxy", "MountKit", "FSCore"], swiftSettings: strictSettings)
     ]
 )
 

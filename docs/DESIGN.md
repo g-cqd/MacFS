@@ -9,6 +9,7 @@
 | Readers | `Btrfs`, `NTFS`, `ExtFS` | One `ReadOnlyFileSystem` each. Synchronous, thread-safe, caches bounded. |
 | Registry | `Formats` | `DiskFormat`: names, short names, probe (a full open), open. The one list every consumer uses. |
 | Mount glue | `MountKit` | `MountedTree`: identifiers (root = 2, parent of root = 1), listings with `.` and `..`, cookies (proved in Lean, `Proofs/`). |
+| NFS proxy | `NFSProxy`, `macfs-nfsd` | NFSv3 and MOUNT v3, read-only, over loopback TCP (ADR-0010): `NFSDispatcher` is a pure call-to-reply function over `MountedTree`; `LoopbackServer` is the socket shell. |
 | FSKit | `Extensions/Shared`, one `@main` per format | `ReadOnlyModule` (`FSUnaryFileSystem`), `ReadOnlyVolume` (`FSVolume.Handler`, `ReadWriteHandler`, macOS 27 API). |
 | App | `App` | Module status, a link to the extension settings, and an in-app browser over the same readers. |
 | Tooling | `Packages/Tooling` | `macfs-tool` and its command plugins: images, gates, plists. |
@@ -32,5 +33,5 @@ journal devices, dirdata. The journal is not replayed.
 
 ## What is not built
 
-Kernel-offloaded I/O, writes, the loopback proxies, disk discovery in the app, mounting from the app, the kernel-extension tier.
+Kernel-offloaded I/O, writes, the WebDAV proxy, disk discovery in the app, mounting from the app, the kernel-extension tier.
 See `docs/roadmap/`.
