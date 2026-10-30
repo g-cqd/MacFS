@@ -1,0 +1,26 @@
+import hashlib, os, sys
+root, manifest = sys.argv[1], sys.argv[2]
+expected = {}
+for line in open(manifest, encoding='utf-8'):
+    p, t, s, d = line.rstrip('\n').split('\t')
+    expected[p] = (t, int(s), d)
+extra = set(sys.argv[3:])
+seen, bad = {}, []
+for dirpath, dirs, files in os.walk(root):
+    for name in dirs + files:
+        full = os.path.join(dirpath, name); rel = os.path.relpath(full, root)
+        if os.path.islink(full): seen[rel] = ('link', 0, os.readlink(full))
+        elif os.path.isdir(full): seen[rel] = ('dir', 0, '-')
+        else:
+            h = hashlib.sha256()
+            with open(full, 'rb') as f:
+                for chunk in iter(lambda: f.read(1 << 20), b''): h.update(chunk)
+            seen[rel] = ('file', os.path.getsize(full), h.hexdigest())
+for p in extra:
+    if seen.pop(p, None) is None: bad.append(f'missing extra {p}')
+for p, row in expected.items():
+    if seen.get(p) != row: bad.append(f'{p}: expected {row}, mounted {seen.get(p)}')
+for p in seen.keys() - expected.keys(): bad.append(f'unexpected {p}')
+print(f'{len(expected)} expected, {len(seen)} seen, {len(bad)} problems')
+for b in bad[:15]: print('  ' + b)
+sys.exit(1 if bad else 0)
