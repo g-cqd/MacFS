@@ -3,6 +3,8 @@
 # test images (TestImages/versions.txt): e2fsprogs' tests/f_* (damaged ext images, each with e2fsck's expected exit status) and
 # btrfs-progs' tests (raw images, and btrfs-image metadata dumps restored to raw). docs/conformance says how they are used.
 set -eu
+# APK_MIRROR (macfs-tool images --mirror HOST): a host serving Alpine's repositories, when the CDN crawls.
+[ -n "${APK_MIRROR:-}" ] && sed -i "s|dl-cdn.alpinelinux.org|$APK_MIRROR|" /etc/apk/repositories
 apk add --no-cache git btrfs-progs btrfs-progs-extra xz coreutils make gcc musl-dev zstd >/dev/null
 cd /work
 rm -rf e2fsprogs btrfs-progs zstd /tmp/src && mkdir -p e2fsprogs btrfs-progs zstd /tmp/src

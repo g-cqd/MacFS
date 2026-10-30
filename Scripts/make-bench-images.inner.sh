@@ -2,6 +2,8 @@
 # Runs inside the container (swift package images --bench): the profiling corpus for roadmap 0012, about 600 MB of
 # data in 1 GiB images. Not used by the tests; built in the container's own /tmp like the test trees.
 set -eu
+# APK_MIRROR (macfs-tool images --mirror HOST): a host serving Alpine's repositories, when the CDN crawls.
+[ -n "${APK_MIRROR:-}" ] && sed -i "s|dl-cdn.alpinelinux.org|$APK_MIRROR|" /etc/apk/repositories
 apk add --no-cache btrfs-progs e2fsprogs xfsprogs ntfs-3g ntfs-3g-progs attr coreutils findutils >/dev/null
 cd /work
 rm -rf /tmp/bench && mkdir -p /tmp/bench/text /tmp/bench/random /tmp/bench/small

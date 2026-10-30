@@ -57,6 +57,12 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **The container runs with `--cap-add ALL`** so the kernel can loop-mount ext images and ntfs-3g can use FUSE (`mknod /dev/fuse`).
 - **`btrfs-image` is in `btrfs-progs-extra`** on Alpine, and `btrfs restore` has no `-q`.
 - **A typed-throws closure passed to a `rethrows` API crashes Swift 6.4's SIL verifier** (`withUnsafeMutableBytes`): use an untyped one.
+- **`BoundedCache` must stay `@inlinable`**: across modules, an unspecialized generic looks its metadata up on every call, which
+  halved XFS lookups. Inlinable code needs `public import` of what it names (InternalImportsByDefault).
+- **An XFS directory's form is where its data fork ends** (`xfs_dir2_format`), not its size: a leaf directory of one data block is
+  as large as a block directory (xfs-1k's `dir/sub`).
+- **When dl-cdn.alpinelinux.org crawls** (apk hangs), pass a mirror:
+  `swift package --package-path Packages/Tooling --disable-sandbox images --mirror ftp.halifax.rwth-aachen.de`.
 - **A generic `some Collection` copy across modules is not specialized**: it went element by element (34 MB/s). Take concrete types.
 - **e2fsck's "exit status 0" includes repairs**: a clean e2fsprogs image is one whose expected output is only the passes.
 - **Install only after the Release build's exit status is 0**: Release turns some Debug warnings into errors, and a failed build
@@ -101,4 +107,5 @@ Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Na
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
 NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through a C decoder held to libzstd whose sequence loop
 is arm64 assembly (0013; docs/research/2026-10-30-compression-kernels.md), Btrfs zlib through MacFS's own inflate held to
-libz. XFS reads through its own module (0031). Next by value: XFS hashed lookup. Read each entry's `status:` and `blocked-by:` before starting it.
+libz. XFS reads through its own module (0031) and looks names up by hash (0037). Next by value: zstd literals' Huffman streams
+(research 2026-10-30-compression-kernels). Read each entry's `status:` and `blocked-by:` before starting it.

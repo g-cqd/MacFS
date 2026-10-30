@@ -3,11 +3,13 @@ import Formats
 import Foundation
 
 // fsprobe <image-or-device> [--rounds N] [--under PATH] [--keep]
+// fsprobe <image-or-device> --lookups <directory> [--rounds N] [--keep]
 // fsprobe --tree <directory> [--rounds N]
 //
 // Opens a volume with the reader its format needs, walks every directory and reads every file in 1 MiB pieces,
 // and prints what it found and how long it took: the workload the kernels and readers are profiled on. With --tree, the same
-// workload on a directory of the host's own file system: the baseline (docs/conformance/performance.md).
+// workload on a directory of the host's own file system: the baseline (docs/conformance/performance.md). With --lookups,
+// every name of one directory looked up instead (LookupBench).
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 guard let path = arguments.first else {
@@ -40,6 +42,10 @@ do {
     guard let format = DiskFormat.detect(source) else {
         print("\(path): no Btrfs, NTFS or ext volume")
         exit(1)
+    }
+    if let index = arguments.firstIndex(of: "--lookups"), index + 1 < arguments.count {
+        try LookupBench.run(format, source, directory: arguments[index + 1], rounds: rounds, keep: keep)
+        exit(0)
     }
     let kept = keep ? try format.open(source) : nil
     for round in 1 ... rounds {

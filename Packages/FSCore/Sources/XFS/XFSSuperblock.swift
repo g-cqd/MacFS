@@ -43,6 +43,9 @@ struct XFSSuperblock: Sendable {
         // reader to, it is refused (docs/conformance/xfs.md).
         if version == 4 { throw .unsupported("XFS v4 volumes") }
         guard version == 5 else { throw .unsupported("XFS version \(version)") }
+        // ASCII case-insensitive volumes (versionnum's BORGBIT, 0x4000) hash and compare names folded: deprecated, and refused
+        // by the same kernel, so refused here too (docs/conformance/xfs.md).
+        if try bytes.be16(0x64) & 0x4000 != 0 { throw .unsupported("XFS ASCII case-insensitive volumes") }
         sectorSize = Int(try bytes.be16(0x66))
         guard [512, 1024, 2048, 4096, 8192, 16384, 32768].contains(sectorSize), sectorSize <= raw.count else {
             throw .corrupt("sector size \(sectorSize)")

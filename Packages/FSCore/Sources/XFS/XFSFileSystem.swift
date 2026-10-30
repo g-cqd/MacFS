@@ -12,6 +12,14 @@ public final class XFSFileSystem: ReadOnlyFileSystem {
     private let blocks: CachedBlocks
     private let extentMaps = BoundedCache<UInt64, [XFSExtent]>(capacity: 512)
     let listings = BoundedCache<UInt64, Listing>(capacity: 256)
+    /// Directory blocks a hashed lookup has read, checked (magic, checksum, owner), by directory and logical offset: about
+    /// 8 MiB of them.
+    let directoryBlocks: BoundedCache<DirectoryBlock, DiskBytes>
+
+    struct DirectoryBlock: Hashable, Sendable {
+        let directory: UInt64
+        let offset: UInt64
+    }
 
     struct Listing: Sendable {
         let parent: UInt64
@@ -34,6 +42,7 @@ public final class XFSFileSystem: ReadOnlyFileSystem {
             throw .corrupt("\(superblock.dataBlocks) blocks on a \(source.byteCount)-byte device")
         }
         blocks = CachedBlocks(source, blockSize: superblock.blockSize, blockCount: superblock.dataBlocks)
+        directoryBlocks = BoundedCache(capacity: max(16, (8 << 20) / superblock.dirBlockSize))
         rootID = superblock.rootInode
         volume = VolumeDescription(
             format: "xfs", label: superblock.label, uuid: superblock.uuid, caseRule: .sensitive, maximumNameLength: 255)

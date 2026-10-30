@@ -50,6 +50,22 @@ import ToolingCore
         }
     }
 
+    /// When Alpine's CDN crawls, a mirror host reaches the payload as APK_MIRROR (a container option, before the image),
+    /// which rewrites the container's repositories; without one, nothing is passed.
+    @Test func aMirrorReachesThePayload() {
+        for kind in TestImages.Kind.allCases {
+            let arguments = TestImages.plan(root: Self.root, container: "/c", kind: kind, mirror: "ftp.example.org")
+                .steps[0].arguments
+            guard let flag = arguments.firstIndex(of: "-e") else {
+                Issue.record("no -e (\(kind))")
+                continue
+            }
+            #expect(arguments[flag + 1] == "APK_MIRROR=ftp.example.org")
+            #expect(flag < arguments.firstIndex(of: TestImages.image)!, "run options come before the image")
+            #expect(!TestImages.plan(root: Self.root, container: "/c", kind: kind).steps[0].arguments.contains("-e"))
+        }
+    }
+
     @Test func benchImagesRunTheirOwnPayload() {
         let plan = TestImages.plan(root: Self.root, container: "/c", kind: .bench)
         #expect(plan.steps.count == 1)

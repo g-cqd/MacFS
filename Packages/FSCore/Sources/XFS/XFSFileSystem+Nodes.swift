@@ -38,7 +38,7 @@ extension XFSFileSystem {
     }
 
     public func lookup(_ name: [UInt8], in directory: UInt64) throws(DiskError) -> DirectoryEntry {
-        guard let entry = try listing(directory).entries.first(where: { $0.name == name }) else { throw .notFound }
+        guard let entry = try hashedLookup(name, in: try inode(directory)) else { throw .notFound }
         // @dl:accept -- each reader maps its own directory entries to DirectoryEntry; the fields happen to share names
         return DirectoryEntry(name: entry.name, id: entry.inode, kind: try kind(of: entry), nextCookie: 0)
     }

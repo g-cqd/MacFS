@@ -2,6 +2,8 @@
 # Runs inside the container. See make-test-images.sh. The trees are built in the container's own /tmp:
 # a directory shared with the host collects Finder's .DS_Store files while the script runs.
 set -eu
+# APK_MIRROR (macfs-tool images --mirror HOST): a host serving Alpine's repositories, when the CDN crawls.
+[ -n "${APK_MIRROR:-}" ] && sed -i "s|dl-cdn.alpinelinux.org|$APK_MIRROR|" /etc/apk/repositories
 apk add --no-cache btrfs-progs ntfs-3g ntfs-3g-progs e2fsprogs e2fsprogs-extra xfsprogs xfsprogs-extra util-linux attr zstd sgdisk coreutils findutils gcc musl-dev lzo-dev >/dev/null
 cd /work
 rm -rf /tmp/tree && mkdir -p /tmp/tree/dir/sub /tmp/tree/big /tmp/tree/vol "/tmp/tree/spaces and ünïcödé"
@@ -192,6 +194,35 @@ make_xfs() {  # $1 name, $2 islands, rest: mkfs.xfs options
 make_xfs xfs 100
 make_xfs xfs-1k 1500 -b size=1024 -n size=8192
 
+# XFS hashed lookup (roadmap 0037): each directory form the kernel makes, in images of their own, so the tree's manifests stay
+# small. block/ (40 names in one directory block), leaf/ (data blocks indexed by one leaf block: 300 names at 4 KiB, 600 in
+# 8 KiB directory blocks, where 300 still fit one block), collide/ (1,200 names of
+# one hash, Scripts/xfs-names.c: a run of that hash across leaf blocks, which a lookup must follow), deep/ (250,000 names at
+# 4 KiB: a node tree of two levels; 3,000 at 1 KiB with 8 KiB directory blocks, where two levels would take a million). Hard
+# links to 1,000 files in targets/, so a lookup that finds the wrong entry finds the wrong inode. Every tenth name of leaf/,
+# collide/ and deep/ is then removed: the kernel leaves stale leaf entries behind, which a lookup skips. The reference is the
+# kernel's: every name left and the inode number it gives (.names).
+gcc -O2 -o /tmp/xfs-names /scripts/xfs-names.c
+make_xfs_hash() {  # $1 name, $2 names in leaf/, $3 in deep/, rest: mkfs.xfs options
+    name=$1; leaf=$2; deep=$3; shift 3
+    rm -f "$name.img"; truncate -s 300M "$name.img"
+    mkfs.xfs -q -f -L "$name" "$@" "$name.img"
+    mount -t xfs -o loop "$name.img" /mnt/ref
+    mkdir /mnt/ref/targets /mnt/ref/block /mnt/ref/leaf /mnt/ref/collide /mnt/ref/deep
+    i=0; while [ $i -lt 1000 ]; do echo $i > /mnt/ref/targets/t$i; i=$((i + 1)); done
+    /tmp/xfs-names plain /mnt/ref/block 40 /mnt/ref/targets 1000
+    /tmp/xfs-names plain /mnt/ref/leaf "$leaf" /mnt/ref/targets 1000
+    /tmp/xfs-names collide /mnt/ref/collide 1200 /mnt/ref/targets 1000
+    /tmp/xfs-names plain /mnt/ref/deep "$deep" /mnt/ref/targets 1000
+    for d in leaf collide deep; do (cd /mnt/ref/$d && LC_ALL=C ls | awk 'NR % 10 == 0' | xargs rm --); done
+    for d in block leaf deep; do for c in a b c d e f g h ... .a ..a; do : > "/mnt/ref/$d/$c"; done; done  # one-byte, dot-led
+    (cd /mnt/ref && find . -mindepth 2 -maxdepth 2 -printf '%h\t%f\t%i\n' | sed 's|^\./||' | LC_ALL=C sort) > "$name.names"
+    umount /mnt/ref
+    xfs_repair -n "$name.img" >/dev/null 2>&1 || { echo "$name: xfs_repair -n finds damage" >&2; exit 1; }
+}
+make_xfs_hash xfs-hash 300 250000
+make_xfs_hash xfs-hash-1k 600 3000 -b size=1024 -n size=8192
+
 # Reference manifests: each image as its reference implementation presents it (docs/conformance). The Linux kernel mounts ext,
 # ntfs-3g mounts NTFS, and btrfs-progs' own reader restores Btrfs (this kernel has no Btrfs driver). The fields line names what
 # that implementation owns: ntfs-3g synthesizes modes and owners, and a restore makes fresh link counts.
@@ -243,6 +274,19 @@ for seed in 00000000-0000-0000-0000-000000000000 01020304-0506-0708-090a-0b0c0d0
         done < /tmp/dxnames
     done
 done
+# Directory hashes from xfsprogs (xfs_db's hash: xfs_da_hashname), the XFS hashed lookup's oracle (roadmap 0037), over the
+# same names and names of 1 to 8 bytes 0xFF and 0x81: high bits where the fields of a byte group overlap, in every tail
+# length. Lines: name in hex, hash.
+cp /tmp/dxnames /tmp/xfsnames
+for n in $(seq 1 8); do
+    head -c "$n" /dev/zero | tr '\0' '\377' >> /tmp/xfsnames && echo >> /tmp/xfsnames
+    head -c "$n" /dev/zero | tr '\0' '\201' >> /tmp/xfsnames && echo >> /tmp/xfsnames
+done
+: > xfshash.txt
+while IFS= read -r name; do
+    hex=$(printf '%s' "$name" | od -An -tx1 | tr -d ' \n')
+    printf '%s\t%s\n' "$hex" "$(xfs_db -r -c "hash $name" xfs-hash.img)" >> xfshash.txt
+done < /tmp/xfsnames
 # zstd frames from the zstd CLI (the reference implementation) and their originals (roadmap 0013): levels 1 to 22 (22 with
 # a long window), with and without a checksum and a content size, sizes around the 128 KiB block, and two frames back to back.
 rm -rf zstd && mkdir zstd && mkdir -p /tmp/zin

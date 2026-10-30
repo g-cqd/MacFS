@@ -5,19 +5,6 @@ import Testing
 
 @testable import ExtFS
 
-/// A source that counts its reads: an htree lookup reads a few blocks where a scan reads the whole directory.
-final class CountingSource: BlockSource {
-    let base: any BlockSource
-    let reads = Atomic<Int>(0)
-    var byteCount: UInt64 { base.byteCount }
-    init(_ base: any BlockSource) { self.base = base }
-
-    func read(at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
-        reads.add(1, ordering: .relaxed)
-        return try base.read(at: offset, count: count)
-    }
-}
-
 /// Hashed lookup in ext's indexed directories (roadmap 0016), as Linux's `dx_probe` and `ext4fs_dirhash` do it.
 @Suite struct ExtHtreeTests {
     /// Every line of TestImages/dxhash.txt: e2fsprogs' `debugfs dx_hash` over names of 1 to 70 bytes and non-ASCII names,
@@ -30,12 +17,12 @@ final class CountingSource: BlockSource {
             let fields = line.split(separator: "\t").map(String.init)
             try #require(fields.count == 5, "\(line)")
             let version = try #require(UInt8(fields[0]))
-            let seedBytes = Self.bytes(hex: fields[1].replacingOccurrences(of: "-", with: ""))
+            let seedBytes = Hex.bytes(fields[1].replacingOccurrences(of: "-", with: ""))
             let seed = (0 ..< 4)
                 .map { word in
                     (0 ..< 4).reduce(UInt32(0)) { $0 | UInt32(seedBytes[4 * word + $1]) << (8 * $1) }
                 }
-            let name = Self.bytes(hex: fields[2])
+            let name = Hex.bytes(fields[2])
             let expected = (
                 try #require(UInt32(fields[3].dropFirst(2), radix: 16)),
                 try #require(UInt32(fields[4].dropFirst(2), radix: 16))
@@ -47,12 +34,6 @@ final class CountingSource: BlockSource {
             checked += 1
         }
         #expect(checked == 900)
-    }
-
-    static func bytes(hex: String) -> [UInt8] {
-        let digits = Array(hex.utf8)
-        return stride(from: 0, to: digits.count, by: 2)
-            .map { UInt8(String(decoding: digits[$0 ..< $0 + 2], as: UTF8.self), radix: 16) ?? 0 }
     }
 
     /// The images must carry the hashes they are for, or matching them proves nothing.

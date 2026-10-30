@@ -34,8 +34,9 @@ journal devices, dirdata. The journal is not replayed.
 
 **XFS (v5).** Big-endian; inode numbers encode allocation group, block and slot. Inodes v3 with their CRC (bigtime and
 nrext64 when set), data forks local, as extent lists or B+trees (`BMA3` blocks, checksum and owner checked), directories by
-their data blocks in every form, symlinks inline or remote (`XSLM`), unwritten extents read as zero. Refused: v4, needsrepair,
-realtime files. The log is not replayed (docs/conformance/xfs.md).
+their data blocks in every form, names looked up by `xfs_da_hashname` through the hash leaves and node tree (`DA3N`, `LEAFN`;
+the next leaf while a hash run goes on), symlinks inline or remote (`XSLM`), unwritten extents read as zero. Refused: v4,
+ASCII case-insensitive volumes, needsrepair, realtime files. The log is not replayed (docs/conformance/xfs.md).
 
 ## What is not built
 

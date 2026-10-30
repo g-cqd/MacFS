@@ -11,6 +11,7 @@ struct Options {
     var dryRun = false
     var check = false
     var kind = TestImages.Kind.test
+    var mirror: String?
 }
 
 func parse(_ arguments: [String]) -> Options? {
@@ -25,6 +26,7 @@ func parse(_ arguments: [String]) -> Options? {
             case "--check": options.check = true
             case "--bench": options.kind = .bench
             case "--corpus": options.kind = .corpus
+            case "--mirror": options.mirror = rest.next()
             default: return nil
         }
     }
@@ -101,7 +103,9 @@ func mounts(_ options: Options) -> Int32 {
 
 func main() -> Int32 {
     guard let options = parse(Array(CommandLine.arguments.dropFirst())) else {
-        print("usage: macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check]")
+        print(
+            "usage: macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus] [--mirror HOST]"
+        )
         return 64
     }
     do {
@@ -115,7 +119,8 @@ func main() -> Int32 {
                     atPath: options.root + "/" + options.kind.directory,
                     withIntermediateDirectories: true)
                 return try report(
-                    TestImages.plan(root: options.root, container: container, kind: options.kind),
+                    TestImages.plan(
+                        root: options.root, container: container, kind: options.kind, mirror: options.mirror),
                     dryRun: options.dryRun)
             case "gates":
                 return try report(

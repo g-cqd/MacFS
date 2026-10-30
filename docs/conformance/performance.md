@@ -56,3 +56,22 @@ libzstd 1.5.7 decodes 1,110 and 1,300 (the C loop 1,253 and 933).
 
 XFS (roadmap 0031; bench image written by the kernel): large files 14,769 MB/s (text) and 15,282 (random), small files 619,105
 nodes/s; ext4 on the same tree 14,973, 15,792 and 678,394.
+
+XFS lookups (roadmap 0037; `fsprobe IMAGE --lookups DIR`, release, every name of the directory once a round from a cold file
+system, lookups/s; the base is the scan of a cached listing, commit 2950722):
+
+| Image: directory | Form | Scan | Hashed | First lookup, scan → hashed |
+|---|---|---|---|---|
+| xfs: many (10,000) | node | 152,600 | 1.7–2.0 M | 414 → 10–28 µs |
+| xfs: forty | block | 2.46 M | 2.3–2.8 M | 7.3 → 2.4–3 µs |
+| xfs-hash: leaf (270) | leaf | 2.85 M | 2.6–2.9 M | 16 → 4–6 µs |
+| xfs-hash: deep (225,000) | node, level 2 | 7,621 | 530,000–600,000 | 10.3 ms → 35–45 µs |
+| xfs-hash-1k: deep (2,700) | node | 616,500 | 2.0–2.1 M | 137 → 8–11 µs |
+| xfs-hash: collide (1,080 of one hash) | node | 1.08 M | 75,000–79,000 | 66 → 24–41 µs |
+
+`collide` is the known regression: each lookup reads the data entries of the whole run of its hash, as the kernel does (about
+24 ns a candidate); a real directory has runs of one or two. `BoundedCache` is `@inlinable`: unspecialized, each of a lookup's
+three cache reads looked its dictionary's generic metadata up at run time, which halved the hashed figures above. Ranges are
+rounds of the same run (±10%); the first round is the coldest. The xfs-hash directories hold 11 more names since the base
+was measured (one-byte and dot-led ones). The test for "." and ".." compares bytes: two array literals built on each lookup
+cost forty 15%.

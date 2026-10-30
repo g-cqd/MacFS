@@ -29,15 +29,15 @@ public enum TestImages {
         }
     }
 
-    public static func plan(root: String, container: String, kind: Kind = .test) -> Plan {
-        Plan(steps: [
-            Command(
-                container,
-                [
-                    // Mounting (the kernel's ext driver, ntfs-3g through FUSE) needs the capabilities a container drops.
-                    "run", "--rm", "--cap-add", "ALL", "-v", "\(root)/\(kind.directory):/work", "-v",
-                    "\(root)/Scripts:/scripts", image, "sh", "/scripts/\(kind.payload)"
-                ])
-        ])
+    /// The run; `mirror`, a host serving Alpine's repositories, replaces the CDN in the container when it crawls.
+    public static func plan(root: String, container: String, kind: Kind = .test, mirror: String? = nil) -> Plan {
+        // Mounting (the kernel's ext driver, ntfs-3g through FUSE) needs the capabilities a container drops.
+        var arguments = ["run", "--rm", "--cap-add", "ALL"]
+        if let mirror { arguments += ["-e", "APK_MIRROR=\(mirror)"] }
+        arguments += [
+            "-v", "\(root)/\(kind.directory):/work", "-v", "\(root)/Scripts:/scripts", image, "sh",
+            "/scripts/\(kind.payload)"
+        ]
+        return Plan(steps: [Command(container, arguments)])
     }
 }

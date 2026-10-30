@@ -48,23 +48,10 @@ enum XFSDirectory {
     static func dataBlock(
         _ block: DiskBytes, _ superblock: XFSSuperblock, directory: UInt64, into entries: inout [Entry]
     ) throws(DiskError) -> UInt64? {
-        let magic = try block.be32(0)
-        let blockMagic: UInt32 = 0x5844_4233
-        guard magic == blockMagic || magic == 0x5844_4433 else {
-            // @dl:accept -- XFS checks each structure's magic, checksum and owner; the structures differ
-            throw .corrupt("directory \(directory): a data block without its magic")
-        }
-        try XFSChecksum.verify(block, at: 4, "directory \(directory): data block")
-        guard try block.be64(40) == directory else { throw .corrupt("directory \(directory): a block of another") }
-        var end = block.count
-        if magic == blockMagic {
-            // A single-block directory: its hash leaf entries and their tail (count, stale) close the block.
-            let count = Int(try block.be32(block.count - 8))
-            end = block.count - 8 - 8 * count
-        }
+        try check(block, directory: directory)
+        let end = try entriesEnd(block, directory: directory)
         var cursor = 64
         var parent: UInt64?
-        guard end >= cursor else { throw .corrupt("directory \(directory): a leaf of \(end) bytes") }
         while cursor < end {
             if try block.be16(cursor) == 0xFFFF {
                 let length = Int(try block.be16(cursor + 2))
@@ -90,6 +77,29 @@ enum XFSDirectory {
             cursor += size
         }
         return parent
+    }
+
+    /// The magic of a single-block directory's block (`XDB3`); the blocks of larger ones are `XDD3`.
+    static let blockMagic: UInt32 = 0x5844_4233
+
+    /// A data block's magic, checksum and owner.
+    static func check(_ block: DiskBytes, directory: UInt64) throws(DiskError) {
+        let magic = try block.be32(0)
+        guard magic == blockMagic || magic == 0x5844_4433 else {
+            // @dl:accept -- XFS checks each structure's magic, checksum and owner; the structures differ
+            throw .corrupt("directory \(directory): a data block without its magic")
+        }
+        try XFSChecksum.verify(block, at: 4, "directory \(directory): data block")
+        guard try block.be64(40) == directory else { throw .corrupt("directory \(directory): a block of another") }
+    }
+
+    /// Where a checked data block's entries end: at the block's end, or in a single-block directory at its hash leaf
+    /// entries and their tail (count, stale), which close the block.
+    static func entriesEnd(_ block: DiskBytes, directory: UInt64) throws(DiskError) -> Int {
+        guard try block.be32(0) == blockMagic else { return block.count }
+        let end = block.count - 8 - 8 * Int(try block.be32(block.count - 8))
+        guard end >= 64 else { throw .corrupt("directory \(directory): a leaf of \(end) bytes") }
+        return end
     }
 
     /// XFS_DIR3_FT_*: regular, directory, character and block devices, FIFO, socket, symlink.

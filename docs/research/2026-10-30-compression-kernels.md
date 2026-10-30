@@ -198,5 +198,6 @@ a 4 GiB limit that only copied libz's `uInt`.
 
 ## Next, by the same method
 
-- **XFS hashed directory lookup**: `xfs_da_hashname` and the da-btree walk instead of a linear scan of large directories.
+- **XFS hashed directory lookup**: done (roadmap 0037). A lookup in 225,000 names went from 7,600 to 600,000 a second; Swift,
+  not assembly, as the cost is the blocks reached, not the instructions.
 - **zstd (roadmap 0013)**: the sequences are in assembly (above); literals' Huffman streams are the next cost on text.
