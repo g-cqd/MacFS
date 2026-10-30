@@ -3,25 +3,39 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @State private var status = ExtensionStatus()
+    let status: ExtensionStatus
     @State private var browser = Browser()
     @State private var selection: Browser.Row.ID?
+    @AppStorage("checkStatusAtLaunch") private var checkAtLaunch = true
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         NavigationSplitView {
             List {
-                Section("File system extensions") {
-                    if status.modules.isEmpty { Text("None installed").foregroundStyle(.secondary) }
-                    ForEach(status.modules) { module in
-                        Label(
-                            module.id.replacingOccurrences(of: "dev.gcqd.MacFS.", with: ""),
-                            systemImage: module.enabled ? "checkmark.circle.fill" : "circle")
+                Section("Status") {
+                    Button {
+                        openSettings()
+                    } label: {
+                        Label {
+                            Text(status.summary.headline)
+                        } icon: {
+                            Image(systemName: StatusStyle.symbol(status.summary.state))
+                                .foregroundStyle(StatusStyle.color(status.summary.state))
+                        }
                     }
-                    Button("Open Extension Settings…") { status.openSettings() }
+                    .buttonStyle(.plain)
+                    .help("Open the Status pane")
+                    ForEach(status.checks.filter { $0.id.hasPrefix("module.") }) { check in
+                        Label {
+                            Text(check.title)
+                        } icon: {
+                            Image(systemName: StatusStyle.symbol(check.state))
+                                .foregroundStyle(StatusStyle.color(check.state))
+                        }
+                    }
                 }
-                if let problem = status.problem { Text(problem).font(.caption).foregroundStyle(.red) }
             }
-            .task { await status.refresh() }
+            .task { if checkAtLaunch { await status.refresh() } }
         } detail: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {

@@ -22,6 +22,17 @@ public enum DiskFormat: String, CaseIterable, Sendable {
         }
     }
 
+    /// The FSKit module's target and directory name (`Extensions/<name>`), and its bundle identifier.
+    public var moduleName: String {
+        switch self {
+            case .btrfs: "BtrfsFS"
+            case .ntfs: "NTFSFS"
+            case .ext: "ExtFSModule"
+        }
+    }
+
+    public var moduleBundleIdentifier: String { "dev.gcqd.MacFS.\(moduleName)" }
+
     public var displayName: String {
         switch self {
             case .btrfs: "Btrfs"

@@ -31,6 +31,7 @@ let package = Package(
         .library(name: "ExtFS", targets: ["ExtFS"]),
         .library(name: "Formats", targets: ["Formats"]),
         .library(name: "MountKit", targets: ["MountKit"]),
+        .library(name: "AppSupport", targets: ["AppSupport"]),
         .library(name: "NFSProxy", targets: ["NFSProxy"]),
         .executable(name: "macfs-nfsd", targets: ["macfs-nfsd"]),
         .executable(name: "fsprobe", targets: ["fsprobe"])
@@ -53,6 +54,9 @@ let package = Package(
         .target(name: "Formats", dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS"], swiftSettings: readerSettings),
         // What every mount technology needs on top of a reader: identifiers, listings with "." and "..".
         .target(name: "MountKit", dependencies: ["FSCore"], swiftSettings: readerSettings),
+        // The app's logic, apart from its views so it is tested: the status checks (roadmap 0021).
+        .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
+        .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
         .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore"], swiftSettings: readerSettings),
         .executableTarget(

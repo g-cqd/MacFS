@@ -73,6 +73,8 @@ targets:
       - package: FSCore
         product: Formats
       - package: FSCore
+        product: AppSupport
+      - package: FSCore
         product: MountKit
       - package: FSCore
         product: FSCore

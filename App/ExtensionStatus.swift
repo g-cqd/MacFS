@@ -1,30 +1,45 @@
+import AppSupport
 import FSKit
+import Foundation
 import Observation
 
-/// Which MacFS modules macOS knows about, and whether the user enabled them.
+/// What the system says about MacFS's modules, evaluated by `AppSupport.StatusEvaluation` (tested there).
 @MainActor @Observable
 final class ExtensionStatus {
-    struct Module: Identifiable {
-        let id: String
-        let enabled: Bool
-    }
-
-    private(set) var modules: [Module] = []
-    private(set) var problem: String?
+    private(set) var checks: [StatusCheck] = []
+    private(set) var summary = StatusEvaluation.Summary(state: .unknown, headline: "Checking…")
+    private(set) var facts = SystemFacts(appPath: Bundle.main.bundlePath, modules: [:], queryFailure: nil)
+    private(set) var checkedAt: Date?
 
     func refresh() async {
+        var modules: [String: Bool] = [:]
+        var failure: String?
         do {
-            let installed = try await FSClient.shared.installedExtensions
-            modules = installed.filter { $0.bundleIdentifier.hasPrefix("dev.gcqd.MacFS.") }
-                .map { Module(id: $0.bundleIdentifier, enabled: $0.isEnabled) }
-                .sorted { $0.id < $1.id }
-            problem = nil
+            for module in try await FSClient.shared.installedExtensions {
+                modules[module.bundleIdentifier] = module.isEnabled
+            }
         } catch {
-            problem = error.localizedDescription
+            failure = error.localizedDescription
         }
+        facts = SystemFacts(appPath: Bundle.main.bundlePath, modules: modules, queryFailure: failure)
+        checks = StatusEvaluation.checks(facts)
+        summary = StatusEvaluation.summary(checks)
+        checkedAt = Date()
     }
 
-    func openSettings() {
-        _ = FSClient.shared.openFileSystemExtensionsSettings()
+    var report: String { StatusEvaluation.report(checks, facts: facts) }
+
+    func perform(_ remedy: StatusCheck.Remedy) {
+        switch remedy {
+            case .openExtensionSettings:
+                _ = FSClient.shared.openFileSystemExtensionsSettings()
+            case .moveToApplications, .reinstall:
+                // Out of process: revealing through NSWorkspace stats the path on the main thread, and a wedged volume would
+                // pin the UI (Everest's finding).
+                let reveal = Process()
+                reveal.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                reveal.arguments = ["-R", Bundle.main.bundlePath]
+                try? reveal.run()
+        }
     }
 }

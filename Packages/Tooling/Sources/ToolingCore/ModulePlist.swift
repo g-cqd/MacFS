@@ -4,11 +4,7 @@ public import Foundation
 /// The Info.plist of each FSKit module, generated from ``DiskFormat`` so a short name has one source.
 public enum ModulePlist {
     public static func directory(for format: DiskFormat) -> String {
-        switch format {
-            case .btrfs: "Extensions/BtrfsFS"
-            case .ntfs: "Extensions/NTFSFS"
-            case .ext: "Extensions/ExtFSModule"
-        }
+        "Extensions/\(format.moduleName)"
     }
 
     private static func media(_ hint: String, order: Int = 3000) -> [String: Any] {
