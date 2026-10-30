@@ -4,7 +4,7 @@ import Testing
 @testable import ExtFS
 
 @Suite struct ExtImageTests {
-    static let images = ["ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc"]
+    static let images = ["ext2", "ext3", "ext4", "ext4-inline", "ext4-bigalloc", "ext4-uuid-seed"]
 
     @Test(arguments: images)
     func wholeTreeMatchesTheManifest(_ name: String) throws {

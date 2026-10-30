@@ -27,7 +27,7 @@ their extents and refuse compressed and encrypted data. Directories read `$INDEX
 folding, hide DOS names and system records. Reparse points: Windows symlinks, junctions, WSL symlinks. Free space: `$Bitmap` through the
 NEON bit count.
 
-**ext2/3/4.** Superblock checksum (metadata_csum), group descriptors (32 or 64 bytes), inodes, extent trees (unwritten extents read as
+**ext2/3/4.** Metadata checksums where the volume has them (metadata_csum: superblock, group descriptors, inodes, extent and directory blocks, as Linux computes them; htree nodes not yet), group descriptors (32 or 64 bytes), inodes, extent trees (unwritten extents read as
 holes), indirect blocks, inline data (`system.data`), linear and htree directories by linear scan. Refused: meta_bg, compression,
 journal devices, dirdata. The journal is not replayed.
 

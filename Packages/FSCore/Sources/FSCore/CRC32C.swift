@@ -11,6 +11,12 @@ public enum CRC32C {
         }
     }
 
+    /// Raw update over memory the caller owns for the call.
+    public static func update(_ crc: UInt32, _ bytes: UnsafeBufferPointer<UInt8>) -> UInt32 {
+        guard let base = bytes.baseAddress else { return crc }
+        return unsafe AemiKernels.crc32c(crc, base, count: bytes.count)
+    }
+
     public static func update(_ crc: UInt32, _ bytes: [UInt8]) -> UInt32 {
         update(crc, bytes[...])
     }

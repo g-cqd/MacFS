@@ -8,7 +8,11 @@ extension ExtFileSystem {
             if inode.flags & ExtInode.extentsFlag != 0 {
                 return try ExtExtentTree.runs(inode.blockArea, number: inode.number) {
                     (block) throws(DiskError) -> DiskBytes in
-                    try self.block(block)
+                    let bytes = try self.block(block)
+                    if let checksums = superblock.checksums, let seed = inode.checksumSeed {
+                        try checksums.verifyExtentBlock(bytes, inode: inode.number, seed: seed)
+                    }
+                    return bytes
                 }
             }
             let count = (inode.size + blockSize - 1) / blockSize

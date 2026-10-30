@@ -38,6 +38,8 @@ struct ExtSuperblock: Sendable {
     let inodeSize: Int
     let incompat: UInt32
     let hasMetadataChecksums: Bool
+    /// The metadata checksums, when the volume has them (`metadata_csum`).
+    let checksums: ExtChecksums?
     let descriptorSize: Int
     let uuid: [UInt8]
     let label: String
@@ -83,6 +85,10 @@ struct ExtSuperblock: Sendable {
         }
         uuid = try bytes.bytes(0x68, 16)
         label = String(decoding: try bytes.bytes(0x78, 16).prefix { $0 != 0 }, as: UTF8.self)
+        // s_checksum_seed when csum_seed is set (the UUID may then change), else crc32c(~0, uuid).
+        checksums =
+            hasMetadataChecksums
+            ? ExtChecksums(seed: incompat & 0x2000 != 0 ? try bytes.u32(0x270) : CRC32C.update(~0, uuid)) : nil
     }
 
     var is64Bit: Bool { incompat & 0x0080 != 0 }

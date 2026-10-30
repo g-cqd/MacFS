@@ -22,8 +22,10 @@ struct ExtInode: Sendable {
     /// The 60 bytes of `i_block`: block pointers, an extent tree, inline data or a fast symlink.
     let blockArea: DiskBytes
     let extraSize: Int
+    let generation: UInt32
+    private let checksums: ExtChecksums?
 
-    init(_ raw: DiskBytes, number: UInt64) throws(DiskError) {
+    init(_ raw: DiskBytes, number: UInt64, checksums: ExtChecksums? = nil) throws(DiskError) {
         self.number = number
         self.raw = raw
         mode = try raw.u16(0x00)
@@ -37,9 +39,15 @@ struct ExtInode: Sendable {
         blockArea = try raw.slice(0x28, 60)
         extraSize = raw.count > 128 ? Int(try raw.u16(0x80)) : 0
         guard 128 + extraSize <= raw.count else { throw .corrupt("inode \(number): extra size \(extraSize)") }
+        generation = try raw.u32(0x64)
+        self.checksums = checksums
     }
 
     var kind: NodeKind { NodeKind(posixMode: UInt32(mode)) }
+
+    /// The seed of this inode's block checksums (extent and directory blocks), when the volume has them. Computed when a
+    /// block needs it: most inode reads need none.
+    var checksumSeed: UInt32? { checksums?.inodeSeed(number: number, generation: generation) }
 
     /// A time field with its `_extra` word: two epoch bits extend the seconds, thirty bits hold nanoseconds.
     func time(_ offset: Int, extra: Int?) throws(DiskError) -> Timestamp {

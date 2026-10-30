@@ -34,6 +34,9 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         tables.reserveCapacity(Int(groups))
         for group in 0 ..< Int(groups) {
             let at = group * superblock.descriptorSize
+            try superblock.checksums?
+                .verifyDescriptor(
+                    try raw.slice(at, superblock.descriptorSize), group: UInt32(truncatingIfNeeded: group))
             let high = superblock.is64Bit ? UInt64(try raw.u32(at + 0x28)) << 32 : 0
             tables.append(high | UInt64(try raw.u32(at + 8)))
         }
@@ -62,8 +65,12 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         let byteInTable = slot * UInt64(superblock.inodeSize)
         let blockSize = UInt64(superblock.blockSize)
         let block = try block(inodeTables[group] + byteInTable / blockSize)
-        let inode = try ExtInode(try block.slice(Int(byteInTable % blockSize), superblock.inodeSize), number: number)
+        let raw = try block.slice(Int(byteInTable % blockSize), superblock.inodeSize)
+        let inode = try ExtInode(raw, number: number, checksums: superblock.checksums)
         guard inode.mode != 0 || number == rootID else { throw .notFound }
+        if let checksums = superblock.checksums {
+            try checksums.verifyInode(raw, number: number, generation: inode.generation, extraSize: inode.extraSize)
+        }
         return inode
     }
 

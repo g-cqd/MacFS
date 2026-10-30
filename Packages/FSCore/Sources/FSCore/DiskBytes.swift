@@ -74,6 +74,12 @@ public struct DiskBytes: Sendable {
         return Array(storage[at ..< (at + length)])
     }
 
+    /// `length` bytes at `offset`, without a copy: what checksums read.
+    public func region(_ offset: Int, _ length: Int) throws(DiskError) -> ArraySlice<UInt8> {
+        let at = try check(offset, length)
+        return storage[at ..< (at + length)]
+    }
+
     /// All bytes of the view, copied.
     public var array: [UInt8] { Array(storage[start ..< (start + count)]) }
 

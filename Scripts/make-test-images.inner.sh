@@ -13,6 +13,11 @@ seq 1 30 | head -c 100 > /tmp/tree/dir/hundred.txt
 seq 1 200000 > /tmp/tree/big/counting.txt
 head -c 3072000 /dev/urandom > /tmp/tree/big/random.bin
 truncate -s 1M /tmp/tree/big/sparse.bin && printf 'tail' >> /tmp/tree/big/sparse.bin
+# Twelve data islands between holes: more extents than the four an ext4 inode holds, so its extent tree gets an external block
+# and that block's checksum tail (roadmap 0015).
+for i in $(seq 0 11); do
+    printf 'island %02d' "$i" | dd of=/tmp/tree/big/islands.bin bs=1 seek=$((i * 65536)) conv=notrunc 2>/dev/null
+done
 for i in $(seq 1 300); do echo "file $i" > /tmp/tree/dir/sub/f$i.txt; done
 echo inside > "/tmp/tree/spaces and ünïcödé/naïve.txt"
 echo subvolume > /tmp/tree/vol/in-subvolume.txt
@@ -57,6 +62,8 @@ make_ext ext3 64M -t ext3
 make_ext ext4 128M -t ext4
 make_ext ext4-inline 128M -t ext4 -O inline_data
 make_ext ext4-bigalloc 128M -t ext4 -b 4096 -O bigalloc -C 16384
+# Every other ext4 image stores its checksum seed (csum_seed); this one derives it from the UUID, the other path (0015).
+make_ext ext4-uuid-seed 128M -t ext4 -O ^metadata_csum_seed
 # A partitioned disk: one GPT partition of type "Linux filesystem" at 1 MiB, so Disk Arbitration matches the
 # module by partition type (FSMediaTypes), not as a partitionless whole disk.
 # mke2fs zeroes the start of the file even with an offset, so the partition table is written after it; the file

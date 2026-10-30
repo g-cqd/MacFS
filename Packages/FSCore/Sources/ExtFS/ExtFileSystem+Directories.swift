@@ -14,16 +14,19 @@ extension ExtFileSystem {
                 if data.count > 60 { try ExtDirectoryBlock.entries(try data.slice(from: 60), into: &entries) }
                 return entries
             }
-            let blockSize = superblock.blockSize
+            let indexed = inode.flags & ExtInode.indexFlag != 0
             for run in try runs(inode) {
                 guard let physical = run.physical else { continue }
                 for index in 0 ..< run.count {
-                    try ExtDirectoryBlock.entries(try block(physical + index), into: &entries)
+                    let bytes = try block(physical + index)
+                    if let checksums = superblock.checksums, let seed = inode.checksumSeed {
+                        try checksums.verifyDirectoryBlock(bytes, directory: directory, seed: seed, indexed: indexed)
+                    }
+                    try ExtDirectoryBlock.entries(bytes, into: &entries)
                     guard entries.count <= 1 << 22 else {
                         throw .corrupt("directory \(directory) has too many entries")
                     }
                 }
-                _ = blockSize
             }
             return entries
         }
