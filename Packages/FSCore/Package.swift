@@ -46,8 +46,7 @@ let package = Package(
         // Release C is -Os by default; the C kernels (zstd above all) are 8 to 11% faster at -O3 (docs/research/
         // 2026-10-30-compression-kernels.md). Allowed here: FSCore is only ever a root or a local package.
         .target(
-            name: "CFSKernels", cSettings: [.unsafeFlags(["-O3"], .when(configuration: .release))],
-            linkerSettings: [.linkedLibrary("z")]),
+            name: "CFSKernels", cSettings: [.unsafeFlags(["-O3"], .when(configuration: .release))]),
         .target(
             name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO], swiftSettings: readerSettings
         ),
@@ -70,13 +69,15 @@ let package = Package(
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         // A call that checks the assembly kernels keep the callee-saved registers (KernelABITests). Tests only.
         .target(name: "KernelABI", dependencies: ["CFSKernels"], path: "Tests/KernelABI"),
+        // The system libz, the reference the codec tests make their streams with and hold `fsk_inflate` to. Tests only.
+        .target(name: "CodecOracle", path: "Tests/CodecOracle", linkerSettings: [.linkedLibrary("z")]),
         .testTarget(
             name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", "KernelABI", aemiTestKit],
             swiftSettings: strictSettings),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
         .testTarget(
-            name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", "CFSKernels", aemiTestKit],
+            name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", "CFSKernels", "CodecOracle", aemiTestKit],
             swiftSettings: strictSettings),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore", "CFSKernels"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),

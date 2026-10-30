@@ -1,5 +1,4 @@
 import CFSKernels
-import Compression
 import FSCore
 
 /// Decompresses one extent's bytes (`compression` from `btrfs_file_extent_item`).
@@ -16,7 +15,7 @@ enum BtrfsCompression {
     }
 
     /// One zlib stream, as Linux reads it (fs/btrfs/zlib.c): the two-byte header checked and skipped, the rest raw DEFLATE
-    /// through the system libz, the Adler-32 trailer not read. libz decodes at twice the rate of Compression.framework here.
+    /// through MacFS's decoder (`fsk_inflate`, held to the system libz by InflateTests), the Adler-32 trailer not read.
     private static func zlib(_ input: [UInt8], size: Int) throws(DiskError) -> [UInt8] {
         guard input.count > 2, input[0] & 0x0F == 8, (UInt16(input[0]) << 8 | UInt16(input[1])) % 31 == 0,
             input[1] & 0x20 == 0
@@ -25,7 +24,7 @@ enum BtrfsCompression {
         guard size > 0 else { return output }
         var produced = 0
         let status = unsafe BufferPair.withBases(input, &output) { from, into in
-            Int(unsafe fsk_zlib_inflate(from + 2, input.count - 2, into, size, &produced))
+            Int(unsafe fsk_inflate(from + 2, input.count - 2, into, size, &produced))
         }
         guard status == 0 else { throw .corrupt(status == -2 ? "zlib extent ends early" : "malformed zlib extent") }
         // A short result is legal: the tail of a compressed extent past the data is zero.

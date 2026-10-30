@@ -76,7 +76,8 @@ type per file and 250 lines). A finding is fixed, or accepted where it is with a
 
 Aemi first: `AemiKernel` (loads, checked arithmetic, XXH64), `AemiIO` (`PosixFile`), `AemiRegex` (the tooling's rules), Aemi's shared
 format and lint plugins and configs. One Aemi pin across every package (ADR-0004). Apple frameworks where macOS owns the job: FSKit,
-Compression (zlib), CryptoKit (SHA-256). Anything else is an ADR with the alternatives compared.
+CryptoKit (SHA-256). The codecs (LZNT1, LZO1X, zstd, DEFLATE) are MacFS's own kernels, held to their reference libraries in the
+tests only: libz linked into them, liblzo2's and libzstd's verdicts recorded in corpora. Anything else is an ADR with the alternatives compared.
 
 ## Documentation law
 

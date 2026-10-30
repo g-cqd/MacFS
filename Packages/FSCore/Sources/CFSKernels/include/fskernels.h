@@ -51,11 +51,12 @@ size_t fsk_zstd_workspace_size(void);
 /// XXH64 with seed 0 (the zstd content checksum's hash).
 uint64_t fsk_xxh64(const uint8_t *_Nonnull bytes, size_t count);
 
-/// Inflates raw DEFLATE (`source[0..<count]`, after a zlib header the caller has checked) into `target[0..<capacity]`
-/// through the system libz; `*produced` is the number of bytes written. Returns 0 when the stream ended or the target is full,
-/// -2 when the input ended first, -1 on a malformed stream.
-int32_t fsk_zlib_inflate(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity,
-                         size_t *_Nonnull produced);
+/// Inflates raw DEFLATE (RFC 1951; Btrfs zlib extents after the two-byte header the caller has checked) from
+/// `source[0..<count]` into `target[0..<capacity]`; `*produced` is the number of bytes written. Returns 0 when the stream
+/// ended or the target is full, -2 when the input ended first, -1 on a malformed stream: the verdicts, bytes and results of
+/// the system libz on every stream (InflateTests, against `fsk_oracle_inflate`).
+int32_t fsk_inflate(const uint8_t *_Nonnull source, size_t count, uint8_t *_Nonnull target, size_t capacity,
+                    size_t *_Nonnull produced);
 /// Block size and block count of the disk device open on `fd` (DKIOCGETBLOCKSIZE and
 /// DKIOCGETBLOCKCOUNT, whose ioctl macros Swift cannot import). Returns 0, or -1 with errno set.
 int32_t fsk_device_geometry(int32_t fd, uint32_t *_Nonnull blockSize, uint64_t *_Nonnull blockCount);

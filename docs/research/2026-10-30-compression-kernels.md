@@ -119,9 +119,84 @@ which the block's 128 KiB output cap and the literals buffer's slack make unreac
 checks proved redundant, and went: rep[0] - 1 = 0 for the repeat code 3 (the offset check refuses it) and the careful path's
 separate offset-0 test.
 
+## DEFLATE (Btrfs zlib): MacFS's own inflate (inflate_kernel.c)
+
+The reader called the system libz (1.2.12). It now calls `fsk_inflate`, a decoder of its own in C, and libz became the tests'
+oracle (`fsk_oracle_inflate` in CodecOracle; CFSKernels no longer links libz). The bench: the text tree (222.6 MB) in 128 KiB
+pieces, as Btrfs compresses them, raw DEFLATE from libz's deflate, each piece checked against libz before timing. MB/s, ours /
+libz, best of seven:
+
+| data | level 1 | level 3 (Btrfs's default) | level 6 | level 9 |
+|---|---:|---:|---:|---:|
+| text (`BenchImages/tree/text`) | 1,440 / 1,286 | 1,416 / 1,291 | 1,595 / 1,748 | 1,748 / 1,948 |
+| C source (2.6 MB) | 1,084 / 1,006 | 1,216 / 1,151 | 1,170 / 1,117 | 1,170 / 1,120 |
+| small files concatenated | 994 / 917 | | 1,160 / 1,129 | |
+| executables (6.6 MB) | 805 / 766 | | 888 / 831 | |
+
+Through the reader, Btrfs zlib text: 1,263 MB/s (1,160 with libz, same session).
+
+What decided it:
+
+- **Entries that consume a symbol whole.** One 32-bit entry per index of the next 11 (literal/length) or 8 (distance) bits, a
+  second level for longer codes (inftrees.c's sizing). The entry holds the bits the code *and its extra bits* take, so one shift
+  consumes a length or a distance; the extra value is `(saved & mask(total)) >> code_length`.
+- **The next entry read before the refill and before the copy.** After a refill all 64 bits of the buffer are input (the
+  refill is `bits |= load64(in) << (count & 63); in += (~count & 63) >> 3; count |= 56`), and one symbol takes at most 48 bits
+  (15 + 5 + 15 + 13). So the next literal/length entry can be read from the bits that remain, before the refill and before the
+  match copy, which then overlap the chain of table reads. This moved text from 1,206 to 1,416 MB/s; nothing else came close.
+- **One test for what is rare**: a second level, the end of block and a refused code share a branch.
+- `count -= e` subtracts the whole entry; only its low byte (the bits' count) is read, which saves a mask per symbol.
+
+What did not help, measured and removed:
+
+- **Pairs of literals in one entry**: no gain.
+- **Three literals per refill**: no gain on any data.
+- **Root widths** 10 to 12 and 8 to 10: within 1%.
+- **Loop alignment** 16 to 64: within 1%.
+
+Removing the match copy altogether (wrong output, timing only) gained 2 to 3%. The loop is bound by the dependent chain of
+table load, shift and next load, which hand-written arm64 would not shorten, so it stays C (-O3). Where libz stays ahead, text
+at levels 6 and 9 by 9 to 10%, literals and matches alternate (26 M each per 222 MB at level 9, every match 16 bytes or
+shorter). The gap is open.
+
+Conformance (InflateTests, against libz's one-shot verdict, bytes and length):
+
+- libz's streams at every level, strategy, window and memory level, into four capacities each;
+- zlib 1.2.12's own inflate coverage vectors (test/infcover.c);
+- every bit flip and every cut of six small streams, and 3,000 arbitrary block bodies;
+- 50 hand-built streams (`fsk_oracle_vector`, CodecOracle) for rules libz's encoder never writes:
+  - blocks after sync, full, partial and Z_BLOCK flushes;
+  - a non-empty stored block between fast-path blocks;
+  - codes without distances, lone 1-bit codes and codes one 15-bit code short, read where unused;
+  - 31 distance or 287/288 length codes, all 316 code lengths;
+  - an all-zero precode, no end-of-block code;
+  - headers ending exactly at the input's end;
+  - distance codes 30 and 31 in the fast path;
+  - a full output before an error, and before a distance too far back;
+  - 48-bit symbols at every bit alignment;
+  - 20 random complete codes up to 15 bits;
+- input and output flush against guard pages;
+- all of it under ASan and UBSan.
+
+The table sizes are zlib's `enough` maxima: 2,340 entries for 286 symbols at root 11, and 400 for 30 at root 8. The decoder
+reserves 2,342 and 402.
+
+900 mutants of the decoder in a C harness (the same corpora; `/tmp`, not kept): 796 killed, 24 did not compile, and 80
+survive. All 80 were judged equivalent:
+
+- array sizes and root widths;
+- unread entry fields and verdict values only tested for truth;
+- copy thresholds and fast-path margins (274 is the tight one);
+- the fixed tables' cache;
+- second-level sizing: larger levels decode the same while the tables fit;
+- the stored header's 31 or 32 bits, with a byte-aligned count;
+- the 8-byte load read as 7: the loop's second refill ORs real input over the missing byte before it is read.
+
+The hand-built streams went in when 117 had survived. 23 of those were real gaps and are killed now; the 14 others were
+mutants of four checks that proved redundant and were removed: count[0] in the canonical codes, clearing the precode's lengths, `*produced = 0` up front, and
+a 4 GiB limit that only copied libz's `uInt`.
+
 ## Next, by the same method
 
-- **zlib (Btrfs)**: the system libz inflates at 1,428 MB/s, the reader 1,147. Inflate is Huffman decoding, latency-bound on the
-  bit buffer; the known arm64 gains (Chromium's `inflate_fast` with 16-byte chunk copies and a 64-bit bit buffer) are a larger
-  kernel. Measure the reader's 20% first.
+- **XFS hashed directory lookup**: `xfs_da_hashname` and the da-btree walk instead of a linear scan of large directories.
 - **zstd (roadmap 0013)**: the sequences are in assembly (above); literals' Huffman streams are the next cost on text.

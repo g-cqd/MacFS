@@ -11,7 +11,7 @@ swift package --package-path Packages/Tooling --disable-sandbox images --corpus 
 swift package --package-path Packages/Tooling --disable-sandbox images --bench    # bench images and the native tree (BenchImages/)
 swift run --package-path Packages/FSCore -c release fsprobe --tree BenchImages/tree # the native baseline; --under PATH for a reader
 swift test --package-path Packages/FSCore                                         # readers, kernels, MountKit (needs the images)
-swift test --package-path Packages/FSCore --sanitize=address --sanitize=undefined --filter 'Zstd|LZNT1|LZO1X|GuardPage|KernelABI'  # C and asm kernels under ASan/UBSan (corpus needed)
+swift test --package-path Packages/FSCore --sanitize=address --sanitize=undefined --filter 'Zstd|LZNT1|LZO1X|GuardPage|KernelABI|Inflate'  # C and asm kernels under ASan/UBSan (corpus needed)
 swift test --package-path Packages/Tooling                                        # tooling, documentation law, source structure
 swift package --package-path Packages/Tooling --disable-sandbox gates [--dry-run] # every static gate (see below)
 swift package --package-path Packages/Tooling --disable-sandbox plists [--check]  # FSKit Info.plists from DiskFormat
@@ -86,6 +86,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   each kernel through `fsk_abi_call` (Tests/KernelABI); add a test there with every new kernel.
 - **zstd's arm64 sequence loop needs frames no CLI writes**: sequences over 57 bits that are not their block's last come only
   from `Scripts/zstd-wide.c` (`ZSTD_compressSequences`, built by `images --corpus` into TestCorpus/zstd/wide).
+- **libz is a tests-only oracle**: CFSKernels does not link it; CodecOracle (Tests/CodecOracle) does, for `fsk_oracle_inflate`,
+  libz's deflate, and the hand-built DEFLATE streams `fsk_oracle_vector`. A rule libz's encoder never writes (lone codes, an
+  all-zero precode, distance 30 in the fast path...) needs a vector there: libz's own streams left 23 real gaps in inflate.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
@@ -97,5 +100,5 @@ and a Settings window with a tested status check. Mounted small files remain bel
 Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Names match as APFS matches them (0022);
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
 NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through a C decoder held to libzstd whose sequence loop
-is arm64 assembly (0013; docs/research/2026-10-30-compression-kernels.md). XFS reads through its own module (0031). Next by
-value: an inflate kernel (zlib is the system's libz today), XFS hashed lookup. Read each entry's `status:` and `blocked-by:` before starting it.
+is arm64 assembly (0013; docs/research/2026-10-30-compression-kernels.md), Btrfs zlib through MacFS's own inflate held to
+libz. XFS reads through its own module (0031). Next by value: XFS hashed lookup. Read each entry's `status:` and `blocked-by:` before starting it.

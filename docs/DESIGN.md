@@ -20,8 +20,8 @@
 **Btrfs.** Newest valid superblock of the three copies (checksum verified: CRC-32C, xxHash64 or SHA-256). Chunk map bootstrapped from the
 superblock's system array, then the chunk tree; SINGLE, DUP and RAID1* read from this device, striped profiles refused when read. Tree
 search is a bounded range walk. The default subvolume is mounted; nested subvolumes are directories whose inodes carry the tree in the
-upper 32 bits. Extents: inline, regular, preallocated, holes; zlib (Compression, header checked) and LZO (own bounds-checked LZO1X);
-zstd refused.
+upper 32 bits. Extents: inline, regular, preallocated, holes; zlib (header checked, MacFS's own inflate), LZO (own bounds-checked
+LZO1X) and zstd (own decoder, its sequence loop in arm64; roadmap 0013).
 
 **NTFS.** Boot sector, `$MFT` bootstrapped from record 0 (attribute lists followed), fixups through the assembly kernel. Streams join
 their extents and refuse compressed and encrypted data. Directories read `$INDEX_ROOT` and every reachable INDX block, sort by `$UpCase`
