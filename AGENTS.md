@@ -41,6 +41,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **In zsh, `log` is a builtin.** Use `/usr/bin/log show|stream`; the builtin swallows the arguments and prints nothing.
 - **After reinstalling the app, kill the old module processes with SIGKILL**: they ignore SIGTERM and keep serving the old code.
 - **`mke2fs -E offset=` zeroes the start of the image**: write a partition table after it. **`sgdisk -q` writes nothing** here.
+- **`AEMI_DEV=1` rewrites aemi's `Package.resolved`.** Revert it before stashing or committing in aemi.
+- **At `-Os`, write SIMD accumulators out.** An array of them in a loop is not unrolled or kept in registers (aemi ADR 0020).
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
