@@ -4,16 +4,18 @@ import NFSProxy
 import Testing
 
 @Suite struct NFSDispatcherTests {
+    static let export = NFSExport(token: Array(0 ..< 24))
     let dispatcher: NFSDispatcher
     let client = RPCClient()
 
     init() throws {
         dispatcher = NFSDispatcher(
-            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 10)), owner: (uid: 501, gid: 20))
+            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 10)), owner: (uid: 501, gid: 20),
+            export: Self.export)
     }
 
     mutating func rootHandle() throws -> [UInt8] {
-        let call = client.call(RPCClient.mount, 3, 1) { $0.string("/") }
+        let call = client.call(RPCClient.mount, 3, 1) { $0.string(Self.export.path) }
         var reply = try client.reply(dispatcher.handle(call))
         #expect(reply.acceptStatus == 0)
         #expect(try reply.results.u32() == 0, "MNT3_OK")
@@ -52,8 +54,9 @@ import Testing
         fileSystem.nodes[5]?.children.append(("na\u{EF}ve.txt", 3000))
         fileSystem.nodes[3000] = InMemoryFileSystem.Node(
             attributes: NodeAttributes(id: 3000, parent: 5, kind: .regular))
-        let dispatcher = NFSDispatcher(tree: try MountedTree(fileSystem), owner: (uid: 501, gid: 20))
-        let call = client.call(RPCClient.mount, 3, 1) { $0.string("/") }
+        let dispatcher = NFSDispatcher(
+            tree: try MountedTree(fileSystem), owner: (uid: 501, gid: 20), export: Self.export)
+        let call = client.call(RPCClient.mount, 3, 1) { $0.string(Self.export.path) }
         var mount = try client.reply(dispatcher.handle(call))
         _ = try mount.results.u32()
         let root = try mount.results.opaque(maximum: 64)

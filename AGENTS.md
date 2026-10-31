@@ -95,6 +95,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **libz is a tests-only oracle**: CFSKernels does not link it; CodecOracle (Tests/CodecOracle) does, for `fsk_oracle_inflate`,
   libz's deflate, and the hand-built DEFLATE streams `fsk_oracle_vector`. A rule libz's encoder never writes (lone codes, an
   all-zero precode, distance 30 in the fast path...) needs a vector there: libz's own streams left 23 real gaps in inflate.
+- **One proxy serves one mount**: the export admits a single MNT (the mount table shows its path to everyone), so after `umount`
+  start `macfs-nfsd` again; a second `mount_nfs` of a live one is "Permission denied" by design.
+- **GNU coreutils come first on PATH**: `stat -f` is GNU's file-system mode there; use `/usr/bin/stat`, `/usr/bin/find`.
+- **`BoundedCache.value(for:)` makes a missing key once**: concurrent callers wait for the maker, so a `make` must never wait on
+  a key whose maker waits on its own.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
 
 ## State
@@ -107,5 +112,9 @@ Kernel-offloaded I/O (0018) brings mounted large files to Apple's own module. Na
 `mounts` checks every image end to end (0025). ext looks names up by hash and reads meta_bg (0016).
 NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through a C decoder held to libzstd whose sequence loop
 is arm64 assembly (0013; docs/research/2026-10-30-compression-kernels.md), Btrfs zlib through MacFS's own inflate held to
-libz. XFS reads through its own module (0031) and looks names up by hash (0037). Next by value: zstd literals' Huffman streams
-(research 2026-10-30-compression-kernels). Read each entry's `status:` and `blocked-by:` before starting it.
+libz. XFS reads through its own module (0031) and looks names up by hash (0037). The NFS proxy mounts soft at a single-use secret
+export, bounds its connections and answers a connection's calls concurrently (0038 in progress, ADR-0014); concurrent cache misses are
+made once (`BoundedCache`). Everest's features are on the roadmap with their improvements (ADR-0013, 0035–0044, research
+2026-10-30-everest-code-review); writes cover every format and mount path (0017, 0026–0028, 0045, 0046); promotion to aemi is
+studied (0047). Next by value: the mount seam and registry (0035), then the agent (0039); on the codec side, zstd literals' Huffman
+streams. Read each entry's `status:` and `blocked-by:` before starting it.

@@ -1,3 +1,4 @@
+public import Dispatch
 public import Synchronization
 
 /// A thread-safe map with a capacity. When full, inserting evicts the least recently inserted half,
@@ -8,7 +9,21 @@ public final class BoundedCache<Key: Hashable & Sendable, Value: Sendable>: Send
     @usableFromInline struct State {
         @usableFromInline var values: [Key: Value] = [:]
         @usableFromInline var order: [Key] = []
+        /// Keys being made: their callers wait on the maker instead of making them again.
+        @usableFromInline var making: [Key: Making] = [:]
         @usableFromInline init() {}
+    }
+
+    /// One make in progress; waiters block on `done` outside the lock.
+    @usableFromInline final class Making: Sendable {
+        @usableFromInline let done = DispatchGroup()
+        @usableFromInline init() { done.enter() }
+    }
+
+    @usableFromInline enum Claim {
+        case hit(Value)
+        case wait(Making)
+        case make(Making)
     }
 
     @usableFromInline let capacity: Int
@@ -35,12 +50,32 @@ public final class BoundedCache<Key: Hashable & Sendable, Value: Sendable>: Send
         }
     }
 
-    /// The cached value, or the result of `make`, which is then cached. `make` runs outside the lock,
-    /// so two callers may both compute a missing value; the second insert wins and both are equal.
+    /// The cached value, or the result of `make`, which is then cached. `make` runs outside the lock, once however many
+    /// callers miss the same key together (Everest's in-flight fetches): the others wait for it, then take its value, or make
+    /// it themselves if it failed. So `make` must not wait for a key whose maker waits for this one.
     @inlinable public func value<E: Error>(for key: Key, _ make: () throws(E) -> Value) throws(E) -> Value {
-        if let hit = self[key] { return hit }
-        let made = try make()
-        insert(made, for: key)
-        return made
+        while true {
+            let claim = state.withLock { state -> Claim in
+                if let hit = state.values[key] { return .hit(hit) }
+                if let making = state.making[key] { return .wait(making) }
+                let making = Making()
+                state.making[key] = making
+                return .make(making)
+            }
+            switch claim {
+                case .hit(let value):
+                    return value
+                case .wait(let making):
+                    making.done.wait()
+                case .make(let making):
+                    defer {
+                        _ = state.withLock { $0.making.removeValue(forKey: key) }
+                        making.done.leave()
+                    }
+                    let made = try make()
+                    insert(made, for: key)
+                    return made
+            }
+        }
     }
 }

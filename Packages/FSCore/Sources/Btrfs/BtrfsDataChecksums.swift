@@ -87,7 +87,8 @@ final class BtrfsDataChecksums: Sendable {
         while index <= last {
             let start = diskStart + index * Self.piece
             let length = min(Self.piece, diskStart + diskLength - start)
-            if verified[start] == nil {
+            // Through `value(for:)`: concurrent readers of one piece wait for one verification instead of each doing it.
+            _ = try verified.value(for: start) { () throws(DiskError) -> Bool in
                 if let read = unsafe read, start >= from, start + length <= from + count {
                     let offset = Int(start - from)
                     try unsafe check(UnsafeRawBufferPointer(rebasing: read[offset ..< offset + Int(length)]), at: start)
@@ -95,7 +96,7 @@ final class BtrfsDataChecksums: Sendable {
                     let physical = try trees.chunks.physical(start, length: length)
                     try check(try trees.source.read(at: physical, count: Int(length)), at: start)
                 }
-                verified.insert(true, for: start)
+                return true
             }
             index += 1
         }

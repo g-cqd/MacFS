@@ -75,3 +75,23 @@ three cache reads looked its dictionary's generic metadata up at run time, which
 rounds of the same run (±10%); the first round is the coldest. The xfs-hash directories hold 11 more names since the base
 was measured (one-byte and dot-led ones). The test for "." and ".." compares bytes: two array literals built on each lookup
 cost forty 15%.
+
+NFS proxy (roadmap 0038; `macfs-nfsd`, release, mounted by `mount_nfs` on loopback; a fresh mount and server per measure so the
+client's caches are cold, the image in the page cache; `cat` of the 10 × 20 MB files of `random/` and of `text/` in the bench
+images, MB/s; harness `/tmp/xh/nfsbench.sh`). Calls answered in order, as before, against concurrently, eight at a time:
+
+| Image | Server | rsize 32 KiB (client default): random, text | rsize 128 KiB: random, text |
+|---|---|---|---|
+| btrfs-plain | in order | 787–813, 762–870 | 1,290–1,429, 1,333–1,535 |
+| btrfs-plain | concurrent | 576–627, 557–592 | 1,026 (misses made eight times) → 1,550–1,562, 1,568–1,579 |
+| btrfs-zstd | in order | 766–830, 470–504 | 1,227–1,587, 681–735 |
+| btrfs-zstd | concurrent | 576–645, 605–640 | 1,070 (misses made eight times) → 1,439–1,600, 1,546–1,568 |
+| ext4 | in order | 830–1,015, 629–912 | 1,198–1,786, 1,216–1,795 |
+| ext4 | concurrent | 855–885, 876–901 | 1,515–1,770, 1,525–1,810 |
+
+The read size is the larger win: 128 KiB, the proxy's FSINFO preference, is now in the mount command. Concurrency first lost a
+fifth on Btrfs: eight READs of one MiB each verified the whole MiB's checksums, because `BoundedCache.value` made a missing value
+outside its lock in every caller. Concurrent misses of one key now wait for one make (Everest's in-flight fetches; a test reads
+8.4 MB to verify one MiB before, under 2 MB after). Then concurrency is level on ext4 and plain Btrfs and doubles compressed text
+(zstd decoding runs in parallel). The machine moved by about 10% between sessions: compare within a row. A `find` of the 20,134
+entries took 0.15 to 0.23 s throughout.

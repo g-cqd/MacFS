@@ -1,17 +1,21 @@
 import FSCore
 public import MountKit
+import Synchronization
 
 /// The whole server as a function: one RPC call in, one reply out (nil drops a record that is not a call).
-/// No sockets, no state beyond the tree, so every procedure is tested without a network.
+/// No sockets, and no state beyond the tree and whether the export was mounted, so every procedure is tested without a network.
 public final class NFSDispatcher: Sendable {
     let tree: MountedTree
     let handles: FileHandles
     let attributes: NFSAttributes
+    let export: NFSExport
+    private let mounted = Atomic<Bool>(false)
 
-    public init(tree: MountedTree, owner: (uid: UInt32, gid: UInt32)) {
+    public init(tree: MountedTree, owner: (uid: UInt32, gid: UInt32), export: NFSExport) {
         self.tree = tree
+        self.export = export
         let volume = tree.fileSystem.volume
-        handles = FileHandles(volume: volume)
+        handles = FileHandles(volume: volume, export: export)
         var fsid: UInt64 = 0
         for byte in (volume.uuid + [UInt8](repeating: 0, count: 8)).prefix(8) { fsid = fsid << 8 | UInt64(byte) }
         attributes = NFSAttributes(tree: tree, owner: owner, fsid: fsid)
@@ -27,7 +31,9 @@ public final class NFSDispatcher: Sendable {
         do throws(XDRError) {
             let results =
                 call.program == MountProgram.number
-                ? try MountProgram.handle(call.procedure, &reader, root: handles.handle(MountedTree.root))
+                ? try MountProgram.handle(
+                    call.procedure, &reader, export: export, root: handles.handle(MountedTree.root),
+                    admit: { !mounted.exchange(true, ordering: .acquiringAndReleasing) })
                 : try NFSProgram(dispatcher: self).handle(call.procedure, &reader)
             guard let results else { return call.reply(status: 3) }
             return call.reply(status: 0, results: results)
