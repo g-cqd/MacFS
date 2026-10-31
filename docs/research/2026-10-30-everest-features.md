@@ -2,7 +2,8 @@
 
 Everest (`~/Developer/ongoing/swift/Everest`) mounts UPnP media servers. ADR-0001 takes its findings, not its code. Read: its
 README (the findings table), `EverestCore` (MountBackend, MountService, MountRemovalPolicy, FileLogger, the WebDAV and File Provider
-backends), `WebDAVKit`, and the app (MountController, settings panes).
+backends), `WebDAVKit`, and the app (MountController, settings panes). Read again at the code, with each feature's improvement and
+roadmap entry: research 2026-10-30-everest-code-review.
 
 | Everest | What it is | For MacFS | Status |
 |---|---|---|---|
