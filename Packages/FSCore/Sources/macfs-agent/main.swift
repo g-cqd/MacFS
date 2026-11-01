@@ -28,39 +28,41 @@ func run() -> Never {
     let service = option("--service") ?? AgentListener.service
 
     if arguments.first == "call" {
-        do {
-            let client = try AgentConnection.client(service: service)
-            switch arguments.dropFirst().first {
-                case "list":
-                    for record in try client.list() {
+        do throws(MountError) {
+            let status = try AgentConnection.withClient(service: service) { client throws(MountError) -> Int32 in
+                switch arguments.dropFirst().first {
+                    case "list":
+                        for record in try client.list() {
+                            print(
+                                "\(record.id)\t\(record.kind)\t\(record.state)\t\(record.source)\t\(record.mountPoint)\t\(record.mountedFrom)"
+                            )
+                        }
+                    case "sweep":
+                        let report = try client.sweep()
                         print(
-                            "\(record.id)\t\(record.kind)\t\(record.state)\t\(record.source)\t\(record.mountPoint)\t\(record.mountedFrom)"
+                            "kept \(report.kept.count), unmounted \(report.unmounted.count), forgotten \(report.forgotten.count)"
                         )
-                    }
-                case "sweep":
-                    let report = try client.sweep()
-                    print(
-                        "kept \(report.kept.count), unmounted \(report.unmounted.count), forgotten \(report.forgotten.count)"
-                    )
-                case "mount" where arguments.count >= 3:
-                    // As the app does: open the image here, send the descriptor, and let the agent read through it.
-                    let fd = open(arguments[2], O_RDONLY)
-                    guard fd >= 0 else {
-                        print("macfs-agent: cannot open \(arguments[2]): errno \(errno)")
-                        exit(1)
-                    }
-                    defer { close(fd) }
-                    let point = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
-                    let record = try client.mount(source: arguments[2], kind: .nfs, at: point, descriptor: fd)
-                    print("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
-                case "unmount" where arguments.count >= 3:
-                    try client.unmount(id: arguments[2])
-                    print("unmounted \(arguments[2])")
-                default:
-                    print("usage: macfs-agent call list|sweep|mount IMAGE DIR|unmount ID")
-                    exit(64)
+                    case "mount" where arguments.count >= 3:
+                        // As the app does: open the image here, send the descriptor, and let the agent read through it.
+                        let fd = open(arguments[2], O_RDONLY)
+                        guard fd >= 0 else {
+                            print("macfs-agent: cannot open \(arguments[2]): errno \(errno)")
+                            return 1
+                        }
+                        defer { close(fd) }
+                        let point = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
+                        let record = try client.mount(source: arguments[2], kind: .nfs, at: point, descriptor: fd)
+                        print("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
+                    case "unmount" where arguments.count >= 3:
+                        try client.unmount(id: arguments[2])
+                        print("unmounted \(arguments[2])")
+                    default:
+                        print("usage: macfs-agent call list|sweep|mount IMAGE DIR|unmount ID")
+                        return 64
+                }
+                return 0
             }
-            exit(0)
+            exit(status)
         } catch {
             print("macfs-agent: \(error)")
             exit(1)

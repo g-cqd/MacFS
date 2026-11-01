@@ -1,5 +1,5 @@
 import System
-import XPC
+public import XPC
 
 /// The agent's XPC shell (roadmap 0039): a Mach service launchd starts on demand, answering only peers signed by MacFS's own
 /// team (`isFromSameTeam`). Each message is a dictionary holding the request's bytes and, for a mount, the descriptor of the
@@ -21,10 +21,17 @@ public final class AgentListener: Sendable {
         }
     }
 
+    /// An anonymous listener, reached through `endpoint` and answering any peer: for tests in one process.
+    public init(dispatcher: AgentDispatcher) {
+        let handler: @Sendable (XPCDictionary) -> XPCDictionary? = { message in Self.answer(message, dispatcher) }
+        listener = XPCListener { request in request.accept(incomingMessageHandler: handler) }
+    }
+
+    public var endpoint: XPCEndpoint { listener.endpoint }
+
     private static func answer(_ received: XPCDictionary, _ dispatcher: AgentDispatcher) -> XPCDictionary {
         let message = received
-        var bytes: [UInt8] = []
-        if let span: RawSpan = message[requestKey] { bytes = Array(raw: span) }
+        let bytes = message.bytes(for: requestKey) ?? []
         let descriptor: FileDescriptor? = message[descriptorKey]
         let answer = dispatcher.handle(bytes, descriptor: descriptor?.rawValue)
         let reply = XPCDictionary()

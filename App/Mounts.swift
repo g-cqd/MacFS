@@ -43,7 +43,7 @@ final class Mounts {
         defer { busy = false }
         let result =
             await Task.detached { () -> Result<[MountRecord], MountError> in
-                do throws(MountError) { return .success(try body(try AgentConnection.client())) } catch {
+                do throws(MountError) { return .success(try AgentConnection.withClient(body)) } catch {
                     return .failure(error)
                 }
             }

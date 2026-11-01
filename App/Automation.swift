@@ -40,24 +40,25 @@ enum Automation {
 
     private static func agent(_ command: String, _ argument: String) -> Int32 {
         do throws(MountError) {
-            let client = try AgentConnection.client()
-            switch command {
-                case "--mount-image":
-                    let fd = open(argument, O_RDONLY)
-                    guard fd >= 0 else {
-                        say("open \(argument): errno \(errno)")
-                        return 1
-                    }
-                    defer { close(fd) }
-                    let record = try client.mount(source: argument, kind: .nfs, at: "", descriptor: fd)
-                    say("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
-                case "--unmount":
-                    try client.unmount(id: argument)
-                    say("unmounted \(argument)")
-                default:
-                    for record in try client.list() { say("\(record.id)\t\(record.mountPoint)\t\(record.source)") }
+            return try AgentConnection.withClient { client throws(MountError) -> Int32 in
+                switch command {
+                    case "--mount-image":
+                        let fd = open(argument, O_RDONLY)
+                        guard fd >= 0 else {
+                            say("open \(argument): errno \(errno)")
+                            return 1
+                        }
+                        defer { close(fd) }
+                        let record = try client.mount(source: argument, kind: .nfs, at: "", descriptor: fd)
+                        say("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
+                    case "--unmount":
+                        try client.unmount(id: argument)
+                        say("unmounted \(argument)")
+                    default:
+                        for record in try client.list() { say("\(record.id)\t\(record.mountPoint)\t\(record.source)") }
+                }
+                return 0
             }
-            return 0
         } catch {
             say("\(command): \(error)")
             return 1

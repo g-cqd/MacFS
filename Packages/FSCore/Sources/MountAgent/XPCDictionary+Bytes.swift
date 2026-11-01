@@ -16,4 +16,17 @@ extension XPCDictionary {
             }
         }
     }
+
+    /// The bytes stored under `key`, or nil when there is no data value there. The Swift subscript reads an empty data value
+    /// as absent, and an empty protobuf message is empty: an empty listing came back as "no bytes".
+    func bytes(for key: String) -> [UInt8]? {
+        withUnsafeUnderlyingDictionary { object -> [UInt8]? in
+            guard let value = unsafe xpc_dictionary_get_value(object, key), xpc_get_type(value) == XPC_TYPE_DATA else {
+                return nil
+            }
+            let count = xpc_data_get_length(value)
+            guard count > 0, let base = unsafe xpc_data_get_bytes_ptr(value) else { return [] }
+            return unsafe Array(UnsafeRawBufferPointer(start: base, count: count))
+        }
+    }
 }
