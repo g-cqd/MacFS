@@ -50,3 +50,15 @@ Also measured:
    `FSPathURLResource`, and a probe.
 
 Not verified: Finder's Eject for btrfs, NTFS and XFS; `DADiskMount` of a partition (ext4-gpt); a physical USB disk; Disk Utility.
+
+## Addendum: the descriptions DiskKit reads (same day)
+
+Recorded with `probes/disk-description-recorder.swift.txt`, kept in `Packages/FSCore/Tests/DiskKitTests/Recorded.json`:
+
+- `DAVolumeKind` is the probing module's short name whether or not the volume is mounted: `ext4` (for ext2 too), `btrfs`, `xfs`;
+  NTFS's is `ntfs` (Apple's reader), with `DAVolumeType` "MS-DOS (FAT12)". `DAVolumePath` appears once mounted.
+- A GPT whole disk, the APFS physical partition (`7C3457EF-…`, Apple_APFS) and the synthesized APFS container (`EF57347C-…`) are
+  none of them leaves and carry no kind.
+- A Linux data partition (`0FC63DAF-…`) with no file system macOS knows has no kind and is not mountable; `hdiutil attach`
+  without `-nomount` refuses such an image ("no mountable file systems").
+- Disk images report `DADeviceProtocol` "Virtual Interface", removable and ejectable, and no `DADeviceInternal`.

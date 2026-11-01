@@ -32,6 +32,7 @@ let package = Package(
         .library(name: "Formats", targets: ["Formats"]),
         .library(name: "MountKit", targets: ["MountKit"]),
         .library(name: "SystemCommands", targets: ["SystemCommands"]),
+        .library(name: "DiskKit", targets: ["DiskKit"]),
         .library(name: "AppSupport", targets: ["AppSupport"]),
         .library(name: "NFSProxy", targets: ["NFSProxy"]),
         .library(name: "MountRegistry", targets: ["MountRegistry"]),
@@ -49,7 +50,9 @@ let package = Package(
             revision: "7b7dbc551b4d8289640fb8b4d6870c698232cbba"
         ),
         // The agent's commands: deadlines, process-group teardown, bounded output (ADR-0017). Exact, like the pins above.
-        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.2")
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.2"),
+        // The tests' recorded fixtures: the revision AemiProtobuf pins.
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "1a79d011bc9def418e6f64ab74191465e4062348")
     ],
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
@@ -107,6 +110,8 @@ let package = Package(
         .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
+        // The disks macOS attached, from Disk Arbitration (roadmap 0021): a watcher and a pure model of a description.
+        .target(name: "DiskKit", dependencies: ["Formats"], swiftSettings: strictSettings),
         // System commands with a deadline (ADR-0017). Apart from MountKit, which the FSKit modules link: only the agent
         // carries swift-subprocess.
         .target(
@@ -152,6 +157,12 @@ let package = Package(
         .testTarget(name: "XFSTests", dependencies: ["XFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(
+            name: "DiskKitTests",
+            dependencies: ["DiskKit", "Formats", .product(name: "AemiJSON", package: "AemiJSON")],
+            resources: [.copy("Recorded.json")],
+            swiftSettings: strictSettings
+        ),
         .testTarget(
             name: "SystemCommandsTests",
             dependencies: ["SystemCommands", "MountKit"],

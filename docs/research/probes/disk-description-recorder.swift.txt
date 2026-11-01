@@ -1,0 +1,25 @@
+import DiskArbitration
+import Foundation
+// rec <label> <bsd>...: each disk's description, the keys DiskKit reads, as JSON members of plain values.
+let label = CommandLine.arguments[1]
+let session = DASessionCreate(kCFAllocatorDefault)!
+let keys = ["DAMediaBSDName", "DAMediaWhole", "DAMediaLeaf", "DAMediaSize", "DAMediaBlockSize", "DAMediaRemovable",
+            "DAMediaEjectable", "DAMediaWritable", "DAMediaContent", "DAMediaName", "DADeviceProtocol", "DADeviceModel",
+            "DADeviceInternal", "DAVolumeKind", "DAVolumeName", "DAVolumePath", "DAVolumeMountable", "DAVolumeNetwork",
+            "DAVolumeType", "DAVolumeUUID", "DAMediaUUID"]
+func plain(_ value: Any) -> String {
+    let cf = value as CFTypeRef
+    switch CFGetTypeID(cf) {
+        case CFUUIDGetTypeID(): return "\"" + (CFUUIDCreateString(nil, (cf as! CFUUID)) as String) + "\""
+        case CFURLGetTypeID(): return "\"" + (cf as! URL).path + "\""
+        case CFBooleanGetTypeID(): return (cf as! Bool) ? "true" : "false"
+        case CFNumberGetTypeID(): return "\((cf as! NSNumber).int64Value)"
+        default: return "\"\(value)\""
+    }
+}
+for bsd in CommandLine.arguments.dropFirst(2) {
+    guard let disk = DADiskCreateFromBSDName(nil, session, bsd), let d = DADiskCopyDescription(disk) as? [String: Any] else { continue }
+    let pairs = keys.compactMap { k in d[k].map { "\"\(k)\": \(plain($0))" } }
+    // One JSON member per disk, keyed as Packages/FSCore/Tests/DiskKitTests/Recorded.json is.
+    print(" \"\(label) \(bsd)\": {" + pairs.joined(separator: ", ") + "},")
+}
