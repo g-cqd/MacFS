@@ -53,7 +53,8 @@ struct ContentView: View {
                     TableColumn("Size") { row in
                         Text(
                             row.kind == .directory
-                                ? "—" : ByteCountFormatter.string(fromByteCount: Int64(row.size), countStyle: .file))
+                                ? "—" : ByteCountFormatter.string(fromByteCount: Int64(row.size), countStyle: .file)
+                        )
                     }
                 }
                 .contextMenu(forSelectionType: Browser.Row.ID.self) { ids in

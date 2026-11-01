@@ -22,12 +22,15 @@ import Testing
         #expect(random2.flags & ExtInode.extentsFlag == 0, "ext2 should map blocks indirectly")
         #expect(
             ext2.superblock.blockSize == 1024 && random2.size > 268 * 1024,
-            "the file should need a double-indirect block")
+            "the file should need a double-indirect block"
+        )
 
         let ext4 = try ExtFileSystem(source: try ImageOracle.image("ext4"))
         #expect(try ext4.inode(try path(ext4, "big/random.bin")).flags & ExtInode.extentsFlag != 0)
         #expect(
-            try ext4.inode(try path(ext4, "dir/sub")).flags & ExtInode.indexFlag != 0, "300 names should make an htree")
+            try ext4.inode(try path(ext4, "dir/sub")).flags & ExtInode.indexFlag != 0,
+            "300 names should make an htree"
+        )
         #expect(ext4.superblock.hasMetadataChecksums)
 
         let inline = try ExtFileSystem(source: try ImageOracle.image("ext4-inline"))
@@ -35,7 +38,8 @@ import Testing
         let hundred = try inline.inode(try path(inline, "dir/hundred.txt"))
         #expect(
             hundred.flags & ExtInode.inlineDataFlag != 0 && hundred.size > 60,
-            "needs bytes beyond i_block, in system.data")
+            "needs bytes beyond i_block, in system.data"
+        )
     }
 
     /// meta_bg must reach descriptors past the first metagroup, or the images prove only the old layout (roadmap 0016).

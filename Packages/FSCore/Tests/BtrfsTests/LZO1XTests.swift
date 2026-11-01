@@ -36,7 +36,8 @@ import Testing
         stream: [UInt8], output: [UInt8]
     ) {
         precondition(
-            literals.count >= 4 && literals.count <= 238 && count >= 3 && count <= 33 && distance <= literals.count)
+            literals.count >= 4 && literals.count <= 238 && count >= 3 && count <= 33 && distance <= literals.count
+        )
         var stream = [UInt8(17 + literals.count)] + literals
         stream += [UInt8(32 | (count - 2)), UInt8(((distance - 1) << 2) & 0xFF), UInt8((distance - 1) >> 6)]
         var output = literals
@@ -58,10 +59,15 @@ import Testing
                 for runLength in [0, 4, 7, 8, 9, 10, 18] {
                     let run = (0 ..< runLength).map { UInt8(ascii: "A") + UInt8($0) }
                     let (stream, expected) = Self.stream(
-                        literals: Array(letters.prefix(max(4, distance))), distance: distance, count: count, run: run)
+                        literals: Array(letters.prefix(max(4, distance))),
+                        distance: distance,
+                        count: count,
+                        run: run
+                    )
                     #expect(
                         try LZO1X.decompress(stream, capacity: expected.count) == expected,
-                        "distance \(distance), count \(count), run \(runLength)")
+                        "distance \(distance), count \(count), run \(runLength)"
+                    )
                     try Self.guardedDecode(stream, size: expected.count, expected: expected)
                 }
             }
@@ -75,7 +81,8 @@ import Testing
             try GuardedBytes.with([UInt8](repeating: 0, count: size), against: .end) { output in
                 let count = try unsafe LZO1X.decompress(
                     UnsafeBufferPointer(start: input, count: stream.count),
-                    into: UnsafeMutableBufferPointer(start: output, count: size))
+                    into: UnsafeMutableBufferPointer(start: output, count: size)
+                )
                 return Array(UnsafeBufferPointer(start: output, count: count))
             }
         }

@@ -29,7 +29,11 @@ public final class LoopbackServer: Sendable {
         /// macOS's client holds one connection per mount and reconnects after a drop; it reads ahead 16 calls by default;
         /// Everest abandons a write after 30 s without progress.
         public static let standard = Limits(
-            connections: 16, idle: .seconds(300), stalled: .seconds(30), concurrentCalls: 8)
+            connections: 16,
+            idle: .seconds(300),
+            stalled: .seconds(30),
+            concurrentCalls: 8
+        )
     }
 
     /// Connections served, refused at the cap, dropped silent, dropped not reading.
@@ -96,8 +100,11 @@ public final class LoopbackServer: Sendable {
 
     public func counts() -> Counts {
         Counts(
-            accepted: accepted.load(ordering: .relaxed), refused: refused.load(ordering: .relaxed),
-            idle: idled.load(ordering: .relaxed), stalled: stalled.load(ordering: .relaxed))
+            accepted: accepted.load(ordering: .relaxed),
+            refused: refused.load(ordering: .relaxed),
+            idle: idled.load(ordering: .relaxed),
+            stalled: stalled.load(ordering: .relaxed)
+        )
     }
 
     private func acceptLoop() {

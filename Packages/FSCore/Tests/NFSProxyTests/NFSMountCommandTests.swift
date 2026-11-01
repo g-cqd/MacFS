@@ -5,8 +5,10 @@ import Testing
 /// of hanging every reader of the mount, which is Everest's worst failure (a hard mount, the default, waits forever).
 @Suite struct NFSMountCommandTests {
     let command = NFSMountCommand(
-        port: 4_049, export: NFSExport(token: Array(0 ..< 24)),
-        mountPoint: "/Users/u/Library/Application Support/MacFS/Mounts/x")
+        port: 4_049,
+        export: NFSExport(token: Array(0 ..< 24)),
+        mountPoint: "/Users/u/Library/Application Support/MacFS/Mounts/x"
+    )
 
     var options: [String] {
         guard let index = command.arguments.firstIndex(of: "-o") else { return [] }
@@ -16,7 +18,8 @@ import Testing
     @Test func itRunsMacOSsOwnClient() {
         #expect(command.executable == "/sbin/mount_nfs")
         #expect(
-            command.arguments.suffix(2) == ["127.0.0.1:/macfs-000102030405060708090a0b0c0d0e0f", command.mountPoint])
+            command.arguments.suffix(2) == ["127.0.0.1:/macfs-000102030405060708090a0b0c0d0e0f", command.mountPoint]
+        )
     }
 
     @Test func aDeadProxyIsUnmountedNotWaitedFor() {

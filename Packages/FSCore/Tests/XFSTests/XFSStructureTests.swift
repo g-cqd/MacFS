@@ -13,7 +13,8 @@ import Testing
         let low = (start & ((1 << 43) - 1)) << 21 | count
         let bytes = DiskBytes(
             (0 ..< 8).map { UInt8(truncatingIfNeeded: high >> (56 - 8 * $0)) }
-                + (0 ..< 8).map { UInt8(truncatingIfNeeded: low >> (56 - 8 * $0)) })
+                + (0 ..< 8).map { UInt8(truncatingIfNeeded: low >> (56 - 8 * $0)) }
+        )
         let fields = try XFSExtent.fields(bytes, 0)
         #expect(fields.logical == offset && fields.start == start && fields.count == count && fields.unwritten)
         let written = try XFSExtent.fields(DiskBytes([0x7F] + Array(try bytes.bytes(1, 15))), 0)
@@ -77,7 +78,10 @@ import Testing
         #expect(stale.contains { $0.contains { $0 != 0 } }, "the freed random data should lie beneath")
         let first = try #require(unwritten.first)
         let bytes = try layout.fileSystem.read(
-            inode.number, at: first.logical * layout.blockSize, count: Int(layout.blockSize))
+            inode.number,
+            at: first.logical * layout.blockSize,
+            count: Int(layout.blockSize)
+        )
         #expect(bytes.allSatisfy { $0 == 0 })
     }
 

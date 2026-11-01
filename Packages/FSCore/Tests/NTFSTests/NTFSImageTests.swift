@@ -55,10 +55,19 @@ import Testing
         #expect(data.flags & NTFSAttribute.compressed != 0 && head.compressionUnit == 4)
         let cut: UInt64 = 70_000  // inside the second compression unit
         let short = NTFSAttribute(
-            type: data.type, name: data.name, flags: data.flags, value: nil,
+            type: data.type,
+            name: data.name,
+            flags: data.flags,
+            value: nil,
             nonResident: NTFSAttribute.NonResident(
-                firstVCN: head.firstVCN, runs: head.runs, allocatedSize: head.allocatedSize, dataSize: head.dataSize,
-                initializedSize: cut, compressionUnit: head.compressionUnit))
+                firstVCN: head.firstVCN,
+                runs: head.runs,
+                allocatedSize: head.allocatedSize,
+                dataSize: head.dataSize,
+                initializedSize: cut,
+                compressionUnit: head.compressionUnit
+            )
+        )
         let stream = try NTFSStream([short], clusterSize: fileSystem.boot.clusterSize)
         let whole = try fileSystem.read(counting.id, at: 0, count: 200_000)
         let bytes = try stream.read(try ImageOracle.image("ntfs-lznt1"), at: 0, count: 200_000)

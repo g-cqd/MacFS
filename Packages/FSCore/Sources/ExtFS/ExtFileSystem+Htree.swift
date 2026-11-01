@@ -100,7 +100,12 @@ extension ExtFileSystem {
         let bytes = try block(physical + logical - run.logical)
         if let checksums = superblock.checksums, let seed = directory.checksumSeed {
             try checksums.verifyDirectoryBlock(
-                bytes, directory: directory.number, logical: logical, seed: seed, indexed: isIndexed(directory))
+                bytes,
+                directory: directory.number,
+                logical: logical,
+                seed: seed,
+                indexed: isIndexed(directory)
+            )
         }
         return bytes
     }

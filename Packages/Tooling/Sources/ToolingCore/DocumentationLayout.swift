@@ -46,7 +46,8 @@ public enum DocumentationLayout {
 
     /// Each entry in number order: a status from `statuses`, then the entry's own rules.
     private static func check(
-        _ entries: Entries, statuses: [String],
+        _ entries: Entries,
+        statuses: [String],
         _ rules: (_ path: String, _ front: FrontMatter?, _ status: String) -> [String]
     ) -> [String] {
         var problems: [String] = []

@@ -12,7 +12,11 @@ struct ExtChecksums: Sendable {
     /// CRC-32C from `start` over `words` little-endian words of `head`, then `bytes`, with the two-byte fields at `zero` and
     /// `alsoZero` (offsets into `bytes`) counted as zero: one call over a stack copy, nothing allocated.
     private static func crc(
-        _ start: UInt32, head: (UInt32, UInt32), words: Int, _ bytes: ArraySlice<UInt8>, zero: Int? = nil,
+        _ start: UInt32,
+        head: (UInt32, UInt32),
+        words: Int,
+        _ bytes: ArraySlice<UInt8>,
+        zero: Int? = nil,
         alsoZero: Int? = nil
     ) -> UInt32 {
         let body = 4 * words
@@ -52,8 +56,13 @@ struct ExtChecksums: Sendable {
     func verifyInode(_ raw: DiskBytes, number: UInt64, generation: UInt32, extraSize: Int) throws(DiskError) {
         let wide = raw.count > 128 && extraSize >= 4
         let value = Self.crc(
-            seed, head: (UInt32(truncatingIfNeeded: number), generation), words: 2, try raw.region(0, raw.count),
-            zero: 0x7C, alsoZero: wide ? 0x82 : nil)
+            seed,
+            head: (UInt32(truncatingIfNeeded: number), generation),
+            words: 2,
+            try raw.region(0, raw.count),
+            zero: 0x7C,
+            alsoZero: wide ? 0x82 : nil
+        )
         var stored = UInt32(try raw.u16(0x7C))
         if wide { stored |= UInt32(try raw.u16(0x82)) << 16 }
         guard (wide ? value : value & 0xFFFF) == stored else { throw .checksum("inode \(number)") }
@@ -76,7 +85,11 @@ struct ExtChecksums: Sendable {
     /// one is refused. The kind is decided by position, not by the last bytes: a root the kernel made from a full linear block
     /// keeps that block's old tail bytes in `dt_reserved` (roadmap 0016).
     func verifyDirectoryBlock(
-        _ block: DiskBytes, directory: UInt64, logical: UInt64, seed: UInt32, indexed: Bool
+        _ block: DiskBytes,
+        directory: UInt64,
+        logical: UInt64,
+        seed: UInt32,
+        indexed: Bool
     ) throws(DiskError) {
         if indexed, let countOffset = try Self.indexCountOffset(block, logical: logical, directory: directory) {
             return try verifyIndexBlock(block, countOffset: countOffset, directory: directory, seed: seed)
@@ -119,7 +132,10 @@ struct ExtChecksums: Sendable {
     /// `ext4_dx_csum`: CRC-32C over the block up to the last used entry, then `dt_reserved`, then a zero checksum field. The
     /// tail follows `limit` entries, used or not.
     private func verifyIndexBlock(
-        _ block: DiskBytes, countOffset: Int, directory: UInt64, seed: UInt32
+        _ block: DiskBytes,
+        countOffset: Int,
+        directory: UInt64,
+        seed: UInt32
     ) throws(DiskError) {
         let (limit, count) = (Int(try block.u16(countOffset)), Int(try block.u16(countOffset + 2)))
         let tail = countOffset + 8 * limit

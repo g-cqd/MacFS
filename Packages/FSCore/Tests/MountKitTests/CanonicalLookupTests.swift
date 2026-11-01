@@ -13,7 +13,8 @@ import Testing
             let id = UInt64(2000 + index)
             fileSystem.nodes[5]?.children.append((name, id))
             fileSystem.nodes[id] = InMemoryFileSystem.Node(
-                attributes: NodeAttributes(id: id, parent: 5, kind: .regular))
+                attributes: NodeAttributes(id: id, parent: 5, kind: .regular)
+            )
         }
         return fileSystem
     }

@@ -12,9 +12,16 @@ public struct ToolPaths: Sendable {
     public let lake: String
 
     public init(
-        swift: String, swiftlint: String, deadwood: String, dolly: String, arcleak: String, fcheck: String,
+        swift: String,
+        swiftlint: String,
+        deadwood: String,
+        dolly: String,
+        arcleak: String,
+        fcheck: String,
         modeler: String,
-        java: String, tla2tools: String, lake: String
+        java: String,
+        tla2tools: String,
+        lake: String
     ) {
         self.swift = swift
         self.swiftlint = swiftlint

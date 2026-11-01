@@ -89,13 +89,15 @@ func mounts(_ options: Options) -> Int32 {
     if options.dryRun {
         for target in MountCheck.targets {
             print(
-                "TestImages/\(target.image).img: attach, mount -F -t \(target.type), compare, refuse a write, release")
+                "TestImages/\(target.image).img: attach, mount -F -t \(target.type), compare, refuse a write, release"
+            )
         }
         return 0
     }
     let base = FileManager.default.temporaryDirectory.appendingPathComponent("macfs-mounts-\(getpid())").path
     let check = MountCheck(
-        runner: SystemProcessRunner(capture: true), root: options.root,
+        runner: SystemProcessRunner(capture: true),
+        root: options.root,
         mountPoint: { target in
             let point = base + "/" + target.image
             try? FileManager.default.createDirectory(atPath: point, withIntermediateDirectories: true)
@@ -103,9 +105,13 @@ func mounts(_ options: Options) -> Int32 {
         },
         compare: { point, manifest, extra in
             try TreeComparison.problems(
-                root: point, manifest: try String(contentsOfFile: manifest, encoding: .utf8), extra: extra)
+                root: point,
+                manifest: try String(contentsOfFile: manifest, encoding: .utf8),
+                extra: extra
+            )
         },
-        writeRefused: MountCheck.refusesWrites(at:))
+        writeRefused: MountCheck.refusesWrites(at:)
+    )
     var failed = false
     for target in MountCheck.targets {
         let outcome = check.run(target)
@@ -137,15 +143,22 @@ func main() -> Int32 {
                 }
                 try FileManager.default.createDirectory(
                     atPath: options.root + "/" + options.kind.directory,
-                    withIntermediateDirectories: true)
+                    withIntermediateDirectories: true
+                )
                 return try report(
                     TestImages.plan(
-                        root: options.root, container: container, kind: options.kind, mirror: options.mirror),
-                    dryRun: options.dryRun)
+                        root: options.root,
+                        container: container,
+                        kind: options.kind,
+                        mirror: options.mirror
+                    ),
+                    dryRun: options.dryRun
+                )
             case "gates":
                 if !options.dryRun { _ = try installAnalyzers(options.root, dryRun: false) }
                 return try report(
-                    Gates.plan(root: options.root, tools: try locator(options.root).gatePaths()), dryRun: options.dryRun
+                    Gates.plan(root: options.root, tools: try locator(options.root).gatePaths()),
+                    dryRun: options.dryRun
                 )
             case "analyzers":
                 return try installAnalyzers(options.root, dryRun: options.dryRun)

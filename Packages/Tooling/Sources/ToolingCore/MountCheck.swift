@@ -45,7 +45,9 @@ public struct MountCheck: Sendable {
     let writeRefused: @Sendable (String) -> Bool
 
     public init(
-        runner: any ProcessRunning, root: String, mountPoint: @escaping @Sendable (Target) -> String,
+        runner: any ProcessRunning,
+        root: String,
+        mountPoint: @escaping @Sendable (Target) -> String,
         compare: @escaping @Sendable (String, String, Set<String>) throws -> [String],
         writeRefused: @escaping @Sendable (String) -> Bool
     ) {
@@ -60,7 +62,8 @@ public struct MountCheck: Sendable {
         let image = "\(root)/TestImages/\(target.image)"
         guard
             let attach = try? runner.run(
-                Command("/usr/bin/hdiutil", ["attach", "-nomount", "-readonly", "\(image).img"])),
+                Command("/usr/bin/hdiutil", ["attach", "-nomount", "-readonly", "\(image).img"])
+            ),
             attach.status == 0, let device = Self.device(attach.output)
         else { return Outcome(target: target, problems: ["attach: no device for \(image).img"]) }
         var problems: [String] = []

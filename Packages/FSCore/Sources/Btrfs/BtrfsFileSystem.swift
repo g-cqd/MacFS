@@ -32,7 +32,8 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
         let chunkItems = try bootstrap.items(
             root: superblock.chunkTree,
             from: BtrfsKey(BtrfsItem.firstChunkTreeObject, BtrfsItem.chunkItem, 0),
-            to: BtrfsKey(BtrfsItem.firstChunkTreeObject, BtrfsItem.chunkItem, .max))
+            to: BtrfsKey(BtrfsItem.firstChunkTreeObject, BtrfsItem.chunkItem, .max)
+        )
         for item in chunkItems {
             try chunks.add(logical: item.key.offset, item: item.data, deviceID: superblock.deviceID)
         }
@@ -41,8 +42,12 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
         mountedTree = try Self.defaultSubvolume(trees)
         rootID = BtrfsItem.firstFreeObject
         volume = VolumeDescription(
-            format: "btrfs", label: superblock.label, uuid: superblock.fsid, caseRule: .sensitive,
-            maximumNameLength: 255)
+            format: "btrfs",
+            label: superblock.label,
+            uuid: superblock.fsid,
+            caseRule: .sensitive,
+            maximumNameLength: 255
+        )
         _ = try treeRoot(mountedTree)
     }
 
@@ -53,7 +58,9 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
         for offset in BtrfsSuperblock.offsets where offset + UInt64(BtrfsSuperblock.size) <= source.byteCount {
             do throws(DiskError) {
                 let candidate = try BtrfsSuperblock(
-                    try source.read(at: offset, count: BtrfsSuperblock.size), at: offset)
+                    try source.read(at: offset, count: BtrfsSuperblock.size),
+                    at: offset
+                )
                 if best.map({ candidate.generation > $0.generation }) ?? true { best = candidate }
             } catch {
                 if firstError == nil { firstError = error }
@@ -85,8 +92,10 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
     /// The root block the root tree records for `tree`, or nil when it has none.
     static func rootBlock(_ trees: BtrfsTreeReader, tree: UInt64) throws(DiskError) -> UInt64? {
         let items = try trees.items(
-            root: trees.superblock.rootTree, from: BtrfsKey(tree, BtrfsItem.rootItem, 0),
-            to: BtrfsKey(tree, BtrfsItem.rootItem, .max))
+            root: trees.superblock.rootTree,
+            from: BtrfsKey(tree, BtrfsItem.rootItem, 0),
+            to: BtrfsKey(tree, BtrfsItem.rootItem, .max)
+        )
         return try items.last?.data.u64(176)
     }
 
@@ -107,8 +116,10 @@ public final class BtrfsFileSystem: ReadOnlyFileSystem {
         let superblock = trees.superblock
         let block = UInt64(superblock.sectorSize)
         return VolumeStatistics(
-            blockSize: superblock.sectorSize, totalBlocks: superblock.totalBytes / block,
+            blockSize: superblock.sectorSize,
+            totalBlocks: superblock.totalBytes / block,
             freeBlocks: superblock.totalBytes.subtractingReportingOverflow(superblock.bytesUsed).partialValue / block,
-            files: 0)
+            files: 0
+        )
     }
 }

@@ -7,7 +7,11 @@ import Foundation
 /// cold caches; the names come from a listing by another instance, which warms nothing the rounds use.
 enum LookupBench {
     static func run(
-        _ format: DiskFormat, _ source: any BlockSource, directory: String, rounds: Int, keep: Bool
+        _ format: DiskFormat,
+        _ source: any BlockSource,
+        directory: String,
+        rounds: Int,
+        keep: Bool
     ) throws(DiskError) {
         var names = try Self.names(try format.open(source), directory)
         // SplitMix64 from a fixed seed: the same order every run.
@@ -30,9 +34,16 @@ enum LookupBench {
             let end = DispatchTime.now().uptimeNanoseconds
             print(
                 String(
-                    format: "round %d: %@ %@: %d lookups in %.3f s (%.0f lookups/s), the first %.1f µs", round,
-                    format.displayName, directory, names.count, Double(end - began) / 1e9,
-                    Double(names.count) / (Double(end - began) / 1e9), Double(first - began) / 1e3))
+                    format: "round %d: %@ %@: %d lookups in %.3f s (%.0f lookups/s), the first %.1f µs",
+                    round,
+                    format.displayName,
+                    directory,
+                    names.count,
+                    Double(end - began) / 1e9,
+                    Double(names.count) / (Double(end - began) / 1e9),
+                    Double(first - began) / 1e3
+                )
+            )
         }
     }
 

@@ -25,8 +25,12 @@ extension BtrfsFileSystem: BlockMapping {
             ranges.append(MappedRange(logical: extent.fileOffset, length: extent.length, physical: physical))
         }
         return MappedRange.clip(
-            ranges, offset: offset, length: length, size: try inodeItem(id).size,
-            unit: UInt64(trees.superblock.sectorSize))
+            ranges,
+            offset: offset,
+            length: length,
+            size: try inodeItem(id).size,
+            unit: UInt64(trees.superblock.sectorSize)
+        )
     }
 
     public func prepareMappedRead(_ id: UInt64, offset: UInt64, length: UInt64) throws(DiskError) {
@@ -38,8 +42,11 @@ extension BtrfsFileSystem: BlockMapping {
             let from = max(offset, extent.fileOffset)
             let to = min(end, extent.end)
             unsafe try dataChecksums.verify(
-                diskStart: address, diskLength: diskLength, from: address + start + from - extent.fileOffset,
-                count: to - from)
+                diskStart: address,
+                diskLength: diskLength,
+                from: address + start + from - extent.fileOffset,
+                count: to - from
+            )
         }
     }
 }

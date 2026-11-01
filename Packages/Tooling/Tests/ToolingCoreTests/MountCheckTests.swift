@@ -10,11 +10,17 @@ import ToolingCore
     static let target = MountCheck.Target(image: "ext4", type: "ext4", extra: ["lost+found"])
 
     static func check(
-        _ runner: RecordingRunner, problems: [String] = [], refused: Bool = true
+        _ runner: RecordingRunner,
+        problems: [String] = [],
+        refused: Bool = true
     ) -> MountCheck {
         MountCheck(
-            runner: runner, root: "/repo", mountPoint: { "/tmp/mounts/\($0.image)" },
-            compare: { _, _, _ in problems }, writeRefused: { _ in refused })
+            runner: runner,
+            root: "/repo",
+            mountPoint: { "/tmp/mounts/\($0.image)" },
+            compare: { _, _, _ in problems },
+            writeRefused: { _ in refused }
+        )
     }
 
     static func runner(failing executable: String? = nil, failingArgument: String? = nil) -> RecordingRunner {
@@ -37,7 +43,8 @@ import ToolingCore
                 Command("/sbin/mount", ["-F", "-t", "ext4", "-o", "rdonly", "/dev/disk42", "/tmp/mounts/ext4"]),
                 Command("/sbin/umount", ["/tmp/mounts/ext4"]),
                 Command("/usr/bin/hdiutil", ["detach", "/dev/disk42"])
-            ])
+            ]
+        )
     }
 
     @Test func aFailedMountStillDetaches() {
@@ -78,10 +85,14 @@ import ToolingCore
     static func tree(_ build: (URL) throws -> Void) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("mount-check-\(UUID())")
         try FileManager.default.createDirectory(
-            at: root.appendingPathComponent("dir"), withIntermediateDirectories: true)
+            at: root.appendingPathComponent("dir"),
+            withIntermediateDirectories: true
+        )
         try Data("hello\n".utf8).write(to: root.appendingPathComponent("hello.txt"))
         try FileManager.default.createSymbolicLink(
-            atPath: root.appendingPathComponent("dir/link").path, withDestinationPath: "../hello.txt")
+            atPath: root.appendingPathComponent("dir/link").path,
+            withDestinationPath: "../hello.txt"
+        )
         try build(root)
         return root
     }
@@ -104,10 +115,14 @@ import ToolingCore
             try Data("HELLO\n".utf8).write(to: root.appendingPathComponent("hello.txt"))
             try FileManager.default.removeItem(at: root.appendingPathComponent("dir/link"))
             try FileManager.default.createSymbolicLink(
-                atPath: root.appendingPathComponent("dir/link").path, withDestinationPath: "elsewhere")
+                atPath: root.appendingPathComponent("dir/link").path,
+                withDestinationPath: "elsewhere"
+            )
             try Data().write(to: root.appendingPathComponent("stray"))
             try FileManager.default.createDirectory(
-                at: root.appendingPathComponent("lost+found"), withIntermediateDirectories: false)
+                at: root.appendingPathComponent("lost+found"),
+                withIntermediateDirectories: false
+            )
         }
         defer { try? FileManager.default.removeItem(at: root) }
         let problems = try TreeComparison.problems(root: root.path, manifest: Self.manifest, extra: ["lost+found"])
@@ -141,7 +156,8 @@ import ToolingCore
         }
         defer { try? FileManager.default.removeItem(at: root) }
         #expect(
-            try TreeComparison.problems(root: root.path, manifest: Self.manifest, extra: []) == ["hello.txt: missing"])
+            try TreeComparison.problems(root: root.path, manifest: Self.manifest, extra: []) == ["hello.txt: missing"]
+        )
     }
 }
 

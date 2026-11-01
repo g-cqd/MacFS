@@ -30,8 +30,10 @@ final class BtrfsDataChecksums: Sendable {
         let reach = UInt64(trees.superblock.nodeSize / size) * sector
         let low = logical > reach ? logical - reach : 0
         let items = try trees.items(
-            root: root, from: BtrfsKey(BtrfsItem.checksumObject, BtrfsItem.extentChecksum, low),
-            to: BtrfsKey(BtrfsItem.checksumObject, BtrfsItem.extentChecksum, logical + UInt64(sectors) * sector - 1))
+            root: root,
+            from: BtrfsKey(BtrfsItem.checksumObject, BtrfsItem.extentChecksum, low),
+            to: BtrfsKey(BtrfsItem.checksumObject, BtrfsItem.extentChecksum, logical + UInt64(sectors) * sector - 1)
+        )
         var sums: [ArraySlice<UInt8>?] = Array(repeating: nil, count: sectors)
         for item in items {
             let count = item.data.count / size
@@ -77,7 +79,11 @@ final class BtrfsDataChecksums: Sendable {
     /// The pieces of the extent [`diskStart`, +`diskLength`) that the read [`from`, +`count`) touches, each verified once.
     /// `read` holds those bytes when the caller has them: a piece the read covers whole is checked there, not read again.
     func verify(
-        diskStart: UInt64, diskLength: UInt64, from: UInt64, count: UInt64, read: UnsafeRawBufferPointer? = nil
+        diskStart: UInt64,
+        diskLength: UInt64,
+        from: UInt64,
+        count: UInt64,
+        read: UnsafeRawBufferPointer? = nil
     ) throws(DiskError) {
         guard count > 0, from >= diskStart, from + count <= diskStart + diskLength else {
             throw .corrupt("a read of \(count) bytes at \(from) outside its extent")

@@ -108,10 +108,15 @@ struct ExtSuperblock: Sendable {
         hashSeed = try (0 ..< 4).map { (index) throws(DiskError) -> UInt32 in try bytes.u32(0xEC + 4 * index) }
         let sparseSuper2 = compat & 0x0200 != 0
         descriptors = DescriptorLayout(
-            blockSize: blockSize, descriptorsPerBlock: blockSize / descriptorSize, blocksPerGroup: blocksPerGroup,
-            firstDataBlock: firstDataBlock, metaBG: incompat & 0x0010 != 0, firstMetaBG: firstMetaBG,
+            blockSize: blockSize,
+            descriptorsPerBlock: blockSize / descriptorSize,
+            blocksPerGroup: blocksPerGroup,
+            firstDataBlock: firstDataBlock,
+            metaBG: incompat & 0x0010 != 0,
+            firstMetaBG: firstMetaBG,
             sparseSuper: roCompat & 0x0001 != 0,
-            sparseSuper2: sparseSuper2 ? (try bytes.u32(0x24C), try bytes.u32(0x250)) : nil)
+            sparseSuper2: sparseSuper2 ? (try bytes.u32(0x24C), try bytes.u32(0x250)) : nil
+        )
         uuid = try bytes.bytes(0x68, 16)
         label = String(decoding: try bytes.bytes(0x78, 16).prefix { $0 != 0 }, as: UTF8.self)
         // s_checksum_seed when csum_seed is set (the UUID may then change), else crc32c(~0, uuid).

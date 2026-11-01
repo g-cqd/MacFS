@@ -27,7 +27,8 @@ import Testing
     @Test func unwrittenExtentsAreHoles() throws {
         let root = Self.node(
             depth: 0,
-            [Self.leaf(logical: 0, length: 4, start: 100), Self.leaf(logical: 4, length: 32768 + 6, start: 200)])
+            [Self.leaf(logical: 0, length: 4, start: 100), Self.leaf(logical: 4, length: 32768 + 6, start: 200)]
+        )
         let runs = try ExtExtentTree.runs(DiskBytes(root), number: 12) { (_) throws(DiskError) -> DiskBytes in
             throw .notFound
         }
@@ -38,12 +39,14 @@ import Testing
     @Test func theUnwrittenBoundary() throws {
         let root = Self.node(
             depth: 0,
-            [Self.leaf(logical: 0, length: 32768, start: 100), Self.leaf(logical: 32768, length: 32769, start: 200)])
+            [Self.leaf(logical: 0, length: 32768, start: 100), Self.leaf(logical: 32768, length: 32769, start: 200)]
+        )
         let runs = try ExtExtentTree.runs(DiskBytes(root), number: 12) { (_) throws(DiskError) -> DiskBytes in
             throw .notFound
         }
         #expect(
-            runs == [ExtRun(logical: 0, physical: 100, count: 32768), ExtRun(logical: 32768, physical: nil, count: 1)])
+            runs == [ExtRun(logical: 0, physical: 100, count: 32768), ExtRun(logical: 32768, physical: nil, count: 1)]
+        )
     }
 
     @Test func indexNodesAreFollowedInOrder() throws {
@@ -52,13 +55,16 @@ import Testing
             5: Self.node(depth: 0, [Self.leaf(logical: 10, length: 1, start: 0x2_0000_0009)])
         ]
         let root = Self.node(
-            depth: 1, [Self.index(logical: 0, child: 0x1_0000_0001), Self.index(logical: 10, child: 5)])
+            depth: 1,
+            [Self.index(logical: 0, child: 0x1_0000_0001), Self.index(logical: 10, child: 5)]
+        )
         let runs = try ExtExtentTree.runs(DiskBytes(root), number: 12) { (block) throws(DiskError) -> DiskBytes in
             guard let bytes = children[block] else { throw .notFound }
             return DiskBytes(bytes)
         }
         #expect(
-            runs == [ExtRun(logical: 0, physical: 7, count: 2), ExtRun(logical: 10, physical: 0x2_0000_0009, count: 1)])
+            runs == [ExtRun(logical: 0, physical: 7, count: 2), ExtRun(logical: 10, physical: 0x2_0000_0009, count: 1)]
+        )
     }
 
     @Test func aChildAtTheWrongDepthIsCorrupt() {
@@ -72,7 +78,9 @@ import Testing
 
     @Test func overlappingExtentsAreCorrupt() {
         let root = Self.node(
-            depth: 0, [Self.leaf(logical: 0, length: 4, start: 1), Self.leaf(logical: 3, length: 1, start: 9)])
+            depth: 0,
+            [Self.leaf(logical: 0, length: 4, start: 1), Self.leaf(logical: 3, length: 1, start: 9)]
+        )
         #expect(throws: DiskError.self) {
             try ExtExtentTree.runs(DiskBytes(root), number: 12) { (_) throws(DiskError) -> DiskBytes in throw .notFound
             }

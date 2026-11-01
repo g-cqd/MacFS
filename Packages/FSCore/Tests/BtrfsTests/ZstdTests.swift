@@ -26,7 +26,8 @@ import Testing
         #expect(Self.streams.count >= 100, "run the images command")
         #expect(
             Self.names(Self.corpus.appendingPathComponent("decodecorpus/frames"), suffix: ".zst").count == 1000,
-            "run the images command with --corpus")
+            "run the images command with --corpus"
+        )
     }
 
     @Test(arguments: streams)
@@ -50,7 +51,8 @@ import Testing
         // A Btrfs extent: the frame, then zeros to the end of its sector.
         #expect(
             try Zstd.decompressFrame(first + [UInt8](repeating: 0, count: 3000), capacity: 2 << 20).consumed
-                == first.count)
+                == first.count
+        )
     }
 
     @Test func everyDecodecorpusFrameDecodesToItsOriginal() throws {
@@ -94,7 +96,8 @@ import Testing
                 switch trial % 3 {
                     case 0:
                         damaged[Int(random.next() % UInt64(stream.count))] ^= UInt8(
-                            truncatingIfNeeded: random.next() | 1)
+                            truncatingIfNeeded: random.next() | 1
+                        )
                     case 1:
                         damaged[Int(random.next() % UInt64(stream.count))] = UInt8(truncatingIfNeeded: random.next())
                     default: damaged = Array(stream.prefix(Int(random.next() % UInt64(stream.count)) + 1))
@@ -105,11 +108,18 @@ import Testing
                         target in
                         var consumed = 0
                         let result = fsk_zstd_decompress_frame(
-                            source, damaged.count, target, original.count, workspace, &consumed)
+                            source,
+                            damaged.count,
+                            target,
+                            original.count,
+                            workspace,
+                            &consumed
+                        )
                         if result >= 0 {
                             #expect(
                                 Array(UnsafeBufferPointer(start: target, count: Int(result))) == original,
-                                "\(name), trial \(trial)")
+                                "\(name), trial \(trial)"
+                            )
                         }
                     }
                 }
@@ -210,13 +220,16 @@ import Testing
     /// frame's first block are refused, as the reference refuses them (the table alone would decode them).
     @Test func aHuffmanTableDoesNotOutliveItsFrame() throws {
         let withTable = Self.frame(
-            Self.literalsBlock(Self.huffmanLiterals(format: 0, regenerated: 4, [129, 0x21, 0x1F])))
+            Self.literalsBlock(Self.huffmanLiterals(format: 0, regenerated: 4, [129, 0x21, 0x1F]))
+        )
         let treeless = Self.frame(
             Self.literalsBlock(
                 Self.huffmanLiterals(format: 0, regenerated: 4, [0x1F]).enumerated()
                     .map {
                         $0.offset == 0 ? $0.element | 3 : $0.element
-                    }))
+                    }
+            )
+        )
         let workspace = UnsafeMutableRawPointer.allocate(byteCount: fsk_zstd_workspace_size(), alignment: 16)
         defer { workspace.deallocate() }
         var output = [UInt8](repeating: 0xEE, count: 64)
@@ -235,7 +248,8 @@ import Testing
         // The reference holds raw and RLE blocks only to the room left, not to the window or 128 KiB.
         #expect(
             try Zstd.decompress(Self.frame(window: 0, Self.block(type: 1, size: 2048, [0x61])), capacity: 4096)
-                == [UInt8](repeating: 0x61, count: 2048))
+                == [UInt8](repeating: 0x61, count: 2048)
+        )
         let big = [UInt8](repeating: 0x78, count: 131_073)
         #expect(try Zstd.decompress(Self.frame(Self.block(type: 0, size: big.count, big)), capacity: 1 << 18) == big)
         let refused: [(String, [UInt8])] = [
@@ -257,7 +271,9 @@ import Testing
                         Self.huffmanLiterals(format: 0, regenerated: 4, [0x1B]).enumerated()
                             .map {
                                 $0.offset == 0 ? $0.element | 3 : $0.element
-                            }))
+                            }
+                    )
+                )
             ),
             // Four streams for two literals.
             (
@@ -265,7 +281,12 @@ import Testing
                 Self.frame(
                     Self.literalsBlock(
                         Self.huffmanLiterals(
-                            format: 1, regenerated: 2, [129, 0x11, 1, 0, 1, 0, 1, 0, 0x80, 0x80, 0x80, 0x80])))
+                            format: 1,
+                            regenerated: 2,
+                            [129, 0x11, 1, 0, 1, 0, 1, 0, 0x80, 0x80, 0x80, 0x80]
+                        )
+                    )
+                )
             ),
             // Four streams for two literals, the fourth long: its count would be 2 - 3 symbols, written without end.
             (
@@ -274,7 +295,10 @@ import Testing
                     Self.literalsBlock(
                         Self.fiveByteHuffmanLiterals(
                             regenerated: 2,
-                            [129, 0x11, 1, 0, 1, 0, 1, 0, 0x03, 0x03, 0x03] + [UInt8](repeating: 0xFF, count: 20_000))))
+                            [129, 0x11, 1, 0, 1, 0, 1, 0, 0x03, 0x03, 0x03] + [UInt8](repeating: 0xFF, count: 20_000)
+                        )
+                    )
+                )
             ),
             // FSE-coded weights whose only symbol takes the whole table: its states read no bits, without end.
             (
@@ -282,7 +306,12 @@ import Testing
                 Self.frame(
                     Self.literalsBlock(
                         Self.huffmanLiterals(
-                            format: 0, regenerated: 4, [3, 0x10, 0x02, 0x80, 0x80])))
+                            format: 0,
+                            regenerated: 4,
+                            [3, 0x10, 0x02, 0x80, 0x80]
+                        )
+                    )
+                )
             )
         ]
         for (what, frame) in refused {
@@ -291,12 +320,14 @@ import Testing
         #expect(throws: DiskError.unsupported("zstd frames that need a dictionary")) {
             try Zstd.decompress(
                 Self.frame(descriptor: 0x01, extra: [5], Self.block(type: 0, size: 3, [0x61, 0x62, 0x63])),
-                capacity: 100)
+                capacity: 100
+            )
         }
         #expect(
             try Zstd.decompress(Self.frame(Self.block(type: 0, size: 3, [0x61, 0x62, 0x63])), capacity: 100) == [
                 0x61, 0x62, 0x63
-            ])
+            ]
+        )
     }
 
     /// The content checksum is XXH64's low half: known vectors of the hash itself.

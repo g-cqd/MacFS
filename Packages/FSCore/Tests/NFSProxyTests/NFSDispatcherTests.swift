@@ -10,8 +10,10 @@ import Testing
 
     init() throws {
         dispatcher = NFSDispatcher(
-            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 10)), owner: (uid: 501, gid: 20),
-            export: Self.export)
+            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 10)),
+            owner: (uid: 501, gid: 20),
+            export: Self.export
+        )
     }
 
     mutating func rootHandle() throws -> [UInt8] {
@@ -30,12 +32,17 @@ import Testing
     @Test mutating func unknownProgramsVersionsAndProceduresAreRefusedByRPC() throws {
         #expect(try client.reply(dispatcher.handle(client.call(100_099, 3, 0))).acceptStatus == 1, "PROG_UNAVAIL")
         #expect(
-            try client.reply(dispatcher.handle(client.call(RPCClient.nfs, 4, 0))).acceptStatus == 2, "PROG_MISMATCH")
+            try client.reply(dispatcher.handle(client.call(RPCClient.nfs, 4, 0))).acceptStatus == 2,
+            "PROG_MISMATCH"
+        )
         #expect(
-            try client.reply(dispatcher.handle(client.call(RPCClient.nfs, 3, 99))).acceptStatus == 3, "PROC_UNAVAIL")
+            try client.reply(dispatcher.handle(client.call(RPCClient.nfs, 3, 99))).acceptStatus == 3,
+            "PROC_UNAVAIL"
+        )
         #expect(
             try client.reply(dispatcher.handle(client.call(RPCClient.nfs, 3, 1) { $0.u32(9) })).acceptStatus == 4,
-            "GARBAGE_ARGS")
+            "GARBAGE_ARGS"
+        )
         #expect(dispatcher.handle([1, 2, 3]) == nil, "not an RPC call: dropped")
     }
 
@@ -53,9 +60,13 @@ import Testing
         var fileSystem = InMemoryFileSystem(root: 5, files: 0)
         fileSystem.nodes[5]?.children.append(("na\u{EF}ve.txt", 3000))
         fileSystem.nodes[3000] = InMemoryFileSystem.Node(
-            attributes: NodeAttributes(id: 3000, parent: 5, kind: .regular))
+            attributes: NodeAttributes(id: 3000, parent: 5, kind: .regular)
+        )
         let dispatcher = NFSDispatcher(
-            tree: try MountedTree(fileSystem), owner: (uid: 501, gid: 20), export: Self.export)
+            tree: try MountedTree(fileSystem),
+            owner: (uid: 501, gid: 20),
+            export: Self.export
+        )
         let call = client.call(RPCClient.mount, 3, 1) { $0.string(Self.export.path) }
         var mount = try client.reply(dispatcher.handle(call))
         _ = try mount.results.u32()
@@ -65,7 +76,9 @@ import Testing
                 client.call(RPCClient.nfs, 3, 3) {
                     $0.opaque(root)
                     $0.string("nai\u{308}ve.txt")
-                }))
+                }
+            )
+        )
         #expect(try lookup.results.u32() == 0, "NFS3_OK")
     }
 
@@ -76,7 +89,9 @@ import Testing
                 client.call(RPCClient.nfs, 3, 3) {
                     $0.opaque(root)
                     $0.string("f3")
-                }))
+                }
+            )
+        )
         #expect(try lookup.results.u32() == 0)
         let file = try lookup.results.opaque(maximum: 64)
         var read = try client.reply(
@@ -85,7 +100,9 @@ import Testing
                     $0.opaque(file)
                     $0.u64(2)
                     $0.u32(100)
-                }))
+                }
+            )
+        )
         #expect(try read.results.u32() == 0)
         if try read.results.bool() { _ = try Attributes(&read.results) }
         #expect(try read.results.u32() == 7, "count")
@@ -100,7 +117,9 @@ import Testing
                 client.call(RPCClient.nfs, 3, 3) {
                     $0.opaque(root)
                     $0.string("nope")
-                }))
+                }
+            )
+        )
         #expect(try reply.results.u32() == 2, "NFS3ERR_NOENT")
     }
 
@@ -133,7 +152,9 @@ import Testing
                         $0.u64(verifier)
                         $0.u32(400)
                         $0.u32(600)
-                    }))
+                    }
+                )
+            )
             #expect(try reply.results.u32() == 0)
             if try reply.results.bool() { _ = try Attributes(&reply.results) }
             verifier = try reply.results.u64()

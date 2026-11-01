@@ -15,7 +15,10 @@ final class RPCClient {
     var xid: UInt32 = 0x1000
 
     func call(
-        _ program: UInt32, _ version: UInt32 = 3, _ procedure: UInt32, _ arguments: (inout XDRWriter) -> Void = { _ in }
+        _ program: UInt32,
+        _ version: UInt32 = 3,
+        _ procedure: UInt32,
+        _ arguments: (inout XDRWriter) -> Void = { _ in }
     )
         -> [UInt8]
     {

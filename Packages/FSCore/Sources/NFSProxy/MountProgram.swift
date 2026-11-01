@@ -4,7 +4,11 @@ enum MountProgram {
 
     /// `admit` is asked once the path matches: true for the first MNT only.
     static func handle(
-        _ procedure: UInt32, _ arguments: inout XDRReader, export: NFSExport, root: [UInt8], admit: () -> Bool
+        _ procedure: UInt32,
+        _ arguments: inout XDRReader,
+        export: NFSExport,
+        root: [UInt8],
+        admit: () -> Bool
     ) throws(XDRError) -> XDRWriter? {
         var results = XDRWriter()
         switch procedure {

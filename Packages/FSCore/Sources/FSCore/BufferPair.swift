@@ -3,7 +3,8 @@
 public enum BufferPair {
     /// `body` with the base addresses of `source` and `target`; 0 without calling it when either is empty.
     public static func withBases(
-        _ source: [UInt8], _ target: inout [UInt8],
+        _ source: [UInt8],
+        _ target: inout [UInt8],
         _ body: (UnsafePointer<UInt8>, UnsafeMutablePointer<UInt8>) -> Int
     ) -> Int {
         source.withUnsafeBufferPointer { from in

@@ -29,7 +29,8 @@ enum ExtExtentTree {
                     if unwritten { length -= 32768 }
                     let start = UInt64(try node.u16(at + 6)) << 32 | UInt64(try node.u32(at + 8))
                     runs.append(
-                        ExtRun(logical: UInt64(try node.u32(at)), physical: unwritten ? nil : start, count: length))
+                        ExtRun(logical: UInt64(try node.u32(at)), physical: unwritten ? nil : start, count: length)
+                    )
                 }
                 continue
             }

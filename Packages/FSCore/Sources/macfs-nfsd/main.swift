@@ -31,7 +31,9 @@ do {
     let tree = try MountedTree(try format.open(source))
     let export = NFSExport.random()
     let server = try LoopbackServer(
-        dispatcher: NFSDispatcher(tree: tree, owner: (getuid(), getgid()), export: export), port: port)
+        dispatcher: NFSDispatcher(tree: tree, owner: (getuid(), getgid()), export: export),
+        port: port
+    )
     let command = NFSMountCommand(port: server.port, export: export, mountPoint: "<directory>")
     print("serving \(format.displayName) \"\(tree.fileSystem.volume.label)\" on 127.0.0.1:\(server.port)")
     // The export admits one mount: the path is secret until the mount table shows it (roadmap 0038).

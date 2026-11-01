@@ -20,8 +20,14 @@ func measure(_ name: String, bytes: Int, runs: Int = 9, _ body: () -> UInt64) {
     let gbps = Double(bytes) / median
     print(
         String(
-            format: "%-34@ %8.2f GB/s   (%.2f to %.2f)  [%llu]", name as NSString, gbps,
-            Double(bytes) / times[runs - 1], Double(bytes) / times[0], sink & 1))
+            format: "%-34@ %8.2f GB/s   (%.2f to %.2f)  [%llu]",
+            name as NSString,
+            gbps,
+            Double(bytes) / times[runs - 1],
+            Double(bytes) / times[0],
+            sink & 1
+        )
+    )
 }
 
 let size = 64 << 20
@@ -34,7 +40,9 @@ data.withUnsafeBufferPointer { buffer in
     let p = buffer.baseAddress!
     let reference = base_crc32c_asm(~0, p, size)
     precondition(
-        base_crc32c_serial(~0, p, size) == reference && base_crc32c_threeway(~0, p, size) == reference, "CRC mismatch")
+        base_crc32c_serial(~0, p, size) == reference && base_crc32c_threeway(~0, p, size) == reference,
+        "CRC mismatch"
+    )
     print("CRC-32C, 64 MiB")
     measure("  C, one __crc32cd stream", bytes: size) { UInt64(base_crc32c_serial(~0, p, size)) }
     measure("  C, three streams + vmull_p64", bytes: size) { UInt64(base_crc32c_threeway(~0, p, size)) }
@@ -156,7 +164,11 @@ ascii.withUnsafeBufferPointer { source in
                 for n in 0 ..< names {
                     x &+= UInt64(
                         AemiKernels.asciiPrefix(
-                            utf16LE: source.baseAddress! + 2 * n * name, units: name, into: target.baseAddress!))
+                            utf16LE: source.baseAddress! + 2 * n * name,
+                            units: name,
+                            into: target.baseAddress!
+                        )
+                    )
                 }
                 return x
             }

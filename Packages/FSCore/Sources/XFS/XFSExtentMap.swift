@@ -3,7 +3,9 @@ import FSCore
 /// A data fork's extents, from its list or its B+tree (`xfs_bmdr_block` in the inode, `xfs_btree_block` below it).
 enum XFSExtentMap {
     static func extents(
-        _ inode: XFSInode, _ superblock: XFSSuperblock, readBlock: (UInt64) throws(DiskError) -> DiskBytes
+        _ inode: XFSInode,
+        _ superblock: XFSSuperblock,
+        readBlock: (UInt64) throws(DiskError) -> DiskBytes
     ) throws(DiskError) -> [XFSExtent] {
         var extents: [XFSExtent] = []
         switch inode.format {
@@ -37,8 +39,12 @@ enum XFSExtentMap {
 
     /// A B+tree block (`BMA3`: a 72-byte header with its checksum and owner), its records or its children.
     private static func walk(
-        _ block: UInt64, level: Int, _ inode: XFSInode, _ superblock: XFSSuperblock,
-        _ readBlock: (UInt64) throws(DiskError) -> DiskBytes, into extents: inout [XFSExtent]
+        _ block: UInt64,
+        level: Int,
+        _ inode: XFSInode,
+        _ superblock: XFSSuperblock,
+        _ readBlock: (UInt64) throws(DiskError) -> DiskBytes,
+        into extents: inout [XFSExtent]
     ) throws(DiskError) {
         let bytes = try readBlock(block)
         let header = 72

@@ -17,7 +17,10 @@ func referenceCRC(_ crc: UInt32, _ bytes: ArraySlice<UInt8>) -> UInt32 {
 func referenceFixups(_ record: UnsafeMutablePointer<UInt8>, _ size: Int, _ stride: Int) -> Int32
 @_silgen_name("fsk_ref_lznt1_decompress")
 func referenceLZNT1(
-    _ source: UnsafePointer<UInt8>, _ count: Int, _ target: UnsafeMutablePointer<UInt8>, _ capacity: Int
+    _ source: UnsafePointer<UInt8>,
+    _ count: Int,
+    _ target: UnsafeMutablePointer<UInt8>,
+    _ capacity: Int
 ) -> Int32
 
 struct SplitMix {

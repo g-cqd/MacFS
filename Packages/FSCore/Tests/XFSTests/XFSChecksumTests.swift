@@ -89,7 +89,9 @@ struct PatchedSource: BlockSource {
         // "."
         let fileSystem = try XFSFileSystem(source: try layout.flipped(first.physical * layout.blockSize + 64 + 9))
         Self.expectChecksumError(
-            { _ = try fileSystem.entries(of: sub.number, from: 0, limit: 1000) }, "directory block")
+            { _ = try fileSystem.entries(of: sub.number, from: 0, limit: 1000) },
+            "directory block"
+        )
     }
 
     @Test func aChangedSymlinkBlockIsAChecksumError() throws {

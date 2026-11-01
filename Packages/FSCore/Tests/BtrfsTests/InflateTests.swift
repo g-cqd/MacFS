@@ -47,8 +47,15 @@ import Testing
         let length = data.withUnsafeBufferPointer { source in
             stream.withUnsafeMutableBufferPointer {
                 fsk_oracle_deflate(
-                    source.baseAddress ?? UnsafePointer(bitPattern: 1)!, data.count, $0.baseAddress!, $0.count, level,
-                    window, memory, strategy)
+                    source.baseAddress ?? UnsafePointer(bitPattern: 1)!,
+                    data.count,
+                    $0.baseAddress!,
+                    $0.count,
+                    level,
+                    window,
+                    memory,
+                    strategy
+                )
             }
         }
         precondition(length >= 0, "libz deflate failed")
@@ -86,8 +93,12 @@ import Testing
         for (name, data) in Self.inputs {
             for setting in settings {
                 let stream = Self.deflate(
-                    data, level: setting.level, window: setting.window, memory: setting.memory,
-                    strategy: setting.strategy)
+                    data,
+                    level: setting.level,
+                    window: setting.window,
+                    memory: setting.memory,
+                    strategy: setting.strategy
+                )
                 let what = "\(name) \(setting)"
                 let count = stream.count
                 let ours = Self.decode(stream, capacity: data.count) { fsk_inflate($0, count, $2, $3, $4) }
@@ -241,7 +252,8 @@ import Testing
                             #expect(
                                 Array(UnsafeBufferPointer(start: target, count: produced))
                                     == Array(data.prefix(capacity)),
-                                "\(name) \(strategy)")
+                                "\(name) \(strategy)"
+                            )
                         }
                     }
                 }

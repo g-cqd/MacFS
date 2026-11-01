@@ -9,7 +9,10 @@ import Testing
     static let export = NFSExport(token: Array(0 ..< 24))
     @Test func aFramedCallOverTCPGetsAFramedReply() throws {
         let dispatcher = NFSDispatcher(
-            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 1)), owner: (501, 20), export: Self.export)
+            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 1)),
+            owner: (501, 20),
+            export: Self.export
+        )
         let server = try LoopbackServer(dispatcher: dispatcher, port: 0)
         defer { server.stop() }
         #expect(server.port > 0)
@@ -25,7 +28,10 @@ import Testing
 
     @Test func itListensOnLoopbackOnly() throws {
         let dispatcher = NFSDispatcher(
-            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 0)), owner: (501, 20), export: Self.export)
+            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 0)),
+            owner: (501, 20),
+            export: Self.export
+        )
         let server = try LoopbackServer(dispatcher: dispatcher, port: 0)
         defer { server.stop() }
         #expect(server.address == "127.0.0.1")

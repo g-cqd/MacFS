@@ -46,9 +46,13 @@ let package = Package(
         // Release C is -Os by default; the C kernels (zstd above all) are 8 to 11% faster at -O3 (docs/research/
         // 2026-10-30-compression-kernels.md). Allowed here: FSCore is only ever a root or a local package.
         .target(
-            name: "CFSKernels", cSettings: [.unsafeFlags(["-O3"], .when(configuration: .release))]),
+            name: "CFSKernels",
+            cSettings: [.unsafeFlags(["-O3"], .when(configuration: .release))]
+        ),
         .target(
-            name: "FSCore", dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO], swiftSettings: readerSettings
+            name: "FSCore",
+            dependencies: ["CFSKernels", aemiKernel, aemiKernels, aemiIO],
+            swiftSettings: readerSettings
         ),
         .target(name: "Btrfs", dependencies: ["FSCore", "CFSKernels", aemiKernel], swiftSettings: readerSettings),
         .target(name: "NTFS", dependencies: ["FSCore", "CFSKernels", aemiKernel], swiftSettings: readerSettings),
@@ -56,7 +60,10 @@ let package = Package(
         .target(name: "XFS", dependencies: ["FSCore", aemiKernel], swiftSettings: readerSettings),
         // The one list of formats every mount technology, the app and fsprobe share.
         .target(
-            name: "Formats", dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS", "XFS"], swiftSettings: readerSettings),
+            name: "Formats",
+            dependencies: ["FSCore", "Btrfs", "NTFS", "ExtFS", "XFS"],
+            swiftSettings: readerSettings
+        ),
         // What every mount technology needs on top of a reader: identifiers, listings with "." and "..".
         .target(name: "MountKit", dependencies: ["FSCore"], swiftSettings: readerSettings),
         // The app's logic, apart from its views so it is tested: the status checks (roadmap 0021).
@@ -65,27 +72,37 @@ let package = Package(
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
         .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore"], swiftSettings: readerSettings),
         .executableTarget(
-            name: "macfs-nfsd", dependencies: ["NFSProxy", "Formats", "FSCore"], swiftSettings: strictSettings),
+            name: "macfs-nfsd",
+            dependencies: ["NFSProxy", "Formats", "FSCore"],
+            swiftSettings: strictSettings
+        ),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         // A call that checks the assembly kernels keep the callee-saved registers (KernelABITests). Tests only.
         .target(name: "KernelABI", dependencies: ["CFSKernels"], path: "Tests/KernelABI"),
         // The system libz, the reference the codec tests make their streams with and hold `fsk_inflate` to. Tests only.
         .target(name: "CodecOracle", path: "Tests/CodecOracle", linkerSettings: [.linkedLibrary("z")]),
         .testTarget(
-            name: "FSCoreTests", dependencies: ["FSCore", "CFSKernels", "KernelABI", aemiTestKit],
-            swiftSettings: strictSettings),
+            name: "FSCoreTests",
+            dependencies: ["FSCore", "CFSKernels", "KernelABI", aemiTestKit],
+            swiftSettings: strictSettings
+        ),
         // The images are built by Scripts/make-test-images.sh in a Linux container from the reference tools
         // (mkfs.btrfs, mkntfs, ntfscp) and found by path, not bundled: they are hundreds of megabytes.
         .testTarget(
-            name: "BtrfsTests", dependencies: ["Btrfs", "FSCore", "CFSKernels", "CodecOracle", aemiTestKit],
-            swiftSettings: strictSettings),
+            name: "BtrfsTests",
+            dependencies: ["Btrfs", "FSCore", "CFSKernels", "CodecOracle", aemiTestKit],
+            swiftSettings: strictSettings
+        ),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore", "CFSKernels"], swiftSettings: strictSettings),
         .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "XFSTests", dependencies: ["XFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),
         .testTarget(
-            name: "NFSProxyTests", dependencies: ["NFSProxy", "MountKit", "FSCore"], swiftSettings: strictSettings)
+            name: "NFSProxyTests",
+            dependencies: ["NFSProxy", "MountKit", "FSCore"],
+            swiftSettings: strictSettings
+        )
     ]
 )
 
@@ -94,10 +111,14 @@ let package = Package(
 if Context.environment["MACFS_DEV"] != nil {
     package.targets += [
         .target(
-            name: "CFSKernelsBaseline", path: "Benchmarks/CFSKernelsBaseline",
-            cSettings: [.unsafeFlags(["-O3", "-march=armv8.2-a+crc+crypto"])]),
+            name: "CFSKernelsBaseline",
+            path: "Benchmarks/CFSKernelsBaseline",
+            cSettings: [.unsafeFlags(["-O3", "-march=armv8.2-a+crc+crypto"])]
+        ),
         .executableTarget(
-            name: "fskbench", dependencies: ["CFSKernelsBaseline", aemiKernels],
-            path: "Benchmarks/fskbench")
+            name: "fskbench",
+            dependencies: ["CFSKernelsBaseline", aemiKernels],
+            path: "Benchmarks/fskbench"
+        )
     ]
 }

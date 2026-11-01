@@ -8,7 +8,10 @@ import Testing
 /// dropped after a bounded time, and the calls of one connection are answered concurrently, each reply whole.
 @Suite(.serialized) struct LoopbackLimitsTests {
     static func limits(
-        connections: Int = 8, idle: Duration = .seconds(30), stalled: Duration = .seconds(30), concurrentCalls: Int = 4
+        connections: Int = 8,
+        idle: Duration = .seconds(30),
+        stalled: Duration = .seconds(30),
+        concurrentCalls: Int = 4
     ) -> LoopbackServer.Limits {
         LoopbackServer.Limits(connections: connections, idle: idle, stalled: stalled, concurrentCalls: concurrentCalls)
     }
@@ -44,7 +47,10 @@ import Testing
     @Test func aClientThatStopsReadingIsDropped() throws {
         let big = [UInt8](repeating: 7, count: 256 << 10)
         let server = try LoopbackServer(
-            port: 0, limits: Self.limits(stalled: .milliseconds(200)), handle: { _ in big })
+            port: 0,
+            limits: Self.limits(stalled: .milliseconds(200)),
+            handle: { _ in big }
+        )
         defer { server.stop() }
         let client = try LoopbackClient(port: server.port, receiveBuffer: 4_096)
         for xid in 0 ..< 40 { client.send([0, 0, 0, UInt8(xid)]) }
@@ -58,7 +64,8 @@ import Testing
     @Test func theStandardLimitsAreADR0014s() {
         #expect(
             LoopbackServer.Limits.standard
-                == Self.limits(connections: 16, idle: .seconds(300), stalled: .seconds(30), concurrentCalls: 8))
+                == Self.limits(connections: 16, idle: .seconds(300), stalled: .seconds(30), concurrentCalls: 8)
+        )
     }
 
     @Test func aClosedConnectionFreesItsPlace() throws {
@@ -175,7 +182,10 @@ import Testing
     /// Records up to 2 MiB are served (ADR-0010); a longer one drops the connection.
     @Test func recordsAreBoundedAtTwoMebibytes() throws {
         let server = try LoopbackServer(
-            port: 0, limits: Self.limits(), handle: { $0.prefix(4) + [UInt8(truncatingIfNeeded: $0.count >> 20)] })
+            port: 0,
+            limits: Self.limits(),
+            handle: { $0.prefix(4) + [UInt8(truncatingIfNeeded: $0.count >> 20)] }
+        )
         defer { server.stop() }
         var records = RecordReader(maximum: 1 << 20)
         let fits = try LoopbackClient(port: server.port)
@@ -188,11 +198,13 @@ import Testing
 
     @Test func aSlowCallDoesNotHoldBackTheNextOne() throws {
         let server = try LoopbackServer(
-            port: 0, limits: Self.limits(),
+            port: 0,
+            limits: Self.limits(),
             handle: { record in
                 if record.first == 1 { Thread.sleep(forTimeInterval: 0.5) }
                 return record
-            })
+            }
+        )
         defer { server.stop() }
         let client = try LoopbackClient(port: server.port)
         var records = RecordReader(maximum: 1 << 20)
@@ -204,10 +216,12 @@ import Testing
 
     @Test func manyConcurrentRepliesArriveWhole() throws {
         let server = try LoopbackServer(
-            port: 0, limits: Self.limits(concurrentCalls: 8),
+            port: 0,
+            limits: Self.limits(concurrentCalls: 8),
             handle: { record in
                 [UInt8](repeating: record[0], count: 100_000 + Int(record[0]) * 1_000)
-            })
+            }
+        )
         defer { server.stop() }
         let client = try LoopbackClient(port: server.port)
         var records = RecordReader(maximum: 1 << 20)

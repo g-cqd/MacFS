@@ -18,6 +18,7 @@ import ToolingCore
                 "✘ Test lookup() failed after 0.002 seconds with 1 issue.",
                 "/src/A.swift:9:2: error: cannot find 'q' in scope",
                 "✔ Test run with 5 tests in 1 suite passed after 0.2 seconds."
-            ])
+            ]
+        )
     }
 }

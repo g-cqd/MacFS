@@ -32,13 +32,22 @@ enum ReferenceOracle {
             guard column.count == 10 else { throw DiskError.corrupt("\(name).reference: \(line)") }
             let type = ["f": "file", "d": "dir", "l": "link"][column[1]] ?? column[1]
             nodes[column[0]] = Node(
-                type: type, mode: column[2], uid: column[3], gid: column[4], nlink: column[5], size: column[6],
-                mtime: normalized(column[7]), ctime: normalized(column[8]), content: column[9])
+                type: type,
+                mode: column[2],
+                uid: column[3],
+                gid: column[4],
+                nlink: column[5],
+                size: column[6],
+                mtime: normalized(column[7]),
+                ctime: normalized(column[8]),
+                content: column[9]
+            )
         }
         return Reference(
             tool: String(lines[0].dropFirst(13)),
             fields: Set(lines[1].dropFirst(10).split(separator: " ").map(String.init)),
-            nodes: nodes)
+            nodes: nodes
+        )
     }
 
     /// `find`'s `%T@` (seconds, a point, ten digits) as seconds and nine digits.
@@ -59,9 +68,16 @@ enum ReferenceOracle {
         try TreeWalk.visit(fileSystem, pageSize: 64) { (visit) throws(DiskError) in
             let attributes = try fileSystem.attributes(of: visit.entry.id)
             var node = Node(
-                type: "file", mode: String(attributes.permissions, radix: 8), uid: String(attributes.uid),
-                gid: String(attributes.gid), nlink: String(attributes.linkCount), size: String(attributes.size),
-                mtime: time(attributes.modified), ctime: time(attributes.changed), content: "-")
+                type: "file",
+                mode: String(attributes.permissions, radix: 8),
+                uid: String(attributes.uid),
+                gid: String(attributes.gid),
+                nlink: String(attributes.linkCount),
+                size: String(attributes.size),
+                mtime: time(attributes.modified),
+                ctime: time(attributes.changed),
+                content: "-"
+            )
             switch visit.entry.kind {
                 case .directory:
                     node.type = "dir"

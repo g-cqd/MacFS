@@ -27,8 +27,11 @@ extension NTFSFileSystem {
                 }
                 guard let offset = vcn.checkedMultiplied(by: unit) else { throw .corrupt("index VCN \(vcn)") }
                 let block = try NTFSMultiSector.restore(
-                    try allocation.read(source, at: offset, count: blockSize), magic: "INDX", size: blockSize,
-                    what: "index block \(vcn) of directory \(directory)")
+                    try allocation.read(source, at: offset, count: blockSize),
+                    magic: "INDX",
+                    size: blockSize,
+                    what: "index block \(vcn) of directory \(directory)"
+                )
                 pending += try entries(in: try DiskBytes(block).slice(from: 0x18), into: &names)
             }
             return NTFSListing(names)
@@ -81,8 +84,12 @@ extension NTFSFileSystem {
         guard let found = try listing(directory).find(units: units, folded: fold(units)) else { throw .notFound }
         return DirectoryEntry(
             // @dl:accept -- each reader maps its own directory entries to DirectoryEntry; the fields happen to share names
-            name: found.fileName.name, id: found.record, kind: kind(found.fileName, record: found.record),
-            nextCookie: 0)
+            name: found.fileName.name,
+            id: found.record,
+            // @dl:accept -- each reader maps its own directory entries to DirectoryEntry; the fields happen to share names
+            kind: kind(found.fileName, record: found.record),
+            nextCookie: 0
+        )
     }
 
     public func entries(of directory: UInt64, from cookie: UInt64, limit: Int) throws(DiskError) -> [DirectoryEntry] {
@@ -90,8 +97,11 @@ extension NTFSFileSystem {
         return try DirectoryPage.page(count: names.count, from: cookie, limit: limit) { (position) throws(DiskError) in
             let name = names[position]
             return DirectoryEntry(
-                name: name.fileName.name, id: name.record, kind: kind(name.fileName, record: name.record),
-                nextCookie: UInt64(position + 1))
+                name: name.fileName.name,
+                id: name.record,
+                kind: kind(name.fileName, record: name.record),
+                nextCookie: UInt64(position + 1)
+            )
         }
     }
 }

@@ -9,7 +9,10 @@ extension XFSFileSystem {
             guard inode.kind == .directory else { throw .notDirectory }
             if inode.format == XFSInode.local {
                 let (parent, entries) = try XFSDirectory.shortform(
-                    inode.dataFork, size: Int(inode.size), fileType: superblock.hasFileType)
+                    inode.dataFork,
+                    size: Int(inode.size),
+                    fileType: superblock.hasFileType
+                )
                 return Listing(parent: parent, entries: entries)
             }
             let blockSize = UInt64(superblock.blockSize)
@@ -50,7 +53,11 @@ extension XFSFileSystem {
             (position) throws(DiskError) in
             let entry = entries[position]
             return DirectoryEntry(
-                name: entry.name, id: entry.inode, kind: try kind(of: entry), nextCookie: UInt64(position + 1))
+                name: entry.name,
+                id: entry.inode,
+                kind: try kind(of: entry),
+                nextCookie: UInt64(position + 1)
+            )
         }
     }
 

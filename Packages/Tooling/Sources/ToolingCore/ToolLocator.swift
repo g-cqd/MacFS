@@ -14,7 +14,9 @@ public struct ToolLocator: Sendable {
     private let isExecutable: @Sendable (String) -> Bool
 
     public init(
-        environment: [String: String], home: String, lock: AnalyzerLock? = nil,
+        environment: [String: String],
+        home: String,
+        lock: AnalyzerLock? = nil,
         isExecutable: @escaping @Sendable (String) -> Bool
     ) {
         self.environment = environment
@@ -60,7 +62,16 @@ public struct ToolLocator: Sendable {
         let lake = need("lake", pinned: ["\(home)/.elan/bin/lake"])
         guard missing.isEmpty else { throw Missing(tools: missing) }
         return ToolPaths(
-            swift: swift, swiftlint: swiftlint, deadwood: deadwood, dolly: dolly, arcleak: arcleak, fcheck: fcheck,
-            modeler: modeler, java: java, tla2tools: jar, lake: lake)
+            swift: swift,
+            swiftlint: swiftlint,
+            deadwood: deadwood,
+            dolly: dolly,
+            arcleak: arcleak,
+            fcheck: fcheck,
+            modeler: modeler,
+            java: java,
+            tla2tools: jar,
+            lake: lake
+        )
     }
 }

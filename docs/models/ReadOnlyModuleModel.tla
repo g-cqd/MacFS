@@ -25,7 +25,7 @@ loadResource_0(p) ==
     /\ volume' \in Dom_volume
     /\ pc' = [pc EXCEPT ![p] = "idle"]
 
-\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:50
+\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:52
 unloadResource_0(p) ==
     /\ pc[p] = "idle"
     /\ volume' = "nil"

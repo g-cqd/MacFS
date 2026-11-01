@@ -26,7 +26,8 @@ import Testing
     @Test func theExportPathIsTheTokenInHex() {
         #expect(export.path == "/macfs-000102030405060708090a0b0c0d0e0f")
         #expect(
-            NFSExport(token: Array(repeating: 0xAB, count: 24)).path == "/macfs-" + String(repeating: "ab", count: 16))
+            NFSExport(token: Array(repeating: 0xAB, count: 24)).path == "/macfs-" + String(repeating: "ab", count: 16)
+        )
         #expect(NFSExport.random().path != NFSExport.random().path)
         #expect(NFSExport.random().path.count == export.path.count)
     }
@@ -47,7 +48,9 @@ import Testing
         let dispatcher = try dispatcher()
         #expect(try mount(export.path, on: dispatcher).status == 0)
         #expect(
-            try mount(export.path, on: dispatcher).status == 13, "MNT3ERR_ACCES: the path is in the mount table now")
+            try mount(export.path, on: dispatcher).status == 13,
+            "MNT3ERR_ACCES: the path is in the mount table now"
+        )
     }
 
     /// DUMP and UMNTALL take no arguments, UMNT a path; MNT and UMNT paths are at most MNTPATHLEN, 1,024 bytes (RFC 1813).
@@ -59,7 +62,8 @@ import Testing
         for (procedure, length, status) in [(UInt32(1), 1_024, 0), (1, 1_025, 4), (3, 1_024, 0), (3, 1_025, 4)] {
             let path = "/" + String(repeating: "a", count: length - 1)
             let reply = try client.reply(
-                dispatcher.handle(client.call(RPCClient.mount, 3, procedure) { $0.string(path) }))
+                dispatcher.handle(client.call(RPCClient.mount, 3, procedure) { $0.string(path) })
+            )
             #expect(reply.acceptStatus == UInt32(status), "procedure \(procedure), \(length) bytes")
         }
     }
@@ -86,8 +90,10 @@ import Testing
             #expect(try getattr(forged) == 10_001, "NFS3ERR_BADHANDLE with byte \(index) changed")
         }
         let other = NFSDispatcher(
-            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 3)), owner: (501, 20),
-            export: NFSExport(token: Self.token.map { $0 ^ 0xFF }))
+            tree: try MountedTree(InMemoryFileSystem(root: 5, files: 3)),
+            owner: (501, 20),
+            export: NFSExport(token: Self.token.map { $0 ^ 0xFF })
+        )
         var reply = try client.reply(other.handle(client.call(RPCClient.nfs, 3, 1) { $0.opaque(root) }))
         #expect(try reply.results.u32() == 10_001, "another export's handle")
     }

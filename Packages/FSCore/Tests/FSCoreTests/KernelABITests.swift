@@ -43,7 +43,8 @@ import Testing
                 output.withUnsafeMutableBufferPointer { target in
                     Self.call(
                         unsafeBitCast(lzo, to: UnsafeRawPointer.self),
-                        [Self.address(source.baseAddress!), 8, Self.address(target.baseAddress!), 64])
+                        [Self.address(source.baseAddress!), 8, Self.address(target.baseAddress!), 64]
+                    )
                 }
             }
             #expect(changed == [])
@@ -61,7 +62,8 @@ import Testing
                 output.withUnsafeMutableBufferPointer { target in
                     Self.call(
                         unsafeBitCast(lznt1, to: UnsafeRawPointer.self),
-                        [Self.address(source.baseAddress!), 6, Self.address(target.baseAddress!), 4096])
+                        [Self.address(source.baseAddress!), 6, Self.address(target.baseAddress!), 4096]
+                    )
                 }
             }
             #expect(changed == [])
@@ -81,7 +83,9 @@ import Testing
             record[1022 ..< 1024] = [7, 0]
             let (changed, result) = record.withUnsafeMutableBufferPointer { base in
                 Self.call(
-                    unsafeBitCast(fixups, to: UnsafeRawPointer.self), [Self.address(base.baseAddress!), 1024, 512])
+                    unsafeBitCast(fixups, to: UnsafeRawPointer.self),
+                    [Self.address(base.baseAddress!), 1024, 512]
+                )
             }
             #expect(changed == [])
             #expect(Int32(truncatingIfNeeded: result) == 0)

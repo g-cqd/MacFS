@@ -37,7 +37,8 @@ public final class XFSFileSystem: ReadOnlyFileSystem {
         let first = try source.read(at: 0, count: 512)
         let sectorSize = Int((try? DiskBytes(first).be16(0x66)) ?? 512)
         superblock = try XFSSuperblock(
-            sectorSize > 512 && sectorSize <= 32768 ? try source.read(at: 0, count: sectorSize) : first)
+            sectorSize > 512 && sectorSize <= 32768 ? try source.read(at: 0, count: sectorSize) : first
+        )
         guard superblock.dataBlocks <= source.byteCount / UInt64(superblock.blockSize) + 1 else {
             throw .corrupt("\(superblock.dataBlocks) blocks on a \(source.byteCount)-byte device")
         }
@@ -45,7 +46,12 @@ public final class XFSFileSystem: ReadOnlyFileSystem {
         directoryBlocks = BoundedCache(capacity: max(16, (8 << 20) / superblock.dirBlockSize))
         rootID = superblock.rootInode
         volume = VolumeDescription(
-            format: "xfs", label: superblock.label, uuid: superblock.uuid, caseRule: .sensitive, maximumNameLength: 255)
+            format: "xfs",
+            label: superblock.label,
+            uuid: superblock.uuid,
+            caseRule: .sensitive,
+            maximumNameLength: 255
+        )
         guard try inode(rootID).kind == .directory else { throw .corrupt("the root inode is not a directory") }
     }
 
@@ -97,7 +103,10 @@ public final class XFSFileSystem: ReadOnlyFileSystem {
 
     public func statistics() throws(DiskError) -> VolumeStatistics {
         VolumeStatistics(
-            blockSize: superblock.blockSize, totalBlocks: superblock.dataBlocks, freeBlocks: superblock.freeBlocks,
-            files: superblock.inodeCount &- superblock.freeInodes)
+            blockSize: superblock.blockSize,
+            totalBlocks: superblock.dataBlocks,
+            freeBlocks: superblock.freeBlocks,
+            files: superblock.inodeCount &- superblock.freeInodes
+        )
     }
 }

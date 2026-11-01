@@ -32,8 +32,12 @@ public final class NFSDispatcher: Sendable {
             let results =
                 call.program == MountProgram.number
                 ? try MountProgram.handle(
-                    call.procedure, &reader, export: export, root: handles.handle(MountedTree.root),
-                    admit: { !mounted.exchange(true, ordering: .acquiringAndReleasing) })
+                    call.procedure,
+                    &reader,
+                    export: export,
+                    root: handles.handle(MountedTree.root),
+                    admit: { !mounted.exchange(true, ordering: .acquiringAndReleasing) }
+                )
                 : try NFSProgram(dispatcher: self).handle(call.procedure, &reader)
             guard let results else { return call.reply(status: 3) }
             return call.reply(status: 0, results: results)

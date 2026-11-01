@@ -42,7 +42,8 @@ struct FlippedSource: BlockSource {
         let (offset, id, isCompressed) = try Self.firstDataByte(image, path)
         #expect(
             isCompressed == compressed,
-            "\(image): \(path) should exercise a \(compressed ? "compressed" : "plain") extent")
+            "\(image): \(path) should exercise a \(compressed ? "compressed" : "plain") extent"
+        )
         let fileSystem = try BtrfsFileSystem(source: FlippedSource(base: try ImageOracle.image(image), offset: offset))
         do {
             _ = try fileSystem.read(id, at: 0, count: 1 << 20)

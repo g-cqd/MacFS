@@ -12,8 +12,13 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
     // FSKit fixes this signature; the count is the protocol's.
     // swiftlint:disable:next function_parameter_count
     func blockmapFile(
-        _ file: FSItem, offset: off_t, length: Int, flags: FSBlockmapFlags, operationID: FSOperationID,
-        packer: FSExtentPacker, replyHandler reply: @escaping @Sendable (FSBlockmapResult?, (any Error)?) -> Void
+        _ file: FSItem,
+        offset: off_t,
+        length: Int,
+        flags: FSBlockmapFlags,
+        operationID: FSOperationID,
+        packer: FSExtentPacker,
+        replyHandler reply: @escaping @Sendable (FSBlockmapResult?, (any Error)?) -> Void
     ) {
         guard offset >= 0, length >= 0 else { return reply(nil, ModuleError.invalid) }
         answer(file, reply, "blockmap") { (file) throws(DiskError) -> FSBlockmapResult? in
@@ -28,9 +33,12 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
                 while done < range.length {
                     let piece = min(range.length - done, Self.longestExtent)
                     let more = packer.packExtent(
-                        resource: device, type: range.physical == nil ? .zeroFill : .data,
-                        logicalOffset: off_t(range.logical + done), physicalOffset: off_t((range.physical ?? 0) + done),
-                        length: Int(piece))
+                        resource: device,
+                        type: range.physical == nil ? .zeroFill : .data,
+                        logicalOffset: off_t(range.logical + done),
+                        physicalOffset: off_t((range.physical ?? 0) + done),
+                        length: Int(piece)
+                    )
                     done += piece
                     // A full packer: FSKit asks again, with the same operation, for what is left.
                     if !more { break pack }
@@ -44,15 +52,23 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
     // FSKit fixes this signature; the count is the protocol's.
     // swiftlint:disable:next function_parameter_count
     func completeIO(
-        for file: FSItem, offset: off_t, length: Int, status: any Error, flags: FSCompleteIOFlags,
-        operationID: FSOperationID, replyHandler reply: @escaping @Sendable (FSCompleteIOResult?, (any Error)?) -> Void
+        for file: FSItem,
+        offset: off_t,
+        length: Int,
+        status: any Error,
+        flags: FSCompleteIOFlags,
+        operationID: FSOperationID,
+        replyHandler reply: @escaping @Sendable (FSCompleteIOResult?, (any Error)?) -> Void
     ) {
         answerAttributes(file, reply, "completeIO", FSCompleteIOResult.init(itemAttributes:))
     }
 
     func lookupItem(
         // @dl:accept -- an FSKit requirement; the parameter list is the protocol's
-        named name: FSFileName, in directory: FSItem, packer: FSExtentPacker, context: FSContext,
+        named name: FSFileName,
+        in directory: FSItem,
+        packer: FSExtentPacker,
+        context: FSContext,
         replyHandler reply: @escaping @Sendable (FSLookupItemKOIOResult?, (any Error)?) -> Void
     ) {
         // Extents are supplied only on demand (blockmapFile): the documentation asks for no extra I/O here.
@@ -61,8 +77,11 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
 
     func createFile(
         // @dl:accept -- an FSKit requirement; the parameter list is the protocol's
-        named name: FSFileName, in directory: FSItem, attributes newAttributes: FSItem.SetAttributesRequest,
-        packer: FSExtentPacker, context: FSContext,
+        named name: FSFileName,
+        in directory: FSItem,
+        attributes newAttributes: FSItem.SetAttributesRequest,
+        packer: FSExtentPacker,
+        context: FSContext,
         replyHandler reply: @escaping @Sendable (FSCreateFileKOIOResult?, (any Error)?) -> Void
     ) { reply(nil, ModuleError.readOnly) }
 }

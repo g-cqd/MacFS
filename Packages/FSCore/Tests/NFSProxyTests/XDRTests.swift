@@ -14,7 +14,8 @@ import Testing
             writer.bytes == [
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 1, 0, 0, 0, 3, 0xAA, 0xBB, 0xCC, 0, 0, 0, 0, 2, 0x68,
                 0x69, 0, 0
-            ])
+            ]
+        )
         var reader = XDRReader(writer.bytes)
         #expect(try reader.u32() == 0x0102_0304)
         #expect(try reader.u64() == 0x0506_0708_090A_0B0C)

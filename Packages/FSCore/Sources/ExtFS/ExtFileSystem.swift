@@ -51,13 +51,19 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
             let at = group * superblock.descriptorSize
             try superblock.checksums?
                 .verifyDescriptor(
-                    try raw.slice(at, superblock.descriptorSize), group: UInt32(truncatingIfNeeded: group))
+                    try raw.slice(at, superblock.descriptorSize),
+                    group: UInt32(truncatingIfNeeded: group)
+                )
             let high = superblock.is64Bit ? UInt64(try raw.u32(at + 0x28)) << 32 : 0
             tables.append(high | UInt64(try raw.u32(at + 8)))
         }
         inodeTables = tables
         volume = VolumeDescription(
-            format: "ext4", label: superblock.label, uuid: superblock.uuid, caseRule: .sensitive, maximumNameLength: 255
+            format: "ext4",
+            label: superblock.label,
+            uuid: superblock.uuid,
+            caseRule: .sensitive,
+            maximumNameLength: 255
         )
     }
 
@@ -82,7 +88,10 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
 
     public func statistics() throws(DiskError) -> VolumeStatistics {
         VolumeStatistics(
-            blockSize: superblock.blockSize, totalBlocks: superblock.blockCount, freeBlocks: superblock.freeBlocks,
-            files: UInt64(superblock.inodeCount - superblock.freeInodes))
+            blockSize: superblock.blockSize,
+            totalBlocks: superblock.blockCount,
+            freeBlocks: superblock.freeBlocks,
+            files: UInt64(superblock.inodeCount - superblock.freeInodes)
+        )
     }
 }

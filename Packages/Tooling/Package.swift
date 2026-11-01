@@ -35,32 +35,44 @@ let package = Package(
             dependencies: [
                 .product(name: "Formats", package: "FSCore"), .product(name: "AemiRegex", package: "AemiRegex")
             ],
-            swiftSettings: strictSettings),
+            swiftSettings: strictSettings
+        ),
         .executableTarget(name: "macfs-tool", dependencies: ["ToolingCore"], swiftSettings: strictSettings),
         .testTarget(name: "ToolingCoreTests", dependencies: ["ToolingCore"], swiftSettings: strictSettings),
         .plugin(
             name: "Images",
             capability: .command(
                 intent: .custom(
-                    verb: "images", description: "Build the test images and their manifests in a Linux container")),
-            dependencies: ["macfs-tool"]),
+                    verb: "images",
+                    description: "Build the test images and their manifests in a Linux container"
+                )
+            ),
+            dependencies: ["macfs-tool"]
+        ),
         .plugin(
             name: "Gates",
             capability: .command(
-                intent: .custom(verb: "gates", description: "Run every static gate: format, lint, analyzers, models")),
-            dependencies: ["macfs-tool"]),
+                intent: .custom(verb: "gates", description: "Run every static gate: format, lint, analyzers, models")
+            ),
+            dependencies: ["macfs-tool"]
+        ),
         .plugin(
             name: "Plists",
             capability: .command(
                 intent: .custom(verb: "plists", description: "Write or check the FSKit modules' Info.plists"),
-                permissions: [.writeToPackageDirectory(reason: "Write Extensions/*/Info.plist from DiskFormat")]),
-            dependencies: ["macfs-tool"]),
+                permissions: [.writeToPackageDirectory(reason: "Write Extensions/*/Info.plist from DiskFormat")]
+            ),
+            dependencies: ["macfs-tool"]
+        ),
         .plugin(
             name: "Mounts",
             capability: .command(
                 intent: .custom(
                     verb: "mounts",
-                    description: "Mount every test image through its FSKit module and compare it with its manifest")),
-            dependencies: ["macfs-tool"])
+                    description: "Mount every test image through its FSKit module and compare it with its manifest"
+                )
+            ),
+            dependencies: ["macfs-tool"]
+        )
     ]
 )

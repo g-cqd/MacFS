@@ -9,8 +9,12 @@ struct InMemoryFileSystem: ReadOnlyFileSystem {
     }
 
     let volume = VolumeDescription(
-        format: "memory", label: "Memory", uuid: [UInt8](repeating: 1, count: 16), caseRule: .sensitive,
-        maximumNameLength: 255)
+        format: "memory",
+        label: "Memory",
+        uuid: [UInt8](repeating: 1, count: 16),
+        caseRule: .sensitive,
+        maximumNameLength: 255
+    )
     let rootID: UInt64
     var nodes: [UInt64: Node]
 
@@ -52,8 +56,11 @@ struct InMemoryFileSystem: ReadOnlyFileSystem {
         return node.children[start ..< min(node.children.count, start + limit)].enumerated()
             .map { offset, child in
                 DirectoryEntry(
-                    name: Array(child.0.utf8), id: child.1, kind: nodes[child.1]?.attributes.kind ?? .regular,
-                    nextCookie: UInt64(start + offset + 1))
+                    name: Array(child.0.utf8),
+                    id: child.1,
+                    kind: nodes[child.1]?.attributes.kind ?? .regular,
+                    nextCookie: UInt64(start + offset + 1)
+                )
             }
     }
 

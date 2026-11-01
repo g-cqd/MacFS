@@ -26,7 +26,8 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
         super
             .init(
                 volumeID: identifier,
-                volumeName: FSFileName(string: description.label.isEmpty ? shortName : description.label))
+                volumeName: FSFileName(string: description.label.isEmpty ? shortName : description.label)
+            )
     }
 
     func item(_ mountID: UInt64) -> ReadOnlyItem {
@@ -101,7 +102,9 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
     /// Answers `reply` for an operation on `item`: casts it, runs `body`, and turns reader errors into
     /// FSKit errors. A result FSKit's failable initializer refused is an internal error, never a crash.
     func answer<T>(
-        _ item: FSItem, _ reply: (T?, (any Error)?) -> Void, _ what: String,
+        _ item: FSItem,
+        _ reply: (T?, (any Error)?) -> Void,
+        _ what: String,
         _ body: (ReadOnlyItem) throws(DiskError) -> T?
     ) {
         guard let item = item as? ReadOnlyItem else { return reply(nil, ModuleError.invalid) }

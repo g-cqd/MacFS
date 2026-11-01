@@ -17,8 +17,12 @@ import ToolingCore
         #expect(
             lock["fcheck"]
                 == AnalyzerLock.Pin(
-                    tool: "fcheck", version: "0.4.0", macOS: String(repeating: "c", count: 64),
-                    linux: String(repeating: "d", count: 64)))
+                    tool: "fcheck",
+                    version: "0.4.0",
+                    macOS: String(repeating: "c", count: 64),
+                    linux: String(repeating: "d", count: 64)
+                )
+        )
         #expect(lock["dolly"] == nil)
     }
 
@@ -34,7 +38,8 @@ import ToolingCore
         let pin = try #require(try AnalyzerLock(Self.text)["arcleak"])
         #expect(pin.archive == "arcleak-0.15.0-macos-arm64")
         #expect(
-            pin.url == "https://github.com/g-cqd/arcleak/releases/download/v0.15.0/arcleak-0.15.0-macos-arm64.tar.gz")
+            pin.url == "https://github.com/g-cqd/arcleak/releases/download/v0.15.0/arcleak-0.15.0-macos-arm64.tar.gz"
+        )
     }
 
     /// Where aemi's `analyzers.sh` installs, so every package of the family shares one download.

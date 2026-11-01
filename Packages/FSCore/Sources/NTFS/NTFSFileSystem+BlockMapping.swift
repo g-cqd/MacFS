@@ -16,6 +16,11 @@ extension NTFSFileSystem: BlockMapping {
         let stream = try stream(try record(id), NTFSAttributeType.data)
         guard let ranges = stream.mappedRanges else { throw .unsupported("record \(id) is not stored as its bytes") }
         return MappedRange.clip(
-            ranges, offset: offset, length: length, size: stream.size, unit: UInt64(boot.clusterSize))
+            ranges,
+            offset: offset,
+            length: length,
+            size: stream.size,
+            unit: UInt64(boot.clusterSize)
+        )
     }
 }

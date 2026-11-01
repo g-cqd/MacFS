@@ -6,7 +6,10 @@ import Testing
 
 @_silgen_name("fsk_ref_lznt1_decompress")
 func referenceLZNT1(
-    _ source: UnsafePointer<UInt8>, _ count: Int, _ target: UnsafeMutablePointer<UInt8>, _ capacity: Int
+    _ source: UnsafePointer<UInt8>,
+    _ count: Int,
+    _ target: UnsafeMutablePointer<UInt8>,
+    _ capacity: Int
 ) -> Int32
 
 /// The arm64 LZNT1 kernel against the portable C one, byte for byte and status for status: on every compressed unit of the
@@ -47,7 +50,9 @@ func referenceLZNT1(
                 guard entry.kind == .regular else { continue }
                 let record = try fileSystem.record(entry.id)
                 let stream = try NTFSStream(
-                    record.extents(NTFSAttributeType.data), clusterSize: fileSystem.boot.clusterSize)
+                    record.extents(NTFSAttributeType.data),
+                    clusterSize: fileSystem.boot.clusterSize
+                )
                 guard let clusters = stream.compressionUnitClusters else { continue }
                 let unitBytes = UInt64(clusters * fileSystem.boot.clusterSize)
                 for unit in 0 ..< (stream.size + unitBytes - 1) / unitBytes {

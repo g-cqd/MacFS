@@ -22,7 +22,8 @@ public enum Gates {
             Command(
                 tools.swift,
                 ["format", "lint", "--strict", "--recursive", "--configuration", "\(root)/.swift-format"]
-                    + formatted.map { "\(root)/\($0)" }),
+                    + formatted.map { "\(root)/\($0)" }
+            ),
             Command(tools.swiftlint, ["lint", "--strict", "--quiet", "--config", "\(root)/.swiftlint.yml"] + shipped)
         ]
         for analyzer in [tools.deadwood, tools.dolly, tools.arcleak] {
@@ -40,7 +41,9 @@ public enum Gates {
                         "-cp", tools.tla2tools, "tlc2.TLC", "-workers", "auto", "-cleanup", "-config",
                         "\(models)/\(type)Model.cfg",
                         "\(models)/\(type)Model.tla"
-                    ]))
+                    ]
+                )
+            )
         }
         // Lean: the arithmetic of AlignedReader and MountedTree, proved (Proofs/).
         steps.append(Command(tools.lake, ["-d", "\(root)/Proofs", "build"]))

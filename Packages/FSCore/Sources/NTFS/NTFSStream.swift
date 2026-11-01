@@ -37,7 +37,8 @@ struct NTFSStream: Sendable {
                 unitClusters = 1 << Int(head.compressionUnit)
             default:
                 throw .unsupported(
-                    "NTFS compression 0x\(String(first.flags & NTFSAttribute.compressionMask, radix: 16))")
+                    "NTFS compression 0x\(String(first.flags & NTFSAttribute.compressionMask, radix: 16))"
+                )
         }
         size = head.dataSize
         initialized = min(head.initializedSize, head.dataSize)
@@ -63,7 +64,10 @@ struct NTFSStream: Sendable {
         let cluster = UInt64(clusterSize)
         return runs.map { run in
             MappedRange(
-                logical: run.vcn * cluster, length: run.length * cluster, physical: run.cluster.map { $0 * cluster })
+                logical: run.vcn * cluster,
+                length: run.length * cluster,
+                physical: run.cluster.map { $0 * cluster }
+            )
         }
     }
 
@@ -87,8 +91,11 @@ struct NTFSStream: Sendable {
                         throw .corrupt("cluster \(lcn)")
                     }
                     try pieces.read(
-                        source, at: physical + position % cluster, to: Int(position - offset),
-                        count: Int(runEnd - position))
+                        source,
+                        at: physical + position % cluster,
+                        to: Int(position - offset),
+                        count: Int(runEnd - position)
+                    )
                 }
                 position = runEnd
             }
@@ -100,7 +107,10 @@ struct NTFSStream: Sendable {
     /// with some allocated holds LZNT1 chunks in those clusters, decoded straight into the result when the read covers the
     /// whole unit. Bytes past the initialized size read as zero.
     private func compressedRead(
-        _ source: any BlockSource, from offset: UInt64, to end: UInt64, unitClusters: Int
+        _ source: any BlockSource,
+        from offset: UInt64,
+        to end: UInt64,
+        unitClusters: Int
     ) throws(DiskError) -> [UInt8] {
         let cluster = UInt64(clusterSize)
         let unitBytes = UInt64(unitClusters) * cluster
@@ -117,8 +127,11 @@ struct NTFSStream: Sendable {
                         let (low, high) = (max(from, part.vcn * cluster), min(to, (part.vcn + part.length) * cluster))
                         guard low < high, let lcn = part.cluster else { continue }
                         try pieces.read(
-                            source, at: lcn * cluster + low - part.vcn * cluster, to: Int(low - offset),
-                            count: Int(high - low))
+                            source,
+                            at: lcn * cluster + low - part.vcn * cluster,
+                            to: Int(low - offset),
+                            count: Int(high - low)
+                        )
                     }
                 } else if allocated > 0 {
                     let stored = try self.stored(source, parts)

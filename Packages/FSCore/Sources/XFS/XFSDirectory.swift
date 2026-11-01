@@ -46,7 +46,10 @@ enum XFSDirectory {
     /// One data block's entries (`XDB3` in a single-block directory, `XDD3` otherwise); "." and ".." are left out, ".."
     /// returned apart.
     static func dataBlock(
-        _ block: DiskBytes, _ superblock: XFSSuperblock, directory: UInt64, into entries: inout [Entry]
+        _ block: DiskBytes,
+        _ superblock: XFSSuperblock,
+        directory: UInt64,
+        into entries: inout [Entry]
     ) throws(DiskError) -> UInt64? {
         try check(block, directory: directory)
         let end = try entriesEnd(block, directory: directory)

@@ -56,7 +56,9 @@ struct NFSProgram {
     /// Runs `body`, writing its status: OK then the body, or the error status then the `post_op_attr` of
     /// `failureAttributes` (none when nil).
     func answer(
-        _ results: inout XDRWriter, failureAttributes id: UInt64?, _ body: (inout XDRWriter) throws(DiskError) -> Void
+        _ results: inout XDRWriter,
+        failureAttributes id: UInt64?,
+        _ body: (inout XDRWriter) throws(DiskError) -> Void
     ) {
         var success = XDRWriter()
         do throws(DiskError) {
@@ -84,7 +86,8 @@ struct NFSProgram {
                     entry = tree.parentMountID(of: try tree.fileSystem.attributes(of: tree.readerID(for: directory)))
                 default:
                     entry = try tree.checkedMountID(
-                        for: try tree.fileSystem.lookupCanonical(name, in: tree.readerID(for: directory)).id)
+                        for: try tree.fileSystem.lookupCanonical(name, in: tree.readerID(for: directory)).id
+                    )
             }
             let target = entry == MountedTree.parentOfRoot ? MountedTree.root : entry
             results.u32(NFSStatus.ok)

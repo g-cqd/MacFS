@@ -8,8 +8,12 @@ import Testing
 
 @_silgen_name("fsk_ref_zstd_decompress_frame")
 func referenceZstdFrame(
-    _ source: UnsafePointer<UInt8>, _ count: Int, _ target: UnsafeMutablePointer<UInt8>, _ capacity: Int,
-    _ workspace: UnsafeMutableRawPointer, _ consumed: UnsafeMutablePointer<Int>
+    _ source: UnsafePointer<UInt8>,
+    _ count: Int,
+    _ target: UnsafeMutablePointer<UInt8>,
+    _ capacity: Int,
+    _ workspace: UnsafeMutableRawPointer,
+    _ consumed: UnsafeMutablePointer<Int>
 ) -> Int64
 
 /// The arm64 sequence kernel (kernels_zstd_arm64.S) against the C sequence loop it replaces (`fsk_ref_zstd_decompress_frame`,
@@ -39,12 +43,23 @@ func referenceZstdFrame(
             (
                 kernel.withUnsafeMutableBufferPointer {
                     fsk_zstd_decompress_frame(
-                        source.baseAddress!, frame.count, $0.baseAddress!, capacity, workspaces.kernel, &kernelUsed)
+                        source.baseAddress!,
+                        frame.count,
+                        $0.baseAddress!,
+                        capacity,
+                        workspaces.kernel,
+                        &kernelUsed
+                    )
                 },
                 reference.withUnsafeMutableBufferPointer {
                     referenceZstdFrame(
-                        source.baseAddress!, frame.count, $0.baseAddress!, capacity, workspaces.reference,
-                        &referenceUsed)
+                        source.baseAddress!,
+                        frame.count,
+                        $0.baseAddress!,
+                        capacity,
+                        workspaces.reference,
+                        &referenceUsed
+                    )
                 }
             )
         }
@@ -98,14 +113,17 @@ func referenceZstdFrame(
             }
         }
         let flips = try String(
-            contentsOf: ZstdTests.corpus.appendingPathComponent("flips/index.tsv"), encoding: .utf8)
+            contentsOf: ZstdTests.corpus.appendingPathComponent("flips/index.tsv"),
+            encoding: .utf8
+        )
         var frames: [String: [UInt8]] = [:]
         var checked = 0
         for line in flips.split(separator: "\n") {
             let fields = line.split(separator: "\t").map(String.init)
             if frames[fields[0]] == nil {
                 frames[fields[0]] = try ZstdTests.bytes(
-                    ZstdTests.corpus.appendingPathComponent("decodecorpus/frames/\(fields[0])"))
+                    ZstdTests.corpus.appendingPathComponent("decodecorpus/frames/\(fields[0])")
+                )
             }
             guard var frame = frames[fields[0]], let byte = Int(fields[1]), let bit = Int(fields[2]) else { continue }
             frame[byte] ^= UInt8(1 << bit)
@@ -134,14 +152,21 @@ func referenceZstdFrame(
         var random = SplitMix(state: 43)
         for (name, frame) in try Self.frames("decodecorpus/frames") {
             let original = try ZstdTests.bytes(
-                ZstdTests.corpus.appendingPathComponent("decodecorpus/originals/\(name)"))
+                ZstdTests.corpus.appendingPathComponent("decodecorpus/originals/\(name)")
+            )
             let input =
                 random.next() % 2 == 0 ? frame : Array(frame.prefix(1 + Int(random.next() % UInt64(frame.count))))
             GuardedBytes.with(input, against: edge) { source in
                 GuardedBytes.with([UInt8](repeating: 0, count: max(1, original.count)), against: edge) { target in
                     var consumed = 0
                     let result = fsk_zstd_decompress_frame(
-                        source, input.count, target, original.count, workspaces.kernel, &consumed)
+                        source,
+                        input.count,
+                        target,
+                        original.count,
+                        workspaces.kernel,
+                        &consumed
+                    )
                     if input.count == frame.count {
                         #expect(result == Int64(original.count), "\(name)")
                         #expect(Array(UnsafeBufferPointer(start: target, count: original.count)) == original, "\(name)")
@@ -161,7 +186,13 @@ func referenceZstdFrame(
             var consumed = 0
             let result = frame.withUnsafeBufferPointer {
                 fsk_zstd_decompress_frame(
-                    $0.baseAddress!, frame.count, target, original.count, workspaces.kernel, &consumed)
+                    $0.baseAddress!,
+                    frame.count,
+                    target,
+                    original.count,
+                    workspaces.kernel,
+                    &consumed
+                )
             }
             #expect(result == Int64(original.count))
             #expect(consumed == frame.count)
@@ -198,7 +229,9 @@ func referenceZstdFrame(
             ZstdTests.block(last: false, type: 1, size: 130, [0x78])
                 + Self.compressedBlock(
                     Self.rawLiterals(Array("abcdefgh".utf8))
-                        + Self.rleSequences(count: 8, literals: 1, offset: 7, match: 0, [extra, 0, 0, 0, 0, 0, 0, 1])))
+                        + Self.rleSequences(count: 8, literals: 1, offset: 7, match: 0, [extra, 0, 0, 0, 0, 0, 0, 1])
+                )
+        )
     }
 
     /// What `careful(extra: 0)` decodes to: each literal, then 3 bytes from 125 back.
@@ -221,7 +254,12 @@ func referenceZstdFrame(
         let valid =
             Self.rawLiterals(literals)
             + Self.rleSequences(
-                count: 21, literals: 22, offset: 0, match: 0, [0, 0, 0, 0, 0, 0, 0, 0x80])
+                count: 21,
+                literals: 22,
+                offset: 0,
+                match: 0,
+                [0, 0, 0, 0, 0, 0, 0, 0x80]
+            )
         let expected = (0 ..< 21)
             .flatMap {
                 Array(literals[$0 * 32 ..< $0 * 32 + 32]) + [UInt8](repeating: literals[$0 * 32 + 31], count: 3)
@@ -237,7 +275,14 @@ func referenceZstdFrame(
                     Self.compressedBlock(
                         Self.rawLiterals((0 ..< 189).map { UInt8(65 + $0 % 26) })
                             + Self.rleSequences(
-                                count: 63, literals: 3, offset: 1, match: 0, [0, 0, 0, 0, 0, 0, 0, 0x80]))),
+                                count: 63,
+                                literals: 3,
+                                offset: 1,
+                                match: 0,
+                                [0, 0, 0, 0, 0, 0, 0, 0x80]
+                            )
+                    )
+                ),
                 378, nil
             ),
             // 64 sequences of 65,536 literals (code 35), one literal there.
@@ -247,7 +292,14 @@ func referenceZstdFrame(
                     Self.compressedBlock(
                         Self.rawLiterals([0x61])
                             + Self.rleSequences(
-                                count: 64, literals: 35, offset: 0, match: 0, [UInt8](repeating: 0, count: 128) + [1]))),
+                                count: 64,
+                                literals: 35,
+                                offset: 0,
+                                match: 0,
+                                [UInt8](repeating: 0, count: 128) + [1]
+                            )
+                    )
+                ),
                 8 << 20, nil
             ),
             // 130 bytes of history (an RLE block), then 8 sequences of a literal and a match of 3 at offset code 7 (7 bits
@@ -265,8 +317,14 @@ func referenceZstdFrame(
                         + Self.compressedBlock(
                             Self.rawLiterals([])
                                 + Self.rleSequences(
-                                    count: 40_000, literals: 0, offset: 10, match: 0,
-                                    [UInt8](repeating: 0x55, count: 7) + [0x80]))),
+                                    count: 40_000,
+                                    literals: 0,
+                                    offset: 10,
+                                    match: 0,
+                                    [UInt8](repeating: 0x55, count: 7) + [0x80]
+                                )
+                        )
+                ),
                 1 << 20, nil
             )
         ]
@@ -276,7 +334,13 @@ func referenceZstdFrame(
                 GuardedBytes.with([UInt8](repeating: 0, count: capacity), against: edge) { target in
                     var consumed = 0
                     let result = fsk_zstd_decompress_frame(
-                        source, frame.count, target, capacity, workspaces.kernel, &consumed)
+                        source,
+                        frame.count,
+                        target,
+                        capacity,
+                        workspaces.kernel,
+                        &consumed
+                    )
                     if let original {
                         #expect(result == Int64(original.count), "\(what)")
                         #expect(Array(UnsafeBufferPointer(start: target, count: original.count)) == original, "\(what)")

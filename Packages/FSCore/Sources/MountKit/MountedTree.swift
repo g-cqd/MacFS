@@ -58,15 +58,20 @@ public struct MountedTree: Sendable {
             if cookie == 0 { page.append(PageEntry(name: [0x2E], kind: .directory, mountID: directory, nextCookie: 2)) }
             let parent = directory == Self.root ? Self.root : parentMountID(of: attributes)
             page.append(
-                PageEntry(name: [0x2E, 0x2E], kind: .directory, mountID: parent, nextCookie: Self.firstEntryCookie))
+                PageEntry(name: [0x2E, 0x2E], kind: .directory, mountID: parent, nextCookie: Self.firstEntryCookie)
+            )
             if page.count >= limit { return Array(page.prefix(limit)) }
         }
         let readerCookie = cookie < Self.firstEntryCookie ? 0 : cookie - Self.firstEntryCookie
         for entry in try fileSystem.entries(of: reader, from: readerCookie, limit: limit - page.count) {
             page.append(
                 PageEntry(
-                    name: entry.name, kind: entry.kind, mountID: try checkedMountID(for: entry.id),
-                    nextCookie: entry.nextCookie + Self.firstEntryCookie))
+                    name: entry.name,
+                    kind: entry.kind,
+                    mountID: try checkedMountID(for: entry.id),
+                    nextCookie: entry.nextCookie + Self.firstEntryCookie
+                )
+            )
         }
         return page
     }

@@ -118,7 +118,11 @@ extension XFSFileSystem {
     /// From the da block at `offset` (of `level`, when known) down to a leaf: in each node, the first entry whose hash is
     /// not below `hash` (the last one if none), each node one level above the next.
     private func descend(
-        from offset: UInt64, _ hash: UInt32, _ directory: XFSInode, level: UInt16?, onto path: inout [Frame]
+        from offset: UInt64,
+        _ hash: UInt32,
+        _ directory: XFSInode,
+        level: UInt16?,
+        onto path: inout [Frame]
     ) throws(DiskError) -> LeafEntries {
         var offset = offset
         var level = level
@@ -177,7 +181,10 @@ extension XFSFileSystem {
 
     /// The data entry at `address` (its byte offset in the directory over 8), if it is named `name`.
     private func dataEntry(
-        _ address: UInt32, named name: [UInt8], _ directory: XFSInode, _ current: inout DataBlock?
+        _ address: UInt32,
+        named name: [UInt8],
+        _ directory: XFSInode,
+        _ current: inout DataBlock?
     ) throws(DiskError) -> XFSDirectory.Entry? {
         let offset = UInt64(address) << 3
         let dirBlockSize = UInt64(superblock.dirBlockSize)
@@ -185,7 +192,10 @@ extension XFSFileSystem {
         if current?.offset != start {
             let block = try directoryBlock(directory, at: start)
             current = DataBlock(
-                offset: start, block: block, end: try XFSDirectory.entriesEnd(block, directory: directory.number))
+                offset: start,
+                block: block,
+                end: try XFSDirectory.entriesEnd(block, directory: directory.number)
+            )
         }
         guard let (block, end) = current.map({ ($0.block, $0.end) }) else { return nil }
         let at = Int(offset % dirBlockSize)

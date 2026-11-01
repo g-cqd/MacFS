@@ -16,7 +16,10 @@ extension ExtFileSystem: BlockMapping {
         let ranges = try runs(inode)
             .map { run in
                 MappedRange(
-                    logical: run.logical * block, length: run.count * block, physical: run.physical.map { $0 * block })
+                    logical: run.logical * block,
+                    length: run.count * block,
+                    physical: run.physical.map { $0 * block }
+                )
             }
         return MappedRange.clip(ranges, offset: offset, length: length, size: inode.size, unit: block)
     }

@@ -60,7 +60,10 @@ enum LZO1XReference {
                 case 64 ... 255:  // M2: 3 to 8 bytes, distance up to 2 KiB
                     let next = try byte()
                     instruction = Instruction(
-                        length: (code >> 5) + 1, distance: ((code >> 2) & 7) + next * 8 + 1, trailing: code & 3)
+                        length: (code >> 5) + 1,
+                        distance: ((code >> 2) & 7) + next * 8 + 1,
+                        trailing: code & 3
+                    )
                 case 32 ... 63:  // M3: distance up to 16 KiB
                     let count = try length(code, 31) + 2
                     let low = try byte()

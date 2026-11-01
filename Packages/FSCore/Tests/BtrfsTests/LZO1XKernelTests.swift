@@ -7,7 +7,10 @@ import Testing
 
 @_silgen_name("fsk_ref_lzo1x_decompress")
 func referenceLZO1X(
-    _ source: UnsafePointer<UInt8>, _ count: Int, _ target: UnsafeMutablePointer<UInt8>, _ capacity: Int
+    _ source: UnsafePointer<UInt8>,
+    _ count: Int,
+    _ target: UnsafeMutablePointer<UInt8>,
+    _ capacity: Int
 ) -> Int64
 
 /// The arm64 LZO1X kernel against the portable C one: the same result and the same bytes up to it, on every liblzo2 stream
@@ -50,7 +53,8 @@ func referenceLZO1X(
                 switch trial % 4 {
                     case 0:
                         damaged[Int(random.next() % UInt64(stream.count))] ^= UInt8(
-                            truncatingIfNeeded: random.next() | 1)
+                            truncatingIfNeeded: random.next() | 1
+                        )
                     case 1:
                         damaged[Int(random.next() % UInt64(stream.count))] = UInt8(truncatingIfNeeded: random.next())
                     case 2: damaged = Array(stream.prefix(1 + Int(random.next() % UInt64(stream.count))))
@@ -83,7 +87,10 @@ func referenceLZO1X(
     }
 
     static func expectGuarded(
-        _ input: [UInt8], capacity: Int, edge: GuardedBytes.Edge, _ what: @autoclosure () -> String
+        _ input: [UInt8],
+        capacity: Int,
+        edge: GuardedBytes.Edge,
+        _ what: @autoclosure () -> String
     ) {
         var reference = [UInt8](repeating: 0, count: max(1, capacity))
         let expected = input.withUnsafeBufferPointer { source in
@@ -98,7 +105,8 @@ func referenceLZO1X(
                 if result == expected, result > 0 {
                     #expect(
                         Array(UnsafeBufferPointer(start: target, count: Int(result)))
-                            == Array(reference[..<Int(result)]))
+                            == Array(reference[..<Int(result)])
+                    )
                 }
             }
         }
@@ -130,16 +138,28 @@ func referenceLZO1X(
                 for tail in 3 ... 8 {
                     let counts = Array(repeating: 8, count: 6) + [5, tail]
                     let (stream, output) = Self.m2Stream(
-                        literals: 24, distance: distance, counts: counts, following: following)
+                        literals: 24,
+                        distance: distance,
+                        counts: counts,
+                        following: following
+                    )
                     Self.expectGuarded(
-                        stream, capacity: output.count, edge: edge, "distance \(distance), \(following), \(tail)")
+                        stream,
+                        capacity: output.count,
+                        edge: edge,
+                        "distance \(distance), \(following), \(tail)"
+                    )
                     let decoded = try? LZO1X.decompress(stream, capacity: output.count)
                     #expect(decoded == output, "distance \(distance), following \(following), tail \(tail)")
                     // Too little room while instructions remain: the moves of the M2 that still fits must stop at the
                     // capacity, and the next one is refused.
                     for short in 1 ... 12 where distance >= 8 {
                         Self.expectGuarded(
-                            stream, capacity: output.count - short, edge: edge, "\(distance), \(following), -\(short)")
+                            stream,
+                            capacity: output.count - short,
+                            edge: edge,
+                            "\(distance), \(following), -\(short)"
+                        )
                     }
                 }
             }

@@ -28,8 +28,10 @@ import Testing
                 .map { line in
                     let column = line.split(separator: "\t").map(String.init)
                     return Case(
-                        suite: suite, image: column[0],
-                        clean: suite == "e2fsprogs" && column.count > 1 && column[1] == "clean")
+                        suite: suite,
+                        image: column[0],
+                        clean: suite == "e2fsprogs" && column.count > 1 && column[1] == "clean"
+                    )
                 }
         }
 
@@ -64,7 +66,8 @@ import Testing
     @Test func theCorpusIsThere() {
         #expect(
             Self.cases.count > 300,
-            "run `swift package --package-path Packages/Tooling --disable-sandbox images --corpus`")
+            "run `swift package --package-path Packages/Tooling --disable-sandbox images --corpus`"
+        )
         #expect(Self.cases.filter(\.clean).count > 10)
     }
 

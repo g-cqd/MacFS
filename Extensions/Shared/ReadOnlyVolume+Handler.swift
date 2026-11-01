@@ -68,7 +68,9 @@ extension ReadOnlyVolume: FSVolume.Handler {
 
     func lookupItem(
         // @dl:accept -- an FSKit requirement; the parameter list is the protocol's
-        named name: FSFileName, in directory: FSItem, context: FSContext,
+        named name: FSFileName,
+        in directory: FSItem,
+        context: FSContext,
         replyHandler reply: @escaping (FSLookupItemResult?, (any Error)?) -> Void
     ) {
         answerLookup(name, in: directory, reply, FSLookupItemResult.init(foundItem:itemName:itemAttributes:))
@@ -77,7 +79,9 @@ extension ReadOnlyVolume: FSVolume.Handler {
     /// A directory's entry by name, made into `T` from the item, its stored name and attributes: both lookups (plain and
     /// kernel-offloaded) answer through here.
     func answerLookup<T>(
-        _ name: FSFileName, in directory: FSItem, _ reply: (T?, (any Error)?) -> Void,
+        _ name: FSFileName,
+        in directory: FSItem,
+        _ reply: (T?, (any Error)?) -> Void,
         _ make: (FSItem, FSFileName, FSItem.Attributes) -> T?
     ) {
         answer(directory, reply, "lookup") { (directory) throws(DiskError) -> T? in
@@ -89,14 +93,19 @@ extension ReadOnlyVolume: FSVolume.Handler {
 
     /// An item's attributes made into `T`: getattr and the end of a kernel-offloaded I/O answer through here.
     func answerAttributes<T>(
-        _ item: FSItem, _ reply: (T?, (any Error)?) -> Void, _ what: String, _ make: (FSItem.Attributes) -> T?
+        _ item: FSItem,
+        _ reply: (T?, (any Error)?) -> Void,
+        _ what: String,
+        _ make: (FSItem.Attributes) -> T?
     ) {
         answer(item, reply, what) { (item) throws(DiskError) -> T? in make(try attributes(item.mountID)) }
     }
 
     func getAttributes(
         // @dl:accept -- an FSKit requirement; the parameter list is the protocol's
-        _ desiredAttributes: FSItem.GetAttributesRequest, of item: FSItem, context: FSContext,
+        _ desiredAttributes: FSItem.GetAttributesRequest,
+        of item: FSItem,
+        context: FSContext,
         replyHandler reply: @escaping (FSGetAttributesResult?, (any Error)?) -> Void
     ) {
         answerAttributes(item, reply, "getattr", FSGetAttributesResult.init(attributes:))
@@ -105,8 +114,12 @@ extension ReadOnlyVolume: FSVolume.Handler {
     // FSKit fixes this signature; the count is the protocol's.
     // swiftlint:disable:next function_parameter_count
     func enumerateDirectory(
-        _ directory: FSItem, startingAt cookie: FSDirectoryCookie, verifier: FSDirectoryVerifier,
-        attributes wanted: FSItem.GetAttributesRequest?, packer: FSDirectoryEntryPacker, context: FSContext,
+        _ directory: FSItem,
+        startingAt cookie: FSDirectoryCookie,
+        verifier: FSDirectoryVerifier,
+        attributes wanted: FSItem.GetAttributesRequest?,
+        packer: FSDirectoryEntryPacker,
+        context: FSContext,
         replyHandler reply: @escaping (FSEnumerateDirectoryResult?, (any Error)?) -> Void
     ) {
         guard let directory = directory as? ReadOnlyItem else { return reply(nil, ModuleError.invalid) }
@@ -120,9 +133,12 @@ extension ReadOnlyVolume: FSVolume.Handler {
                 for entry in page {
                     let attributes = wanted == nil ? nil : try attributes(entry.mountID)
                     let packed = packer.packEntry(
-                        name: FSFileName(data: Data(entry.name)), itemType: Self.type(entry.kind),
+                        name: FSFileName(data: Data(entry.name)),
+                        itemType: Self.type(entry.kind),
                         itemID: FSItem.Identifier(rawValue: entry.mountID) ?? .invalid,
-                        nextCookie: FSDirectoryCookie(rawValue: entry.nextCookie), attributes: attributes)
+                        nextCookie: FSDirectoryCookie(rawValue: entry.nextCookie),
+                        attributes: attributes
+                    )
                     if !packed { break pages }
                     position = entry.nextCookie
                 }
@@ -135,12 +151,16 @@ extension ReadOnlyVolume: FSVolume.Handler {
 
     // @dl:accept -- an FSKit requirement; the parameter list is the protocol's
     func readSymbolicLink(
-        _ item: FSItem, context: FSContext, replyHandler reply: @escaping (FSReadSymlinkResult?, (any Error)?) -> Void
+        _ item: FSItem,
+        context: FSContext,
+        replyHandler reply: @escaping (FSReadSymlinkResult?, (any Error)?) -> Void
     ) {
         answer(item, reply, "readlink") { (item) throws(DiskError) -> FSReadSymlinkResult? in
             let target = try tree.fileSystem.readLink(tree.readerID(for: item.mountID))
             return FSReadSymlinkResult(
-                contents: FSFileName(data: Data(target)), symlinkAttributes: try attributes(item.mountID))
+                contents: FSFileName(data: Data(target)),
+                symlinkAttributes: try attributes(item.mountID)
+            )
         }
     }
 }

@@ -50,9 +50,13 @@ struct NTFSAttribute: Sendable {
             let runsAt = Int(try body.u16(32))
             guard runsAt >= 64, runsAt <= length else { throw .corrupt("mapping pairs at \(runsAt)") }
             nonResident = NonResident(
-                firstVCN: first, runs: try DataRun.decode(try body.slice(from: runsAt), firstVCN: first, lastVCN: last),
-                allocatedSize: try body.u64(40), dataSize: try body.u64(48), initializedSize: try body.u64(56),
-                compressionUnit: try body.u8(34))
+                firstVCN: first,
+                runs: try DataRun.decode(try body.slice(from: runsAt), firstVCN: first, lastVCN: last),
+                allocatedSize: try body.u64(40),
+                dataSize: try body.u64(48),
+                initializedSize: try body.u64(56),
+                compressionUnit: try body.u8(34)
+            )
             value = nil
         }
     }

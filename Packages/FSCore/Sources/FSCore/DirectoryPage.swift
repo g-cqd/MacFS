@@ -2,7 +2,10 @@
 /// entry's next cookie the position after it.
 public enum DirectoryPage {
     public static func page(
-        count: Int, from cookie: UInt64, limit: Int, _ entry: (_ position: Int) throws(DiskError) -> DirectoryEntry
+        count: Int,
+        from cookie: UInt64,
+        limit: Int,
+        _ entry: (_ position: Int) throws(DiskError) -> DirectoryEntry
     ) throws(DiskError) -> [DirectoryEntry] {
         guard cookie < UInt64(count) else { return [] }
         let start = Int(cookie)

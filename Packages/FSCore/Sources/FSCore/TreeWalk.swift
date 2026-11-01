@@ -10,7 +10,10 @@ public enum TreeWalk {
     }
 
     public static func visit(
-        _ fileSystem: any ReadOnlyFileSystem, from start: UInt64? = nil, budget: Int = 1_000_000, pageSize: Int = 64,
+        _ fileSystem: any ReadOnlyFileSystem,
+        from start: UInt64? = nil,
+        budget: Int = 1_000_000,
+        pageSize: Int = 64,
         _ body: (Visit) throws(DiskError) -> Void
     ) throws(DiskError) {
         var pending: [(id: UInt64, path: String)] = [(start ?? fileSystem.rootID, "")]

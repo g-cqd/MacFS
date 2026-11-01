@@ -38,7 +38,10 @@ public enum ReadAssembly {
 
         /// The same, then `inspect` sees the bytes where they landed (a checksum over the result, without reading twice).
         public mutating func read(
-            _ source: any BlockSource, at offset: UInt64, to position: Int, count: Int,
+            _ source: any BlockSource,
+            at offset: UInt64,
+            to position: Int,
+            count: Int,
             inspect: (UnsafeRawBufferPointer) throws(DiskError) -> Void
         ) throws(DiskError) {
             let region = unsafe try claim(position, count)
@@ -56,7 +59,9 @@ public enum ReadAssembly {
         /// `count` bytes at `position` written by `decode` in place (a decoder writing straight into the result, roadmap 0014);
         /// `decode` must write all of them.
         public mutating func fill(
-            to position: Int, count: Int, _ decode: (UnsafeMutableRawBufferPointer) throws(DiskError) -> Void
+            to position: Int,
+            count: Int,
+            _ decode: (UnsafeMutableRawBufferPointer) throws(DiskError) -> Void
         ) throws(DiskError) {
             let region = unsafe try claim(position, count)
             try unsafe decode(region)

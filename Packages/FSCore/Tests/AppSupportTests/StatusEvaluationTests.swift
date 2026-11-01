@@ -5,10 +5,13 @@ import Testing
 /// What the app's status pane says, from what the system reports (FSKit's module list, where the app is installed).
 @Suite struct StatusEvaluationTests {
     static let everyModule = Dictionary(
-        uniqueKeysWithValues: DiskFormat.allCases.map { ($0.moduleBundleIdentifier, true) })
+        uniqueKeysWithValues: DiskFormat.allCases.map { ($0.moduleBundleIdentifier, true) }
+    )
 
     static func facts(
-        path: String = "/Applications/MacFS.app", modules: [String: Bool]? = everyModule, failure: String? = nil
+        path: String = "/Applications/MacFS.app",
+        modules: [String: Bool]? = everyModule,
+        failure: String? = nil
     )
         -> SystemFacts
     {

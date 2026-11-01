@@ -21,14 +21,20 @@ struct XFSExtent: Sendable, Equatable {
     static func fields(_ bytes: DiskBytes, _ at: Int) throws(DiskError) -> Record {
         let (high, low) = (try bytes.be64(at), try bytes.be64(at + 8))
         return Record(
-            logical: high >> 9 & ((1 << 54) - 1), start: (high & 0x1FF) << 43 | low >> 21, count: low & 0x1F_FFFF,
-            unwritten: high >> 63 != 0)
+            logical: high >> 9 & ((1 << 54) - 1),
+            start: (high & 0x1FF) << 43 | low >> 21,
+            count: low & 0x1F_FFFF,
+            unwritten: high >> 63 != 0
+        )
     }
 
     static func decode(_ bytes: DiskBytes, _ at: Int, _ superblock: XFSSuperblock) throws(DiskError) -> XFSExtent {
         let record = try fields(bytes, at)
         return XFSExtent(
-            logical: record.logical, physical: try superblock.diskBlock(record.start), count: record.count,
-            unwritten: record.unwritten)
+            logical: record.logical,
+            physical: try superblock.diskBlock(record.start),
+            count: record.count,
+            unwritten: record.unwritten
+        )
     }
 }

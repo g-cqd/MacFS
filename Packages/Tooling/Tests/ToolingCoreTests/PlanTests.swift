@@ -71,7 +71,9 @@ import ToolingCore
         #expect(plan.steps.count == 1)
         #expect(plan.steps[0].arguments.last == "/scripts/make-bench-images.inner.sh")
         #expect(
-            plan.steps[0].arguments.contains("/repo/BenchImages:/work"), "bench images live apart from the test images")
+            plan.steps[0].arguments.contains("/repo/BenchImages:/work"),
+            "bench images live apart from the test images"
+        )
     }
 
     /// The reference test suites (e2fsprogs' and btrfs-progs' images) are fetched and unpacked in the container, into a
@@ -86,9 +88,17 @@ import ToolingCore
 
     @Test func gatesCoverEveryToolTheWhitePaperNames() {
         let tools = ToolPaths(
-            swift: "/s", swiftlint: "/l", deadwood: "/d", dolly: "/o", arcleak: "/a", fcheck: "/f", modeler: "/m",
+            swift: "/s",
+            swiftlint: "/l",
+            deadwood: "/d",
+            dolly: "/o",
+            arcleak: "/a",
+            fcheck: "/f",
+            modeler: "/m",
             java: "/j",
-            tla2tools: "/t.jar", lake: "/k")
+            tla2tools: "/t.jar",
+            lake: "/k"
+        )
         let plan = Gates.plan(root: Self.root, tools: tools)
         let used = Set(plan.steps.map(\.executable))
         #expect(used == ["/s", "/l", "/d", "/o", "/a", "/f", "/m", "/j", "/k"])
@@ -107,6 +117,7 @@ import ToolingCore
         #expect(
             plan.steps.contains {
                 $0.executable == "/s" && $0.arguments.contains("--strict") && $0.arguments.contains("lint")
-            })
+            }
+        )
     }
 }

@@ -19,7 +19,11 @@ import ToolingCore
 
     func pin(hash: String? = nil) -> AnalyzerLock.Pin {
         AnalyzerLock.Pin(
-            tool: "fcheck", version: "0.4.0", macOS: hash ?? digest, linux: String(repeating: "0", count: 64))
+            tool: "fcheck",
+            version: "0.4.0",
+            macOS: hash ?? digest,
+            linux: String(repeating: "0", count: 64)
+        )
     }
 
     /// curl writes `archive`, tar unpacks `fcheck-0.4.0-macos-arm64/fcheck`, and the tool reports `reported`.
@@ -35,7 +39,10 @@ import ToolingCore
                 let directory = arguments[index + 1] + "/fcheck-0.4.0-macos-arm64"
                 try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
                 FileManager.default.createFile(
-                    atPath: directory + "/fcheck", contents: Data("#!".utf8), attributes: [.posixPermissions: 0o755])
+                    atPath: directory + "/fcheck",
+                    contents: Data("#!".utf8),
+                    attributes: [.posixPermissions: 0o755]
+                )
                 return ProcessResult(status: 0, output: "")
             }
             if arguments == ["--version"] { return ProcessResult(status: 0, output: reported + "\n") }

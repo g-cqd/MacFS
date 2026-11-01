@@ -60,7 +60,8 @@ import ToolingCore
         tree["docs/adr/0003-three.md"] = "---\nstatus: accepted\ndate: 2026-10-30\n---\n"
         #expect(
             DocumentationLayout.problems(tree)
-                .contains("docs/adr/0002-two.md: superseded by 0003, which does not name it"))
+                .contains("docs/adr/0002-two.md: superseded by 0003, which does not name it")
+        )
     }
 
     @Test func sourceStructureCountsTopLevelTypesAndLines() {
@@ -73,7 +74,8 @@ import ToolingCore
             SourceStructure.problems(tree) == [
                 "Sources/A/Long.swift has 251 lines (cap 250)",
                 "Sources/A/Two.swift declares 2 top-level types: Two, Extra"
-            ])
+            ]
+        )
     }
 
     // MARK: This repository
@@ -89,8 +91,10 @@ import ToolingCore
 
     @Test func thisRepositorysSourcesFollowTheStructureRule() throws {
         let tree = try RepositoryFiles.read(
-            root: Self.root.path, under: ["Packages/FSCore/Sources", "Packages/Tooling/Sources", "Extensions", "App"],
-            suffix: ".swift")
+            root: Self.root.path,
+            under: ["Packages/FSCore/Sources", "Packages/Tooling/Sources", "Extensions", "App"],
+            suffix: ".swift"
+        )
         #expect(tree.count > 50)
         #expect(SourceStructure.problems(tree) == [])
     }

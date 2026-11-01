@@ -31,7 +31,9 @@ import Testing
         let source = try ImageOracle.image(name)
         let format = try #require(DiskFormat.detect(source), "\(name): not detected")
         let fileSystem = try #require(
-            try format.open(source) as? any BlockMapping, "\(name): the reader maps no blocks")
+            try format.open(source) as? any BlockMapping,
+            "\(name): the reader maps no blocks"
+        )
         var mappable = 0
         var unmappable: [String] = []
         try TreeWalk.visit(fileSystem) { (visit) throws(DiskError) in
@@ -63,7 +65,8 @@ import Testing
                 let high = part.last.map { $0.logical + $0.length } ?? 0
                 #expect(
                     low <= 5_000 && high >= 8_000 && high - low <= 3_000 + 2 * 131_072,
-                    "\(name): \(visit.path): \(low) to \(high)")
+                    "\(name): \(visit.path): \(low) to \(high)"
+                )
             }
         }
         // Small files are inline or resident in most formats; the large random file is stored as its bytes everywhere (even
@@ -101,11 +104,13 @@ import Testing
                 MappedRange(logical: 4096, length: 4096, physical: 100 * 4096 + 4096),
                 MappedRange(logical: 8192, length: 8192, physical: nil),
                 MappedRange(logical: 16384, length: 4096, physical: 200 * 4096)
-            ])
+            ]
+        )
         #expect(MappedRange.clip(ranges, offset: 30000, length: 10, size: 18000, unit: 4096) == [])
         #expect(
             MappedRange.clip([], offset: 0, length: 10, size: 10, unit: 4096) == [
                 MappedRange(logical: 0, length: 4096, physical: nil)
-            ])
+            ]
+        )
     }
 }

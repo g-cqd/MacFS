@@ -8,9 +8,15 @@ import Testing
     typealias Layout = ExtSuperblock.DescriptorLayout
 
     static let sparse = Layout(
-        blockSize: 1024, descriptorsPerBlock: 16, blocksPerGroup: 1024, firstDataBlock: 1, metaBG: false,
+        blockSize: 1024,
+        descriptorsPerBlock: 16,
+        blocksPerGroup: 1024,
+        firstDataBlock: 1,
+        metaBG: false,
         firstMetaBG: 0,
-        sparseSuper: true, sparseSuper2: nil)
+        sparseSuper: true,
+        sparseSuper2: nil
+    )
 
     @Test func sparseSuperKeepsBackupsInGroupsOneAndPowersOfThreeFiveAndSeven() {
         let groups = (0 ..< 400).filter { Self.sparse.hasSuperblock(UInt64($0)) }

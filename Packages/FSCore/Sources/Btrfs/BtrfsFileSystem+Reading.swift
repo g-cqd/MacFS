@@ -6,8 +6,10 @@ extension BtrfsFileSystem {
         try extentCache.value(for: id) { () throws(DiskError) -> [BtrfsExtent] in
             let (tree, inode) = location(id)
             let items = try trees.items(
-                root: try treeRoot(tree), from: BtrfsKey(inode, BtrfsItem.extentData, 0),
-                to: BtrfsKey(inode, BtrfsItem.extentData, .max))
+                root: try treeRoot(tree),
+                from: BtrfsKey(inode, BtrfsItem.extentData, 0),
+                to: BtrfsKey(inode, BtrfsItem.extentData, .max)
+            )
             var extents: [BtrfsExtent] = []
             for item in items { extents.append(try BtrfsExtent(fileOffset: item.key.offset, item: item.data)) }
             return extents
@@ -20,7 +22,11 @@ extension BtrfsFileSystem {
         switch extent.storage {
             case .inline(let data):
                 return try BtrfsCompression.decompress(
-                    data, method: extent.compression, size: Int(extent.decodedSize), sectorSize: sector)
+                    data,
+                    method: extent.compression,
+                    size: Int(extent.decodedSize),
+                    sectorSize: sector
+                )
             case .regular(let address, let length, _):
                 return try decodedCache.value(for: address) { () throws(DiskError) -> [UInt8] in
                     guard length <= 1 << 20 else { throw .corrupt("compressed extent of \(length) bytes") }
@@ -28,7 +34,11 @@ extension BtrfsFileSystem {
                     let raw = try trees.source.read(at: physical, count: Int(length))
                     if verifyData { try dataChecksums.verify(compressed: raw, at: address) }
                     return try BtrfsCompression.decompress(
-                        raw, method: extent.compression, size: Int(extent.decodedSize), sectorSize: sector)
+                        raw,
+                        method: extent.compression,
+                        size: Int(extent.decodedSize),
+                        sectorSize: sector
+                    )
                 }
             case .preallocated:
                 return []
@@ -48,8 +58,10 @@ extension BtrfsFileSystem {
             throw .notFound
         }
         return InodeItem(
-            kind: NodeKind(posixMode: try item.u32(52)), size: try item.u64(16),
-            verifiesData: try item.u64(64) & BtrfsItem.noDataChecksumFlag == 0)
+            kind: NodeKind(posixMode: try item.u32(52)),
+            size: try item.u64(16),
+            verifiesData: try item.u64(64) & BtrfsItem.noDataChecksumFlag == 0
+        )
     }
 
     public func read(_ id: UInt64, at offset: UInt64, count: Int) throws(DiskError) -> [UInt8] {
@@ -79,29 +91,47 @@ extension BtrfsFileSystem {
                         // Read into the result, then checked there: a mismatch throws, and the result is never returned.
                         let checksums = dataChecksums
                         unsafe try pieces.read(
-                            trees.source, at: try trees.chunks.physical(logical, length: UInt64(span)), to: target,
+                            trees.source,
+                            at: try trees.chunks.physical(logical, length: UInt64(span)),
+                            to: target,
                             count: span
                         ) { (bytes) throws(DiskError) in
                             guard verifyData else { return }
                             try unsafe checksums.verify(
-                                diskStart: address, diskLength: diskLength, from: logical, count: UInt64(span),
-                                read: bytes)
+                                diskStart: address,
+                                diskLength: diskLength,
+                                from: logical,
+                                count: UInt64(span),
+                                read: bytes
+                            )
                         }
                     case .regular(_, _, let start):
                         try Self.copy(
-                            try decoded(extent, verifyData: verifyData), from: Int(start + within), count: span,
-                            into: &pieces, at: target)
+                            try decoded(extent, verifyData: verifyData),
+                            from: Int(start + within),
+                            count: span,
+                            into: &pieces,
+                            at: target
+                        )
                     case .inline:
                         try Self.copy(
-                            try decoded(extent, verifyData: verifyData), from: Int(within), count: span, into: &pieces,
-                            at: target)
+                            try decoded(extent, verifyData: verifyData),
+                            from: Int(within),
+                            count: span,
+                            into: &pieces,
+                            at: target
+                        )
                 }
             }
         }
     }
 
     private static func copy(
-        _ data: [UInt8], from: Int, count: Int, into pieces: inout ReadAssembly.Pieces, at target: Int
+        _ data: [UInt8],
+        from: Int,
+        count: Int,
+        into pieces: inout ReadAssembly.Pieces,
+        at target: Int
     ) throws(DiskError) {
         guard from >= 0, from <= data.count else {
             throw .corrupt("extent offset \(from) past its \(data.count) bytes")

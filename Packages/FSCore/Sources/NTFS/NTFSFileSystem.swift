@@ -27,7 +27,9 @@ public final class NTFSFileSystem: ReadOnlyFileSystem {
         boot = try NTFSBoot(try source.read(at: 0, count: 512))
         // Record 0 describes the MFT itself; its first extent is enough to find any extension record.
         let selfRecord = try NTFSRecord(
-            try source.read(at: boot.mftCluster * UInt64(boot.clusterSize), count: boot.recordSize), number: 0)
+            try source.read(at: boot.mftCluster * UInt64(boot.clusterSize), count: boot.recordSize),
+            number: 0
+        )
         let bootstrap = try NTFSStream(selfRecord.extents(NTFSAttributeType.data), clusterSize: boot.clusterSize)
         let full = try Self.withAttributeList(selfRecord, source: source, boot: boot, mft: bootstrap)
         mft = try NTFSStream(full.extents(NTFSAttributeType.data), clusterSize: boot.clusterSize)
@@ -37,9 +39,12 @@ public final class NTFSFileSystem: ReadOnlyFileSystem {
         var uuid = [UInt8](repeating: 0, count: 16)
         for index in 0 ..< 8 { uuid[index] = UInt8(truncatingIfNeeded: boot.serial >> (8 * index)) }
         volume = VolumeDescription(
-            format: "ntfsro", label: String(decoding: label, as: UTF8.self), uuid: uuid,
+            format: "ntfsro",
+            label: String(decoding: label, as: UTF8.self),
+            uuid: uuid,
             caseRule: .insensitivePreserving,
-            maximumNameLength: 255)
+            maximumNameLength: 255
+        )
     }
 
     // MARK: Records
@@ -56,7 +61,10 @@ public final class NTFSFileSystem: ReadOnlyFileSystem {
 
     /// The record with the attributes its `$ATTRIBUTE_LIST` places in extension records merged in.
     static func withAttributeList(
-        _ record: NTFSRecord, source: any BlockSource, boot: NTFSBoot, mft: NTFSStream
+        _ record: NTFSRecord,
+        source: any BlockSource,
+        boot: NTFSBoot,
+        mft: NTFSStream
     ) throws(DiskError) -> NTFSRecord {
         guard let list = record.first(NTFSAttributeType.attributeList) else { return record }
         let content = try NTFSStream([list], clusterSize: boot.clusterSize)
@@ -125,7 +133,10 @@ public final class NTFSFileSystem: ReadOnlyFileSystem {
             return total > used ? total - used : 0
         }
         return VolumeStatistics(
-            blockSize: boot.clusterSize, totalBlocks: total, freeBlocks: free, files: mft.size / UInt64(boot.recordSize)
+            blockSize: boot.clusterSize,
+            totalBlocks: total,
+            freeBlocks: free,
+            files: mft.size / UInt64(boot.recordSize)
         )
     }
 }

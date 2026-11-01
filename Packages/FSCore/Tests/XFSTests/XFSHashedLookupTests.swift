@@ -59,7 +59,8 @@ import Testing
         let inode = try fileSystem.inode(try XFSImageTests.path(fileSystem, "dir/sub"))
         #expect(inode.size == UInt64(fileSystem.superblock.dirBlockSize))
         let leaf = DiskBytes(
-            try fileSystem.mapped(inode, at: XFSDirectory.leafOffset, count: fileSystem.superblock.dirBlockSize))
+            try fileSystem.mapped(inode, at: XFSDirectory.leafOffset, count: fileSystem.superblock.dirBlockSize)
+        )
         #expect(try leaf.be16(8) == 0x3DF1)
         let names = try fileSystem.listing(inode.number).entries
         #expect(!names.isEmpty)
@@ -71,7 +72,9 @@ import Testing
     func everyNameTheKernelMadeIsFoundByHash(_ image: String) throws {
         let fileSystem = try XFSFileSystem(source: try ImageOracle.image(image))
         let text = try String(
-            contentsOf: ImageOracle.directory.appendingPathComponent("\(image).names"), encoding: .utf8)
+            contentsOf: ImageOracle.directory.appendingPathComponent("\(image).names"),
+            encoding: .utf8
+        )
         var directories: [String: XFSInode] = [:]
         var (checked, wrong): (Int, [String]) = (0, [])
         for line in text.split(separator: "\n") {
@@ -87,7 +90,8 @@ import Testing
         #expect(wrong.isEmpty, "\(wrong.count) wrong, first \(wrong.prefix(3))")
         #expect(
             checked == (image == "xfs-hash" ? 252_540 : 5_840) + 3 * (Self.oneByte.count + Self.dotLed.count)
-                - Self.removed(image))
+                - Self.removed(image)
+        )
     }
 
     /// The one-byte and dot-led names the image script adds to block/, leaf/ and deep/ (after the removals): the shortest
@@ -132,7 +136,9 @@ import Testing
     /// The names the kernel made in xfs-hash's deep/, in the order of the .names file.
     static func deepNames() throws -> [[UInt8]] {
         let text = try String(
-            contentsOf: ImageOracle.directory.appendingPathComponent("xfs-hash.names"), encoding: .utf8)
+            contentsOf: ImageOracle.directory.appendingPathComponent("xfs-hash.names"),
+            encoding: .utf8
+        )
         return text.split(separator: "\n").filter { $0.hasPrefix("deep\t") }
             .map { Array($0.split(separator: "\t", omittingEmptySubsequences: false)[1].utf8) }
     }

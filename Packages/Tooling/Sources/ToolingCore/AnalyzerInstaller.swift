@@ -41,7 +41,9 @@ public struct AnalyzerInstaller: Sendable {
         // The whole directory: an archive may carry libraries beside the binary.
         try? files.removeItem(atPath: directory)
         try files.createDirectory(
-            atPath: (directory as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+            atPath: (directory as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true
+        )
         try files.copyItem(atPath: "\(scratch)/\(pin.archive)", toPath: directory)
         let version = try reported(binary)
         guard version == pin.version else {

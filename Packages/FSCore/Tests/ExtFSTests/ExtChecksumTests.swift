@@ -38,7 +38,8 @@ struct PatchedSource: BlockSource {
             let index = number - 1
             let group = index / UInt64(superblock.inodesPerGroup)
             let descriptor = DiskBytes(
-                try source.read(at: descriptorTable + group * UInt64(superblock.descriptorSize), count: 64))
+                try source.read(at: descriptorTable + group * UInt64(superblock.descriptorSize), count: 64)
+            )
             let high = superblock.is64Bit ? UInt64(try descriptor.u32(0x28)) << 32 : 0
             let table = high | UInt64(try descriptor.u32(8))
             return table * blockSize + index % UInt64(superblock.inodesPerGroup) * UInt64(superblock.inodeSize)
@@ -144,7 +145,9 @@ struct PatchedSource: BlockSource {
         let patched = try layout.flipped(block * layout.blockSize + layout.blockSize - 12 + 7)  // the tail's type, 0xDE
         let fileSystem = try ExtFileSystem(source: patched)
         Self.expectChecksumError(
-            { _ = try fileSystem.entries(of: directory.number, from: 0, limit: 100) }, "tailless block")
+            { _ = try fileSystem.entries(of: directory.number, from: 0, limit: 100) },
+            "tailless block"
+        )
     }
 
     /// An htree's index blocks carry a `dx_tail` after their entries (roadmap 0016): a changed hash in the root is caught.

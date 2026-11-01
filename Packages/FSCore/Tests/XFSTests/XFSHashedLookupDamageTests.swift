@@ -108,7 +108,9 @@ import Testing
         try damaged.change(at: logical, recompute: false) { $0[70] ^= 1 }
         let (fileSystem, inode) = try damaged.patched()
         XFSChecksumTests.expectChecksumError(
-            { _ = try fileSystem.hashedLookup(Self.collideName, in: inode) }, "\(which)")
+            { _ = try fileSystem.hashedLookup(Self.collideName, in: inode) },
+            "\(which)"
+        )
     }
 
     /// Another directory's block (owner at 48) or a block of another kind (magic at 8), its checksum right.
@@ -119,7 +121,8 @@ import Testing
         let (fileSystem, inode) = try damaged.patched()
         guard case .corrupt = Self.error(fileSystem, inode, Self.collideName) else {
             Issue.record(
-                "\(which), byte \(byte): \(String(describing: Self.error(fileSystem, inode, Self.collideName)))")
+                "\(which), byte \(byte): \(String(describing: Self.error(fileSystem, inode, Self.collideName)))"
+            )
             return
         }
     }
@@ -139,7 +142,8 @@ import Testing
         (fileSystem, inode) = try damaged.patched()
         #expect(
             Self.error(fileSystem, inode, names[0].name)
-                == .corrupt("directory \(inode.number): a leaf of \(count) entries and \(bests + 1) bests"))
+                == .corrupt("directory \(inode.number): a leaf of \(count) entries and \(bests + 1) bests")
+        )
     }
 
     /// A da block's entries may fill it, and no more (the node's and the leaf's most entries): the root of xfs-hash-1k's
@@ -222,7 +226,8 @@ import Testing
         let lastCount = Int(try damaged.block(at: lastLeaf).be16(56))
         let firstLeaf = try damaged.block(at: try damaged.child(of: right, 0))
         let index = try #require(
-            try (0 ..< Int(try firstLeaf.be16(56))).first { (index) throws in try firstLeaf.be32(68 + 8 * index) != 0 })
+            try (0 ..< Int(try firstLeaf.be16(56))).first { (index) throws in try firstLeaf.be32(68 + 8 * index) != 0 }
+        )
         let hash = try firstLeaf.be32(64 + 8 * index)
         let name = try damaged.name(at: try firstLeaf.be32(68 + 8 * index))
         #expect(XFSDirectoryHash.hash(name) == hash)
@@ -240,7 +245,8 @@ import Testing
         for path in ["collide", "deep"] {
             let inode = try fileSystem.inode(try XFSImageTests.path(fileSystem, path))
             let root = DiskBytes(
-                try fileSystem.mapped(inode, at: Self.root, count: fileSystem.superblock.dirBlockSize))
+                try fileSystem.mapped(inode, at: Self.root, count: fileSystem.superblock.dirBlockSize)
+            )
             let (low, high) = (try root.be32(64), try root.be32(64 + 8 * (Int(try root.be16(56)) - 1)))
             var outside: (below: [UInt8]?, above: [UInt8]?) = (nil, nil)
             for index in 0 ..< 10_000_000 where outside.below == nil || outside.above == nil {

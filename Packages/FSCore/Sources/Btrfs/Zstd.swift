@@ -24,7 +24,11 @@ enum Zstd {
             var at = 0
             while at < input.count {
                 let (bytes, consumed) = try unsafe frame(
-                    input, from: at, into: target.baseAddress! + produced, capacity: capacity - produced)
+                    input,
+                    from: at,
+                    into: target.baseAddress! + produced,
+                    capacity: capacity - produced
+                )
                 produced += bytes
                 at += consumed
             }
@@ -35,14 +39,23 @@ enum Zstd {
 
     /// One frame of `input` from `start` into `target`, with a workspace of its own.
     @unsafe private static func frame(
-        _ input: [UInt8], from start: Int, into target: UnsafeMutablePointer<UInt8>, capacity: Int
+        _ input: [UInt8],
+        from start: Int,
+        into target: UnsafeMutablePointer<UInt8>,
+        capacity: Int
     ) throws(DiskError) -> (Int, Int) {
         let workspace = UnsafeMutableRawPointer.allocate(byteCount: fsk_zstd_workspace_size(), alignment: 16)
         defer { unsafe workspace.deallocate() }
         var consumed = 0
         let result = input.withUnsafeBufferPointer { source in
             unsafe fsk_zstd_decompress_frame(
-                source.baseAddress! + start, source.count - start, target, capacity, workspace, &consumed)
+                source.baseAddress! + start,
+                source.count - start,
+                target,
+                capacity,
+                workspace,
+                &consumed
+            )
         }
         if result == -2 { throw .unsupported("zstd frames that need a dictionary") }
         guard result >= 0, consumed > 0 else { throw .corrupt("zstd: a malformed frame") }

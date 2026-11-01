@@ -29,10 +29,16 @@ if path == "--tree", arguments.count > 1 {
         let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
         print(
             String(
-                format: "round %d: native %@: %d nodes, %.1f MB in %.3f s (%.0f MB/s, %.0f nodes/s)", round,
+                format: "round %d: native %@: %d nodes, %.1f MB in %.3f s (%.0f MB/s, %.0f nodes/s)",
+                round,
                 arguments[1],
-                result.nodes, Double(result.bytes) / 1e6, seconds, Double(result.bytes) / 1e6 / seconds,
-                Double(result.nodes) / seconds))
+                result.nodes,
+                Double(result.bytes) / 1e6,
+                seconds,
+                Double(result.bytes) / 1e6 / seconds,
+                Double(result.nodes) / seconds
+            )
+        )
     }
     exit(0)
 }
@@ -71,9 +77,17 @@ do {
         let seconds = Double(DispatchTime.now().uptimeNanoseconds - began) / 1e9
         print(
             String(
-                format: "round %d: %@ %@: %d nodes, %.1f MB in %.3f s (%.0f MB/s, %.0f nodes/s)", round,
-                format.displayName, fileSystem.volume.label, nodes, Double(bytes) / 1e6, seconds,
-                Double(bytes) / 1e6 / seconds, Double(nodes) / seconds))
+                format: "round %d: %@ %@: %d nodes, %.1f MB in %.3f s (%.0f MB/s, %.0f nodes/s)",
+                round,
+                format.displayName,
+                fileSystem.volume.label,
+                nodes,
+                Double(bytes) / 1e6,
+                seconds,
+                Double(bytes) / 1e6 / seconds,
+                Double(nodes) / seconds
+            )
+        )
     }
 } catch {
     print("fsprobe: \(error)")

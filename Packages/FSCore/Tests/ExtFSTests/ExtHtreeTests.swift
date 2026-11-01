@@ -11,7 +11,9 @@ import Testing
     /// hash versions 0 to 5 (legacy, half-MD4, TEA, signed then unsigned) and two seeds.
     @Test func everyDirectoryHashMatchesE2fsprogs() throws {
         let text = try String(
-            contentsOf: ImageOracle.directory.appendingPathComponent("dxhash.txt"), encoding: .utf8)
+            contentsOf: ImageOracle.directory.appendingPathComponent("dxhash.txt"),
+            encoding: .utf8
+        )
         var checked = 0
         for line in text.split(separator: "\n") {
             let fields = line.split(separator: "\t").map(String.init)
@@ -30,7 +32,8 @@ import Testing
             let hash = ExtDirectoryHash.hash(name, version: version, seed: seed)
             #expect(
                 hash?.major == expected.0 && hash?.minor == expected.1,
-                "version \(version), \(fields[2]), seed \(fields[1])")
+                "version \(version), \(fields[2]), seed \(fields[1])"
+            )
             checked += 1
         }
         #expect(checked == 900)
@@ -123,7 +126,9 @@ import Testing
         let sub = try plain.inode(try Self.path(plain, "dir/sub"))
         let root = try #require(try plain.runs(sub).first?.physical)
         let patched = PatchedSource(
-            base: image, patches: [root * UInt64(plain.superblock.blockSize) + UInt64(offset): value])
+            base: image,
+            patches: [root * UInt64(plain.superblock.blockSize) + UInt64(offset): value]
+        )
         let fileSystem = try ExtFileSystem(source: patched)
         guard case .notIndexed = try fileSystem.indexedLookup(Array("f1.txt".utf8), in: sub) else {
             Issue.record("\(what): followed")
@@ -170,7 +175,8 @@ import Testing
         let marked = hash | 1
         let at = try #require(runs.first?.physical) * UInt64(plain.superblock.blockSize) + 32 + 16
         let patches = Dictionary(
-            uniqueKeysWithValues: (0 ..< 4).map { (at + UInt64($0), UInt8(truncatingIfNeeded: marked >> (8 * $0))) })
+            uniqueKeysWithValues: (0 ..< 4).map { (at + UInt64($0), UInt8(truncatingIfNeeded: marked >> (8 * $0))) }
+        )
         let fileSystem = try ExtFileSystem(source: PatchedSource(base: image, patches: patches))
         guard case .found(let found) = try fileSystem.indexedLookup(lowest.name, in: sub) else {
             Issue.record("\(String(decoding: lowest.name, as: UTF8.self)) should be found in the next leaf")

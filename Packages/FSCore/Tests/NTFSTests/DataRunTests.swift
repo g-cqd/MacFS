@@ -20,7 +20,8 @@ import Testing
                 DataRun(vcn: 0x18, length: 4, cluster: 0x5624),
                 DataRun(vcn: 0x1C, length: 8, cluster: nil),
                 DataRun(vcn: 0x24, length: 2, cluster: 0x15624)
-            ])
+            ]
+        )
     }
 
     @Test func runsBeforeClusterZeroAreCorrupt() {

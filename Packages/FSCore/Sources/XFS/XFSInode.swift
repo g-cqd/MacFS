@@ -62,10 +62,13 @@ struct XFSInode: Sendable {
         if flags2 & 0x08 != 0 {
             let value = try raw.be64(offset)
             return Timestamp(
-                seconds: Int64(value / 1_000_000_000) - (1 << 31), nanoseconds: Int32(value % 1_000_000_000))
+                seconds: Int64(value / 1_000_000_000) - (1 << 31),
+                nanoseconds: Int32(value % 1_000_000_000)
+            )
         }
         return Timestamp(
             seconds: Int64(Int32(bitPattern: try raw.be32(offset))),
-            nanoseconds: Int32(bitPattern: try raw.be32(offset + 4)))
+            nanoseconds: Int32(bitPattern: try raw.be32(offset + 4))
+        )
     }
 }

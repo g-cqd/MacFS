@@ -25,25 +25,37 @@ public enum StatusEvaluation {
             installed
                 ? StatusCheck(id: "app.location", title: "Installed in Applications", state: .ok, detail: facts.appPath)
                 : StatusCheck(
-                    id: "app.location", title: "Not in Applications", state: .attention,
+                    id: "app.location",
+                    title: "Not in Applications",
+                    state: .attention,
                     detail:
                         "macOS registers file system modules only for an app in /Applications. Running from \(facts.appPath).",
-                    remedy: .moveToApplications))
+                    remedy: .moveToApplications
+                )
+        )
         if let failure = facts.queryFailure {
             checks.append(
                 StatusCheck(
-                    id: "fskit.query", title: "FSKit did not answer", state: .failed,
-                    detail: "The list of file system modules could not be read: \(failure)"))
+                    id: "fskit.query",
+                    title: "FSKit did not answer",
+                    state: .failed,
+                    detail: "The list of file system modules could not be read: \(failure)"
+                )
+            )
         }
         for format in DiskFormat.allCases {
             checks.append(module(format, facts: facts, installed: installed))
         }
         checks.append(
             StatusCheck(
-                id: "note.ntfs", title: "NTFS and macOS", state: .information,
+                id: "note.ntfs",
+                title: "NTFS and macOS",
+                state: .information,
                 detail:
                     "macOS's own read-only NTFS driver mounts NTFS volumes before any module. To use MacFS for one, mount it with "
-                    + "mount -F -t \(DiskFormat.ntfs.shortName), or use the in-app browser."))
+                    + "mount -F -t \(DiskFormat.ntfs.shortName), or use the in-app browser."
+            )
+        )
         return checks
     }
 
@@ -56,21 +68,30 @@ public enum StatusEvaluation {
         switch facts.modules[format.moduleBundleIdentifier] {
             case true:
                 return StatusCheck(
-                    id: id, title: title, state: .ok,
-                    detail: "Enabled. Volumes mount automatically, read-only (mount -t \(format.shortName)).")
+                    id: id,
+                    title: title,
+                    state: .ok,
+                    detail: "Enabled. Volumes mount automatically, read-only (mount -t \(format.shortName))."
+                )
             case false:
                 return StatusCheck(
-                    id: id, title: title, state: .attention,
+                    id: id,
+                    title: title,
+                    state: .attention,
                     detail:
                         "Installed but not enabled: turn it on in System Settings → General → Login Items & Extensions.",
-                    remedy: .openExtensionSettings)
+                    remedy: .openExtensionSettings
+                )
             case nil:
                 return StatusCheck(
-                    id: id, title: title, state: .failed,
+                    id: id,
+                    title: title,
+                    state: .failed,
                     detail: installed
                         ? "Not registered with FSKit. Reinstall MacFS to register its modules."
                         : "Not registered: the app is not in /Applications.",
-                    remedy: installed ? .reinstall : .moveToApplications)
+                    remedy: installed ? .reinstall : .moveToApplications
+                )
         }
     }
 
@@ -85,7 +106,8 @@ public enum StatusEvaluation {
             case .attention, .failed:
                 return Summary(
                     state: worst,
-                    headline: needing == 1 ? "1 item needs attention." : "\(needing) items need attention.")
+                    headline: needing == 1 ? "1 item needs attention." : "\(needing) items need attention."
+                )
         }
     }
 

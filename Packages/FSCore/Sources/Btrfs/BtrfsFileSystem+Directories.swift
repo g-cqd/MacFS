@@ -28,8 +28,11 @@ extension BtrfsFileSystem {
         let (tree, inode) = location(directory)
         guard try attributes(of: directory).kind == .directory else { throw .notDirectory }
         let items = try trees.items(
-            root: try treeRoot(tree), from: BtrfsKey(inode, BtrfsItem.dirIndex, cookie),
-            to: BtrfsKey(inode, BtrfsItem.dirIndex, .max), limit: limit)
+            root: try treeRoot(tree),
+            from: BtrfsKey(inode, BtrfsItem.dirIndex, cookie),
+            to: BtrfsKey(inode, BtrfsItem.dirIndex, .max),
+            limit: limit
+        )
         var listed: [DirectoryEntry] = []
         for item in items {
             guard let first = try BtrfsDirectoryItem.all(in: item.data).first else { continue }

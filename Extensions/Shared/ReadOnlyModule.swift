@@ -30,7 +30,9 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
     }
 
     func loadResource(
-        resource: FSResource, options: FSTaskOptions, replyHandler: @escaping (FSVolume?, (any Error)?) -> Void
+        resource: FSResource,
+        options: FSTaskOptions,
+        replyHandler: @escaping (FSVolume?, (any Error)?) -> Void
     ) {
         guard let device = resource as? FSBlockDeviceResource else { return replyHandler(nil, ModuleError.invalid) }
         do throws(DiskError) {

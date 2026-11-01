@@ -45,7 +45,11 @@ extension ExtFileSystem {
         }
         guard let entry = found else { throw .notFound }
         return DirectoryEntry(
-            name: entry.name, id: entry.inode, kind: ExtDirectoryBlock.kind(entry.type), nextCookie: 0)
+            name: entry.name,
+            id: entry.inode,
+            kind: ExtDirectoryBlock.kind(entry.type),
+            nextCookie: 0
+        )
     }
 
     public func entries(of directory: UInt64, from cookie: UInt64, limit: Int) throws(DiskError) -> [DirectoryEntry] {
@@ -55,8 +59,11 @@ extension ExtFileSystem {
             (position) throws(DiskError) in
             let entry = entries[position]
             return DirectoryEntry(
-                name: entry.name, id: entry.inode, kind: ExtDirectoryBlock.kind(entry.type),
-                nextCookie: UInt64(position + 1))
+                name: entry.name,
+                id: entry.inode,
+                kind: ExtDirectoryBlock.kind(entry.type),
+                nextCookie: UInt64(position + 1)
+            )
         }
     }
 

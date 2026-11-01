@@ -5,11 +5,16 @@ import ToolingCore
     @Test func anEnvironmentOverrideWinsThenPinnedPathsThenThePath() {
         let present: Set<String> = ["/env/dolly", "/cache/dolly-0.11.0/dolly", "/usr/bin/dolly", "/opt/bin/swiftlint"]
         let locator = ToolLocator(
-            environment: ["MACFS_DOLLY": "/env/dolly", "PATH": "/usr/bin:/opt/bin"], home: "/home",
-            isExecutable: { present.contains($0) })
+            environment: ["MACFS_DOLLY": "/env/dolly", "PATH": "/usr/bin:/opt/bin"],
+            home: "/home",
+            isExecutable: { present.contains($0) }
+        )
         #expect(locator.find("dolly", pinned: ["/cache/dolly-0.11.0/dolly"]) == "/env/dolly")
         let noOverride = ToolLocator(
-            environment: ["PATH": "/usr/bin:/opt/bin"], home: "/home", isExecutable: { present.contains($0) })
+            environment: ["PATH": "/usr/bin:/opt/bin"],
+            home: "/home",
+            isExecutable: { present.contains($0) }
+        )
         #expect(noOverride.find("dolly", pinned: ["/cache/dolly-0.11.0/dolly"]) == "/cache/dolly-0.11.0/dolly")
         #expect(noOverride.find("swiftlint") == "/opt/bin/swiftlint")
         #expect(noOverride.find("absent") == nil)
@@ -17,8 +22,10 @@ import ToolingCore
 
     @Test func anOverrideThatIsNotExecutableIsNotUsed() {
         let locator = ToolLocator(
-            environment: ["MACFS_DOLLY": "/missing", "PATH": "/usr/bin"], home: "/h",
-            isExecutable: { $0 == "/usr/bin/dolly" })
+            environment: ["MACFS_DOLLY": "/missing", "PATH": "/usr/bin"],
+            home: "/h",
+            isExecutable: { $0 == "/usr/bin/dolly" }
+        )
         #expect(locator.find("dolly") == "/usr/bin/dolly")
     }
 

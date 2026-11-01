@@ -18,12 +18,16 @@ extension XFSFileSystem: BlockMapping {
         for extent in try extents(inode) {
             if extent.logical > next {
                 ranges.append(
-                    MappedRange(logical: next * block, length: (extent.logical - next) * block, physical: nil))
+                    MappedRange(logical: next * block, length: (extent.logical - next) * block, physical: nil)
+                )
             }
             ranges.append(
                 MappedRange(
-                    logical: extent.logical * block, length: extent.count * block,
-                    physical: extent.unwritten ? nil : extent.physical * block))
+                    logical: extent.logical * block,
+                    length: extent.count * block,
+                    physical: extent.unwritten ? nil : extent.physical * block
+                )
+            )
             next = extent.end
         }
         let last = (inode.size + block - 1) / block

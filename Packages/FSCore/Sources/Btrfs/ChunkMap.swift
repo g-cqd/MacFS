@@ -27,7 +27,8 @@ struct ChunkMap: Sendable {
             throw .corrupt("chunk at \(logical): length \(length), \(stripes) stripes")
         }
         var physical: Result<UInt64, DiskError> = .failure(
-            .unsupported("chunk at \(logical) has no copy on this device"))
+            .unsupported("chunk at \(logical) has no copy on this device")
+        )
         if type & Self.stripedProfiles != 0, stripes > 1 {
             physical = .failure(.unsupported("striped chunk at \(logical) (profile \(type))"))
         } else {

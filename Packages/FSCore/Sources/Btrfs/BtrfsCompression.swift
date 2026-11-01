@@ -64,7 +64,8 @@ enum BtrfsCompression {
                     do throws(DiskError) {
                         return try unsafe LZO1X.decompress(
                             UnsafeBufferPointer(rebasing: source[start ..< start + length]),
-                            into: UnsafeMutableBufferPointer(rebasing: target[produced ..< produced + room]))
+                            into: UnsafeMutableBufferPointer(rebasing: target[produced ..< produced + room])
+                        )
                     } catch {
                         failure = error
                         return 0

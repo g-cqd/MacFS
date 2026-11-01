@@ -5,7 +5,8 @@ public enum SourceStructure {
     // A declaration at column 0, after attributes and modifiers: `public final class Name`.
     private static let declaration = pattern(
         "^(?:@[A-Za-z]+(?:\\([^)]*\\))? +)*(?:(?:public|package|internal|fileprivate|private|final|open|indirect|nonisolated) +)*"
-            + "(?:struct|class|enum|protocol|actor) +([A-Za-z_][A-Za-z0-9_]*)")
+            + "(?:struct|class|enum|protocol|actor) +([A-Za-z_][A-Za-z0-9_]*)"
+    )
 
     public static func problems(_ tree: [String: String]) -> [String] {
         var problems: [String] = []

@@ -4,7 +4,10 @@ import FSCore
 enum ExtIndirectMap {
     /// Runs covering logical blocks `[first, first + count)`, merged where physically contiguous.
     static func runs(
-        _ area: DiskBytes, first: UInt64, count: UInt64, blockSize: Int,
+        _ area: DiskBytes,
+        first: UInt64,
+        count: UInt64,
+        blockSize: Int,
         readBlock: (UInt64) throws(DiskError) -> DiskBytes
     ) throws(DiskError) -> [ExtRun] {
         let perBlock = UInt64(blockSize / 4)
@@ -24,7 +27,10 @@ enum ExtIndirectMap {
     }
 
     private static func lookup(
-        _ logical: UInt64, area: DiskBytes, perBlock: UInt64, readBlock: (UInt64) throws(DiskError) -> DiskBytes
+        _ logical: UInt64,
+        area: DiskBytes,
+        perBlock: UInt64,
+        readBlock: (UInt64) throws(DiskError) -> DiskBytes
     ) throws(DiskError) -> UInt64? {
         var index = logical
         if index < 12 { return try pointer(area, Int(index)) }

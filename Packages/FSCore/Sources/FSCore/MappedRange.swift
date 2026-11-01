@@ -14,7 +14,11 @@ public struct MappedRange: Sendable, Equatable {
     /// `ranges` (a file's, ascending, in bytes) cut to the units covering [`offset`, `offset + length`) and to the file's last
     /// unit, with every gap between them zero: what a block map answers.
     public static func clip(
-        _ ranges: [MappedRange], offset: UInt64, length: UInt64, size: UInt64, unit: UInt64
+        _ ranges: [MappedRange],
+        offset: UInt64,
+        length: UInt64,
+        size: UInt64,
+        unit: UInt64
     ) -> [MappedRange] {
         guard unit > 0 else { return [] }
         let start = offset / unit * unit
@@ -31,7 +35,11 @@ public struct MappedRange: Sendable, Equatable {
             if from > cursor { result.append(MappedRange(logical: cursor, length: from - cursor, physical: nil)) }
             result.append(
                 MappedRange(
-                    logical: from, length: to - from, physical: range.physical.map { $0 + from - range.logical }))
+                    logical: from,
+                    length: to - from,
+                    physical: range.physical.map { $0 + from - range.logical }
+                )
+            )
             cursor = to
         }
         if cursor < end { result.append(MappedRange(logical: cursor, length: end - cursor, physical: nil)) }
