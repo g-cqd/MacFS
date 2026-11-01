@@ -1,6 +1,9 @@
 /// A volume that also takes changes (ADR-0018): the seam every mount path writes through. Grows with each slice of the
 /// writers (roadmap 0026): writing files, creating and removing names.
 public protocol WritableFileSystem: ReadOnlyFileSystem {
+    /// Starts writing on `device`, the one the volume reads: refuses what the format's writer does not maintain, by name. A mount
+    /// path calls it at activation, when the mount was not asked to be read-only.
+    func beginWriting(on device: any WritableBlockSource) throws(DiskError)
     /// A new, empty file or directory named `name` in `directory`, owned by `owner` with permissions `mode`; its identifier.
     func create(
         _ name: [UInt8],

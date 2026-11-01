@@ -24,11 +24,21 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
         answer(file, reply, "blockmap") { (file) throws(DiskError) -> FSBlockmapResult? in
             guard let mapping = tree.fileSystem as? any BlockMapping else { throw .unsupported("no block maps") }
             let id = tree.readerID(for: file.mountID)
-            log.debug("blockmap \(id) at \(offset) for \(length), operation \(operationID.rawValue)")
-            if operationID != .unspecified {
-                try mapping.prepareMappedRead(id, offset: UInt64(offset), length: UInt64(length))
+            log.info(
+                "blockmap \(id) at \(offset) for \(length), flags \(flags.rawValue), operation \(operationID.rawValue)"
+            )
+            let ranges: [MappedRange]
+            if flags.contains(.write) {
+                // The kernel is about to write: the writer allocates, zeroes and links the range first (roadmap 0046).
+                guard let writer = writer.withLock({ $0 }) as? any WritableBlockMapping else { throw .readOnly }
+                ranges = try writer.mapForWriting(id, offset: UInt64(offset), length: UInt64(length))
+            } else {
+                if operationID != .unspecified {
+                    try mapping.prepareMappedRead(id, offset: UInt64(offset), length: UInt64(length))
+                }
+                ranges = try mapping.blockMap(id, offset: UInt64(offset), length: UInt64(length))
             }
-            pack: for range in try mapping.blockMap(id, offset: UInt64(offset), length: UInt64(length)) {
+            pack: for range in ranges {
                 var done: UInt64 = 0
                 while done < range.length {
                     let piece = min(range.length - done, Self.longestExtent)
@@ -44,8 +54,8 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
                     if !more { break pack }
                 }
             }
-            // A read-only volume's free space never changes.
-            return FSBlockmapResult(freeSpace: .noUpdate)
+            // A read-only volume's free space never changes; a writable one's FSKit asks for again.
+            return FSBlockmapResult(freeSpace: flags.contains(.write) ? nil : .noUpdate)
         }
     }
 
@@ -60,6 +70,25 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
         operationID: FSOperationID,
         replyHandler reply: @escaping @Sendable (FSCompleteIOResult?, (any Error)?) -> Void
     ) {
+        // `status` is never touched. FSKit passes nil for a success (its documentation) through a parameter its header
+        // declares non-null, so Swift holds a null `any Error`; in this build every way of reading it opened it first
+        // (swift_getErrorValue) and crashed the module, even reading its bits out of line (diary 2026-11-01-18). So a write
+        // completion is taken as a success: had the kernel's write failed, the size would cover blocks `mapForWriting`
+        // zeroed, never another file's bytes, and nothing the file held before changes.
+        // A finished write: the writer grows the size over it and moves the times.
+        if flags.contains(.write), let item = file as? ReadOnlyItem,
+            let writer = writer.withLock({ $0 }) as? any WritableBlockMapping
+        {
+            do throws(DiskError) {
+                try writer.completeWrite(
+                    tree.readerID(for: item.mountID),
+                    offset: UInt64(offset),
+                    length: UInt64(length)
+                )
+            } catch {
+                return reply(nil, error.fskit)
+            }
+        }
         answerAttributes(file, reply, "completeIO", FSCompleteIOResult.init(itemAttributes:))
     }
 
@@ -83,5 +112,8 @@ extension ReadOnlyVolume: FSVolume.KernelOffloadedIOHandler {
         packer: FSExtentPacker,
         context: FSContext,
         replyHandler reply: @escaping @Sendable (FSCreateFileKOIOResult?, (any Error)?) -> Void
-    ) { reply(nil, ModuleError.readOnly) }
+    ) {
+        // A new file has no blocks yet: the kernel asks for them (blockmapFile, for writing) when it writes.
+        answerCreate(name, .file, in: directory, newAttributes, reply, FSCreateFileKOIOResult.init)
+    }
 }

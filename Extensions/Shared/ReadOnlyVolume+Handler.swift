@@ -36,7 +36,16 @@ extension ReadOnlyVolume: FSVolume.Handler {
         return result
     }
 
-    var requestedMountOptions: FSVolume.MountOptions { .readOnly }
+    /// Read-write only once the format's writer began (`activateVolume`): never for an automount's `rdonly`.
+    var requestedMountOptions: FSVolume.MountOptions {
+        // FSKit asks after `activateVolume` (measured): read-write only once the writer began.
+        let writes = writer.withLock { $0 != nil }
+        log.info("requested mount options asked: \(writes ? "read-write" : "read-only", privacy: .public)")
+        return writes ? [] : .readOnly
+    }
+
+    /// FSKit asks for one of the two (it logged that the volume answered neither): ext's limit with 64-bit sizes.
+    var maximumFileSize: UInt64 { UInt64(Int64.max) }
 
     // MARK: PathConf
 
@@ -50,18 +59,69 @@ extension ReadOnlyVolume: FSVolume.Handler {
     func activateVolume(options: FSTaskOptions, replyHandler reply: @escaping (FSActivateResult?, (any Error)?) -> Void)
     {
         log.info("activate, options: \(options.taskOptions, privacy: .public)")
+        // Writable only when asked: no `rdonly` among the options, a writable device, a format that writes and accepts this
+        // volume. Refused, the volume stays read-only and says why; asking to write never fails a mount (ADR-0018).
+        if !Self.isReadOnly(options.taskOptions), device.isWritable,
+            let writable = tree.fileSystem as? any WritableFileSystem
+        {
+            do throws(DiskError) {
+                try writable.beginWriting(on: BlockDeviceSource(device))
+                writer.withLock { $0 = writable }
+                log.info("writing on \(self.device.bsdName, privacy: .public)")
+            } catch {
+                log.error("read-only: \(String(describing: error), privacy: .public)")
+            }
+        }
         reply(FSActivateResult(rootItem: item(MountedTree.root)), nil)
     }
 
     func deactivateVolume(options: FSDeactivateOptions = [], replyHandler reply: @escaping ((any Error)?) -> Void) {
-        reply(nil)
+        reply(closeWriter())
+    }
+
+    /// The writer's unmount: changes durable, the volume clean again. Once, whichever of unmount and deactivate comes first.
+    func closeWriter() -> (any Error)? {
+        guard
+            let writer = writer.withLock({ (writer) -> (any WritableFileSystem)? in
+                defer { writer = nil }
+                return writer
+            })
+        else { return nil }
+        do throws(DiskError) {
+            try writer.close()
+            log.info("closed, clean")
+            return nil
+        } catch {
+            log.error("close: \(String(describing: error), privacy: .public)")
+            return error.fskit
+        }
+    }
+
+    /// Whether the task options ask for a read-only mount: `rdonly` (or `ro`) in an `-o` list.
+    static func isReadOnly(_ options: [String]) -> Bool {
+        zip(options, options.dropFirst())
+            .contains { flag, value in
+                flag == "-o" && value.split(separator: ",").contains { $0 == "rdonly" || $0 == "ro" }
+            }
     }
     func mount(options: FSTaskOptions, replyHandler reply: @escaping ((any Error)?) -> Void) {
         log.info("mount, options: \(options.taskOptions, privacy: .public)")
         reply(nil)
     }
-    func unmount(replyHandler reply: @escaping () -> Void) { reply() }
-    func synchronize(flags: FSSyncFlags, replyHandler reply: @escaping ((any Error)?) -> Void) { reply(nil) }
+    func unmount(replyHandler reply: @escaping () -> Void) {
+        _ = closeWriter()
+        reply()
+    }
+
+    func synchronize(flags: FSSyncFlags, replyHandler reply: @escaping ((any Error)?) -> Void) {
+        guard let writer = writer.withLock({ $0 }) else { return reply(nil) }
+        do throws(DiskError) {
+            try writer.synchronize()
+            reply(nil)
+        } catch {
+            reply(error.fskit)
+        }
+    }
 
     func reclaimItem(_ item: FSItem, replyHandler reply: @escaping ((any Error)?) -> Void) {
         forget(item)

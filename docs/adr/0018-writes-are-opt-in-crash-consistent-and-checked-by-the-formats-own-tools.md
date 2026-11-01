@@ -88,3 +88,20 @@ code, needed for Disk Arbitration mounts and useful by itself (it can report a v
 weaker than the others' and is named as such. The crash explorer and the container checker are shared by every format, built
 once with ext2. Apple's msdos module declares its check with `FSCheckOptionSyntax`; whether FSKit then calls ours is still to
 be probed, on a fresh FSKit agent (the first attempt ran on a stale one).
+
+## Amendment (2026-11-01): writing through FSKit
+
+Measured while making the ext2 writer reach Finder (diary 2026-11-01-18):
+
+- Writes go through FSKit's kernel-offloaded I/O, Apple's own modules' path, not its write handler: through the write
+  handler, a write of 256 KiB or more never reached the module, and left the writing process stuck in the kernel for good.
+  `blockmapFile` for a write asks the writer to map the range (`WritableBlockMapping.mapForWriting`: blocks allocated,
+  zeroed and linked, flushed before the link); the kernel writes the data; `completeIO` asks it to complete the write (data
+  flushed, then the size and the times). The write handler stays for files that cannot be mapped.
+- FSKit offers no flush for direct writes (`metadataFlush` covers its buffer cache only, which direct I/O bypasses): on an
+  FSKit device a barrier is the order writes were issued in, and a power loss may lose what the drive itself held.
+- `completeIO`'s error is documented as nil for a success but declared non-null; Swift then holds a null `any Error`, and
+  every way of reading it crashed the module in its Release build. It is not read: a completion counts as a success, and a
+  failed one leaves only zeroed blocks inside the size.
+- The volume asks for read-write only once its writer began (FSKit asks after activation); an automount's `rdonly` never
+  begins one.

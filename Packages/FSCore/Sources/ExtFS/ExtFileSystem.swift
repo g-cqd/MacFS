@@ -12,8 +12,8 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     let superblock: ExtSuperblock
     private let inodeTables: [UInt64]
     let blocks: CachedBlocks
-    /// The device writes go to; nil for a read-only volume (ADR-0018).
-    let device: (any WritableBlockSource)?
+    /// The device writes go to, once `beginWriting` set it; nil for a read-only volume (ADR-0018).
+    let writingDevice = Mutex<(any WritableBlockSource)?>(nil)
     let clock: @Sendable () -> Timestamp
     /// Set by `close`: no change after the unmount.
     let closed = Mutex(false)
@@ -27,17 +27,12 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         (try? source.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).map(ExtSuperblock.looksLikeOne) ?? false
     }
 
-    public convenience init(source: any BlockSource) throws(DiskError) {
-        try self.init(source: source, device: nil, clock: { .epoch })
-    }
-
-    init(
+    /// `clock` dates the changes once the volume writes: the system's by default.
+    public init(
         source: any BlockSource,
-        device: (any WritableBlockSource)?,
-        clock: @escaping @Sendable () -> Timestamp
+        clock: @escaping @Sendable () -> Timestamp = { .now }
     ) throws(DiskError) {
         self.source = source
-        self.device = device
         self.clock = clock
         superblock = try ExtSuperblock(try source.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
         blocks = CachedBlocks(source, blockSize: superblock.blockSize, blockCount: superblock.blockCount)

@@ -58,7 +58,7 @@ extension ExtFileSystem {
     ) throws(DiskError) -> (block: (UInt64, [UInt8])?, grown: Bool) {
         let blockSize = UInt64(superblock.blockSize)
         for (_, physical) in try directoryBlocks(directory) {
-            let bytes = try device?.read(at: physical * blockSize, count: Int(blockSize)) ?? []
+            let bytes = try openDevice().read(at: physical * blockSize, count: Int(blockSize))
             if let changed = try ExtDirectoryEntries.inserting(name, inode: UInt32(number), type: type, into: bytes) {
                 return ((physical, changed), false)
             }

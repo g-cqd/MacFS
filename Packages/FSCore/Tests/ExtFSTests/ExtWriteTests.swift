@@ -121,6 +121,29 @@ import Testing
         #expect(ExtFileSystem.pieces(of: hole, from: 0, to: 10, blockSize: 1024) == nil)
     }
 
+    /// A volume opened to read begins writing on its device: the mount path's upgrade, at activation, when the mount was not
+    /// asked to be read-only. One reader, so one cache. Once only.
+    @Test func aReadOnlyVolumeBeginsWritingOnItsDevice() throws {
+        let device = try Self.copy("ext2")
+        let volume = try ExtFileSystem(source: device, clock: { Self.now })
+        let hello = try ExtHtreeTests.path(volume, "hello.txt")
+        #expect(throws: DiskError.readOnly) { try volume.write(hello, at: 0, [1]) }
+        try volume.beginWriting(on: device)
+        #expect(try Self.state(device) & 1 == 0)
+        try volume.write(hello, at: 0, Array("J".utf8))
+        #expect(try volume.read(hello, at: 0, count: 5) == Array("Jello".utf8))
+        #expect(throws: DiskError.self) { try volume.beginWriting(on: device) }
+        try volume.close()
+        #expect(try Self.state(device) & 1 == 1)
+    }
+
+    /// The mount paths' clock: the system's, to the nanosecond.
+    @Test func nowIsTheSystemsTime() {
+        let now = Timestamp.now
+        #expect(abs(Double(now.seconds) - Date().timeIntervalSince1970) < 5)
+        #expect(now.nanoseconds >= 0 && now.nanoseconds < 1_000_000_000)
+    }
+
     // MARK: Overwrites
 
     @Test func anOverwriteIsReadBackAndMovesTheFilesTimes() async throws {

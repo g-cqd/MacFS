@@ -4,9 +4,9 @@ import MountKit
 import Synchronization
 import os
 
-/// A mounted read-only volume over ``MountedTree`` (the macOS 27 `FSVolume.Handler` interface).
+/// A mounted volume over ``MountedTree`` (the macOS 27 `FSVolume.Handler` interface): read-only unless its format writes.
 ///
-/// Every mutating operation answers `EROFS`. Items are kept per mount identifier until FSKit reclaims
+/// Changes go to the format's writer when the mount is writable, else answer `EROFS`. Items are kept per mount identifier until FSKit reclaims
 /// them, so the same node is always the same `FSItem`.
 final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
     let tree: MountedTree
@@ -15,6 +15,9 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
     /// The device the volume lives on: block maps name it for the kernel's own reads (roadmap 0018).
     let device: FSBlockDeviceResource
     private let items = Mutex<[UInt64: ReadOnlyItem]>([:])
+    /// The format's writer, once the mount was asked for writable and it accepted the volume (ADR-0018); nil, every change
+    /// answers EROFS.
+    let writer = Mutex<(any WritableFileSystem)?>(nil)
 
     init(tree: MountedTree, shortName: String, log: Logger, device: FSBlockDeviceResource) {
         self.tree = tree
@@ -62,8 +65,10 @@ final class ReadOnlyVolume: FSVolume, @unchecked Sendable {
         attributes.changeTime = Self.timespec(node.changed)
         attributes.birthTime = Self.timespec(node.created)
         attributes.flags = node.isHidden ? UInt32(UF_HIDDEN) : 0
-        // A file not stored as its bytes (inline, compressed, resident) is read by the module; every other one by the kernel
-        // itself, through its block map. FSKit reads this once per file (roadmap 0018).
+        // A file not stored as its bytes (inline, compressed, resident) is read and written by the module; every other one by
+        // the kernel itself, through its block map, which a writable volume's writer allocates for writes (roadmaps 0018,
+        // 0046: through FSKit's write handler, writes of 256 KiB and more never reached the module). FSKit reads this once
+        // per file.
         if node.kind == .regular {
             let mappable = (tree.fileSystem as? any BlockMapping).flatMap { try? $0.isMappable(node.id) } ?? false
             attributes.inhibitKernelOffloadedIO = !mappable

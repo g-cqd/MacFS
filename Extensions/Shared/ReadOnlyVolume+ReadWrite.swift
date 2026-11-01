@@ -33,6 +33,15 @@ extension ReadOnlyVolume: FSVolume.ReadWriteHandler {
         at offset: off_t,
         replyHandler reply: @escaping (FSWriteFileResult?, (any Error)?) -> Void
     ) {
-        reply(nil, ModuleError.readOnly)
+        guard offset >= 0 else { return reply(nil, ModuleError.invalid) }
+        log.info("write \(contents.count) at \(offset)")
+        change(item, reply, "write") { (writer, item) throws(DiskError) -> FSWriteFileResult? in
+            try writer.write(tree.readerID(for: item.mountID), at: UInt64(offset), [UInt8](contents))
+            return FSWriteFileResult(
+                bytesWritten: contents.count,
+                itemAttributes: try attributes(item.mountID),
+                freeSpace: nil
+            )
+        }
     }
 }

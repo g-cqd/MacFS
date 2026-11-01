@@ -20,8 +20,18 @@ extension ExtFileSystem: WritableFileSystem {
         writable device: any WritableBlockSource,
         clock: @escaping @Sendable () -> Timestamp
     ) throws(DiskError) {
+        try self.init(source: device, clock: clock)
+        try beginWriting(on: device)
+    }
+
+    /// Starts writing on `device`, the one this volume reads (ADR-0018): refuses, by name, what this writer does not
+    /// maintain, then marks the volume not clean. A mount path calls it at activation, when the mount was not asked to be
+    /// read-only. Once only.
+    public func beginWriting(on device: any WritableBlockSource) throws(DiskError) {
+        guard writingDevice.withLock({ $0 == nil }), !closed.withLock({ $0 }) else {
+            throw .unsupported("this volume already writes, or was closed")
+        }
         // A device opened read-only refuses the mount's first write: ``DiskError/readOnly``.
-        try self.init(source: device, device: device, clock: clock)
         let bytes = DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
         if try bytes.u32(0x5C) & 0x0004 != 0 || superblock.incompat & 0x0004 != 0 {
             throw .unsupported("writing a volume with a journal (ext3/ext4)")
@@ -42,6 +52,7 @@ extension ExtFileSystem: WritableFileSystem {
         try markSuperblock(on: device, state: state & ~Self.validState, time: 0x2C) {
             Self.put16(mounts, at: 0x34, in: &$0)
         }
+        writingDevice.withLock { $0 = device }
     }
 
     public func write(_ id: UInt64, at offset: UInt64, _ bytes: [UInt8]) throws(DiskError) {
@@ -50,7 +61,7 @@ extension ExtFileSystem: WritableFileSystem {
         guard !bytes.isEmpty else { return }
         let end = offset + UInt64(bytes.count)
         let blockSize = UInt64(superblock.blockSize)
-        let runs = try runs(inode)
+        let runs = try runs(inode, through: (end - 1) / blockSize)
         if end <= inode.size, let pieces = Self.pieces(of: runs, from: offset, to: end, blockSize: blockSize) {
             for piece in pieces { try device.write(at: piece.at, Array(bytes[piece.from ..< piece.to])) }
             try touch(inode, on: device)
@@ -59,9 +70,9 @@ extension ExtFileSystem: WritableFileSystem {
         try freeCounts.withLock { (free) throws(DiskError) in
             free = try allocatingWrite(
                 inode,
-                runs: runs,
                 at: offset,
                 bytes,
+                length: UInt64(bytes.count),
                 on: device,
                 free: free ?? initialFreeCounts
             )
@@ -160,7 +171,7 @@ extension ExtFileSystem: WritableFileSystem {
 
     /// The device, unless the volume is read-only or closed.
     func openDevice() throws(DiskError) -> any WritableBlockSource {
-        guard let device, !closed.withLock({ $0 }) else { throw .readOnly }
+        guard let device = writingDevice.withLock({ $0 }), !closed.withLock({ $0 }) else { throw .readOnly }
         return device
     }
 

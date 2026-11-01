@@ -2,12 +2,13 @@ import FSCore
 
 extension ExtFileSystem {
     /// A write that needs blocks (roadmap 0026 step 2): new data and indirect blocks taken and written, flushed, then linked
-    /// from the existing indirect blocks and the inode. Returns the free counts left.
+    /// from the existing indirect blocks and the inode. Without `bytes`, the range's blocks are only made: new ones zeroed,
+    /// stored ones left, the size kept (a range mapped for the kernel to write, roadmap 0046). Returns the free counts left.
     func allocatingWrite(
         _ inode: ExtInode,
-        runs: [ExtRun],
         at offset: UInt64,
-        _ bytes: [UInt8],
+        _ bytes: [UInt8]?,
+        length: UInt64,
         on device: any WritableBlockSource,
         free: ExtFreeCounts
     ) throws(DiskError) -> ExtFreeCounts {
@@ -18,9 +19,10 @@ extension ExtFileSystem {
             throw .unsupported("allocating on a volume with clusters or descriptor checksums (a later slice)")
         }
         let blockSize = UInt64(superblock.blockSize)
-        let end = offset + UInt64(bytes.count)
+        let end = offset + length
         let first = offset / blockSize
         let last = (end - 1) / blockSize
+        let runs = try runs(inode, through: last)
         func physical(_ logical: UInt64) -> UInt64? {
             guard let run = runs.first(where: { $0.logical <= logical && logical < $0.end }), let start = run.physical
             else {
@@ -37,6 +39,7 @@ extension ExtFileSystem {
             let from = Int(max(offset, blockStart) - offset)
             let to = Int(min(end, blockStart + blockSize) - offset)
             if let stored = physical(logical) {
+                guard let bytes else { continue }
                 try device.write(
                     at: stored * blockSize + (max(offset, blockStart) - blockStart),
                     Array(bytes[from ..< to])
@@ -45,11 +48,13 @@ extension ExtFileSystem {
                 let block = try allocation.allocate()
                 try allocation.link(logical, to: block)
                 var content = [UInt8](repeating: 0, count: Int(blockSize))
-                content.replaceSubrange(
-                    Int(max(offset, blockStart) - blockStart) ..< Int(max(offset, blockStart) - blockStart)
-                        + (to - from),
-                    with: bytes[from ..< to]
-                )
+                if let bytes {
+                    content.replaceSubrange(
+                        Int(max(offset, blockStart) - blockStart) ..< Int(max(offset, blockStart) - blockStart)
+                            + (to - from),
+                        with: bytes[from ..< to]
+                    )
+                }
                 try device.write(at: block * blockSize, content)
             }
         }
@@ -67,7 +72,8 @@ extension ExtFileSystem {
         for (block, content) in allocation.changedIndirectBlocks { try device.write(at: block * blockSize, content) }
         let sectors = inode.sectors + UInt64(allocation.allocated.count) * blockSize / 512
         guard sectors <= UInt64(UInt32.max) else { throw .unsupported("a file of more than 2 TiB of sectors") }
-        try touchMapping(inode, pointers: allocation.pointers, size: max(inode.size, end), sectors: sectors, on: device)
+        let size = bytes == nil ? inode.size : max(inode.size, end)
+        try touchMapping(inode, pointers: allocation.pointers, size: size, sectors: sectors, on: device)
         for block in allocation.metadata.keys { blocks.invalidate(block) }
         for block in allocation.indirect.keys { blocks.invalidate(block) }
         mappings.invalidate(inode.number)

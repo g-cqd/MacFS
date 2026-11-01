@@ -4,9 +4,9 @@ import Synchronization
 import SystemCommands
 
 /// Each format's own checker, run in the container image `Scripts/checkers/Containerfile` builds (ADR-0018 decision 5):
-/// `container build -t macfs-checkers:1 -f Scripts/checkers/Containerfile Scripts/checkers`.
+/// `container build -t macfs-checkers:2 -f Scripts/checkers/Containerfile Scripts/checkers`.
 public enum Checkers {
-    public static let image = "macfs-checkers:1"
+    public static let image = "macfs-checkers:2"
     static let container = "/opt/homebrew/bin/container"
 
     public struct Result: Sendable, Equatable {

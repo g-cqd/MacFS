@@ -15,11 +15,23 @@ extension ExtFileSystem {
                     return bytes
                 }
             }
-            let count = (inode.size + blockSize - 1) / blockSize
-            guard count <= 1 << 32 else { throw .corrupt("inode \(inode.number) of \(inode.size) bytes") }
-            return try ExtIndirectMap.runs(inode.blockArea, first: 0, count: count, blockSize: superblock.blockSize) {
-                (block) throws(DiskError) -> DiskBytes in try self.block(block)
-            }
+            return try indirectRuns(inode, count: (inode.size + blockSize - 1) / blockSize)
+        }
+    }
+
+    /// The runs of an indirect-mapped inode through block `last`, past its size: a writer's view, where blocks mapped for the
+    /// kernel to write are linked before the size covers them. Not cached.
+    func runs(_ inode: ExtInode, through last: UInt64) throws(DiskError) -> [ExtRun] {
+        guard inode.flags & (ExtInode.extentsFlag | ExtInode.inlineDataFlag) == 0 else { return try runs(inode) }
+        let blockSize = UInt64(superblock.blockSize)
+        return try indirectRuns(inode, count: max((inode.size + blockSize - 1) / blockSize, last + 1))
+    }
+
+    /// The first `count` blocks of an indirect-mapped inode, as runs.
+    private func indirectRuns(_ inode: ExtInode, count: UInt64) throws(DiskError) -> [ExtRun] {
+        guard count <= 1 << 32 else { throw .corrupt("inode \(inode.number): \(count) blocks") }
+        return try ExtIndirectMap.runs(inode.blockArea, first: 0, count: count, blockSize: superblock.blockSize) {
+            (block) throws(DiskError) -> DiskBytes in try self.block(block)
         }
     }
 
