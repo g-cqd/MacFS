@@ -48,16 +48,7 @@ public final class ProtobufRegistryStore: MountRegistryStore {
             state.registryUnknown = message.unknownFields
             state.unknown = Dictionary(message.records.map { ($0.id, $0.unknownFields) }) { first, _ in first }
         }
-        return message.records.map {
-            MountRecord(
-                id: $0.id,
-                kind: MountBackendKind(rawValue: $0.kind),
-                source: $0.source,
-                mountPoint: $0.mountPoint,
-                mountedFrom: $0.mountedFrom,
-                state: MountRecord.State(rawValue: $0.state)
-            )
-        }
+        return message.records.map(\.record)
     }
 
     public func save(_ records: [MountRecord]) throws(MountError) {
@@ -66,17 +57,7 @@ public final class ProtobufRegistryStore: MountRegistryStore {
         // Also without a load: a newer MacFS's registry is never written over.
         if let data = FileManager.default.contents(atPath: path), let error = newerFormat([UInt8](data)) { throw error }
         var message = RegistryMessage(
-            records: records.map {
-                RecordMessage(
-                    id: $0.id,
-                    kind: $0.kind.rawValue,
-                    source: $0.source,
-                    mountPoint: $0.mountPoint,
-                    mountedFrom: $0.mountedFrom,
-                    state: $0.state.rawValue,
-                    unknownFields: unknown[$0.id] ?? UnknownFields()
-                )
-            }
+            records: records.map { RecordMessage($0, unknownFields: unknown[$0.id] ?? UnknownFields()) }
         )
         message.unknownFields = registryUnknown
         let bytes: [UInt8]

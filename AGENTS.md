@@ -20,7 +20,9 @@ swift package --package-path Packages/FSCore --disable-sandbox --allow-writing-t
 MACFS_DEV=1 swift run --package-path Packages/FSCore -c release fskbench            # kernels against C baselines
 swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img    # NFS proxy; prints the mount command
 swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img --mount /tmp/m   # through the mount seam; Ctrl-C unmounts
-swift run --package-path Packages/FSCore -c release macfs-nfsd --sweep    # settle what a dead process left (registry in Application Support)
+swift run --package-path Packages/FSCore -c release macfs-nfsd --sweep    # settle what a dead process left (registry-cli.pb in Application Support)
+# The agent (0039), live without the app: sign with the Developer ID identity, then launchctl bootstrap a plist naming a test
+# --service and --registry (see docs/diary/2026-11-01-03.md); `macfs-agent call list|mount IMG DIR|unmount ID|sweep --service S`.
 xcodegen generate && xcodebuild -scheme MacFS -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
 swift test --package-path Packages/FSCore 2>&1 | swift run --package-path Packages/Tooling macfs-tool summary
 ```
@@ -106,6 +108,11 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **GNU coreutils come first on PATH**: `stat -f` is GNU's file-system mode there; use `/usr/bin/stat`, `/usr/bin/find`.
 - **`umount` takes a path and removes whatever is mounted there**: unmount only after the table shows our `mountedFrom` at the
   point (TLC found the eject-then-remount trace). A pending record proves ownership by the backend's `claims`, nothing looser.
+- **One owner per registry**: a sweep unmounts what its own process does not serve. The agent uses `registry.pb`,
+  `macfs-nfsd --mount` uses `registry-cli.pb`.
+- **The agent answers only binaries of team NP94WB3P75** (`isFromSameTeam`, both ways). The local Apple Development identities
+  "cannot be used for signing code"; sign test binaries with the Developer ID identity. An unsigned or ad-hoc agent has no team,
+  so every connection is interrupted.
 - **Hand-written TLA+ goes in `Gates.specifications`**, beside the modeler-generated `modelledTypes`.
 - **`BoundedCache.value(for:)` makes a missing key once**: concurrent callers wait for the maker, so a `make` must never wait on
   a key whose maker waits on its own.

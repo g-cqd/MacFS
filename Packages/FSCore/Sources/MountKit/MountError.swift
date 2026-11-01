@@ -8,4 +8,6 @@ public enum MountError: Error, Hashable, Sendable {
     case unrecognized(String)
     case backend(String)
     case registry(String)
+    /// The agent could not be reached, or answered with something that is not a reply (roadmap 0039).
+    case agent(String)
 }

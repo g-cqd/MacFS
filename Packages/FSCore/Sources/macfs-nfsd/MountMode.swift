@@ -11,18 +11,12 @@ import NFSProxy
 /// (0039). Until the agent exists, this process is the proxy's owner: the mount lives as long as it does.
 enum MountMode {
     static let defaultRegistry =
-        NSHomeDirectory() + "/Library/Application Support/MacFS/registry.pb"
+        NSHomeDirectory() + "/Library/Application Support/MacFS/registry-cli.pb"
 
     static func service(registry: String) throws -> MountService {
         let table = SystemMountTable()
-        let backend = NFSMountBackend(runner: SystemCommandRunner(), table: table, owner: (getuid(), getgid())) {
-            path in
-            let source = try FileBlockSource(path: path)
-            guard let format = DiskFormat.detect(source) else { throw DiskError.unsupported("no volume MacFS reads") }
-            return try MountedTree(try format.open(source))
-        }
         return try MountService(
-            backends: [backend],
+            backends: [NFSMountBackend.system(table: table)],
             store: ProtobufRegistryStore(path: registry),
             table: table,
             newID: { UUID().uuidString }

@@ -34,6 +34,7 @@ let package = Package(
         .library(name: "AppSupport", targets: ["AppSupport"]),
         .library(name: "NFSProxy", targets: ["NFSProxy"]),
         .executable(name: "macfs-nfsd", targets: ["macfs-nfsd"]),
+        .executable(name: "macfs-agent", targets: ["macfs-agent"]),
         .executable(name: "fsprobe", targets: ["fsprobe"])
     ],
     dependencies: [
@@ -75,6 +76,18 @@ let package = Package(
             dependencies: ["MountKit", "FSCore", .product(name: "AemiProtobuf", package: "AemiProtobuf")],
             swiftSettings: strictSettings
         ),
+        // The mount agent's protocol (ADR-0013, ADR-0015): requests and replies in protobuf, a dispatcher over MountService,
+        // a typed client over any byte transport. XPC is the agent's and the app's thin shell around them.
+        .target(
+            name: "MountAgent",
+            dependencies: ["MountKit", "MountRegistry", .product(name: "AemiProtobuf", package: "AemiProtobuf")],
+            swiftSettings: strictSettings
+        ),
+        .testTarget(
+            name: "MountAgentTests",
+            dependencies: ["MountAgent", "MountKit", .product(name: "AemiProtobuf", package: "AemiProtobuf")],
+            swiftSettings: strictSettings
+        ),
         .testTarget(
             name: "MountRegistryTests",
             dependencies: [
@@ -86,10 +99,16 @@ let package = Package(
         .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
-        .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore"], swiftSettings: readerSettings),
+        .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore", "Formats"], swiftSettings: readerSettings),
         .executableTarget(
             name: "macfs-nfsd",
             dependencies: ["NFSProxy", "Formats", "FSCore", "MountKit", "MountRegistry"],
+            swiftSettings: strictSettings
+        ),
+        // The launch agent that owns proxy mounts (roadmap 0039), and its `call` client for checks.
+        .executableTarget(
+            name: "macfs-agent",
+            dependencies: ["MountAgent", "MountKit", "MountRegistry", "NFSProxy", "Formats", "FSCore"],
             swiftSettings: strictSettings
         ),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
