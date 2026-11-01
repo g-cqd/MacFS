@@ -22,7 +22,8 @@ let package = Package(
         .plugin(name: "Images", targets: ["Images"]),
         .plugin(name: "Gates", targets: ["Gates"]),
         .plugin(name: "Plists", targets: ["Plists"]),
-        .plugin(name: "Mounts", targets: ["Mounts"])
+        .plugin(name: "Mounts", targets: ["Mounts"]),
+        .plugin(name: "Install", targets: ["Install"])
     ],
     dependencies: [
         .package(path: "../FSCore"),
@@ -71,6 +72,17 @@ let package = Package(
                 intent: .custom(
                     verb: "mounts",
                     description: "Mount every test image through its FSKit module and compare it with its manifest"
+                )
+            ),
+            dependencies: ["macfs-tool"]
+        ),
+        .plugin(
+            name: "Install",
+            capability: .command(
+                intent: .custom(
+                    verb: "install",
+                    description:
+                        "Build the Release app, verify it, install it in /Applications and register its modules"
                 )
             ),
             dependencies: ["macfs-tool"]

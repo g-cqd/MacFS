@@ -75,6 +75,18 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **e2fsck's "exit status 0" includes repairs**: a clean e2fsprogs image is one whose expected output is only the passes.
 - **Install only after the Release build's exit status is 0**: Release turns some Debug warnings into errors, and a failed build
   leaves the previous one in the derived-data folder, ready to be installed by mistake.
+- **Install with `swift package --package-path Packages/Tooling --disable-sandbox install --check`** (roadmap 0041). It refuses a
+  failed build or a bad signature or entitlement, keeps the previous app in `/tmp/MacFS.app.previous`, and runs the mount check.
+- **Every build's copy of the app gets registered, and its modules run instead of the installed ones**: pluginkit listed them at
+  `/tmp/macfs-release/.../MacFS.app` (and at a scratch build's folder). The installer unregisters the build's copy and deletes it.
+  Do not `pluginkit -r` and `-a` a module: that lost XFS's enablement, which only System Settings can give back.
+- **A module enabled again in System Settings stays disabled to FSKit until its process restarts**:
+  `pkill -9 -f XFSModule.appex`.
+- **swiftly's proxy exports `TOOLCHAINS` and `SDKROOT` to `swift package` plugins**: xcodebuild then links the app with the
+  open-source toolchain and fails. The installer runs it under `env -u TOOLCHAINS -u SDKROOT`.
+- **macOS 27 mounts NTFS disks with its own reader** (`UVFSService`, `ntfs.fs`), not ours; ours (`ntfsro`) runs when named.
+- **`diskutil` cannot unmount or mount our FSKit volumes** (StorageKit error 119; it shows "no file system"), while Disk
+  Arbitration's own calls and Finder's Eject can. Use `hdiutil detach`, `umount` or `DADiskUnmount`.
 - **The first mount right after reinstalling may fail**: the module process is still starting. Run `mounts` again.
 - **Offline `resize2fs` never makes meta_bg** (it moves blocks); the kernel's online resize does. `resize2fs` is in
   e2fsprogs-extra, and it does not grow an image file: truncate it first.

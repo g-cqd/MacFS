@@ -1,0 +1,28 @@
+import DiskArbitration
+import Foundation
+
+let bsd = CommandLine.arguments[1]
+let session = DASessionCreate(kCFAllocatorDefault)!
+DASessionScheduleWithRunLoop(session, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+let disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, bsd)!
+let d = DADiskCopyDescription(disk) as! [String: Any]
+for key in d.keys.sorted() { print("  \(key) = \(d[key]!)".prefix(150)) }
+if CommandLine.arguments.count > 2, CommandLine.arguments[2] == "mount" {
+    DADiskMount(disk, nil, DADiskMountOptions(kDADiskMountOptionDefault), { _, dissenter, _ in
+        if let dissenter {
+            print("mount dissented: 0x\(String(UInt32(bitPattern: DADissenterGetStatus(dissenter)), radix: 16)) \(DADissenterGetStatusString(dissenter) as String? ?? "")")
+        } else { print("mounted") }
+        exit(0)
+    }, nil)
+    CFRunLoopRun()
+}
+if CommandLine.arguments.count > 2 {
+    DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionDefault), { _, dissenter, _ in
+        if let dissenter {
+            let status = DADissenterGetStatus(dissenter)
+            print("unmount dissented: 0x\(String(UInt32(bitPattern: status), radix: 16)) \(DADissenterGetStatusString(dissenter) as String? ?? "")")
+        } else { print("unmounted") }
+        exit(0)
+    }, nil)
+    CFRunLoopRun()
+}

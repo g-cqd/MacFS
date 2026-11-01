@@ -140,10 +140,50 @@ func mounts(_ options: Options) -> Int32 {
     return failed ? 1 : 0
 }
 
+/// Builds, verifies, installs and registers the Release app (roadmap 0041); with `--check`, runs the mount check after.
+func install(_ options: Options) -> Int32 {
+    let derivedData = "/tmp/macfs-release"
+    let installed = "/Applications/MacFS.app"
+    let previous = "/tmp/MacFS.app.previous"
+    if options.dryRun {
+        print(
+            "xcodegen, xcodebuild Release into \(derivedData); verify signatures and entitlements; keep the installed app"
+        )
+        print(
+            "at \(previous); copy to \(installed); unregister and remove the build's copy, register the installed app; stop"
+        )
+        print("the old module and agent processes; verify the installed signature and the registrations")
+        return 0
+    }
+    print("Building and installing (xcodebuild's output is kept; its last line is shown on failure)...")
+    let installer = Installer(
+        runner: SystemProcessRunner(capture: true),
+        root: options.root,
+        derivedData: derivedData,
+        installed: installed,
+        previous: previous,
+        team: "NP94WB3P75",
+        extensions: { app in
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: app + "/Contents/Extensions")) ?? []
+            return names.filter { $0.hasSuffix(".appex") }.map { String($0.dropLast(".appex".count)) }.sorted()
+        }
+    )
+    let problems = installer.run()
+    guard problems.isEmpty else {
+        problems.forEach { print("[FAIL] \($0)") }
+        return 1
+    }
+    print("[OK]   installed \(installed) (the previous app is at \(previous))")
+    guard options.check else { return 0 }
+    // The module processes were stopped: the first mount may come before they are back (AGENTS.md).
+    Thread.sleep(forTimeInterval: 8)
+    return mounts(options)
+}
+
 func main() -> Int32 {
     guard let options = parse(Array(CommandLine.arguments.dropFirst())) else {
         print(
-            "usage: macfs-tool <images|gates|analyzers|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus] [--mirror HOST]"
+            "usage: macfs-tool <images|gates|analyzers|plists|mounts|install|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus] [--mirror HOST]"
         )
         return 64
     }
@@ -179,6 +219,8 @@ func main() -> Int32 {
                 return try plists(options)
             case "mounts":
                 return mounts(options)
+            case "install":
+                return install(options)
             case "summary":
                 let input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
                 TestSummary.reduce(input).forEach { print($0) }

@@ -6,4 +6,18 @@ date: 2026-10-30
 
 # 0021 — The app finds disks and mounts them
 
-Disk Arbitration discovery, raw device access through `authopen`, mounting through `FSClient.mountSingleVolume`.
+Revised after the probes in `docs/research/2026-11-01-disks-from-the-app.md`: macOS already mounts our formats when a disk is
+attached, through our FSKit modules, and Disk Arbitration's own API mounts, unmounts and ejects them from a sandboxed process. No
+raw device access, no `authopen`.
+
+1. **Disks in the app:** a `DiskKit` target with a Disk Arbitration watcher (appeared, changed, disappeared) and a pure model of a
+   disk's description: whole or partition, size, removable, its volume (kind, name, path), and whether MacFS reads it (one of our
+   module short names) or might (a Linux partition type, not mounted, no file system macOS knows). The model is tested on
+   recorded descriptions; the watcher live on attached images.
+2. **Actions through Disk Arbitration:** mount, unmount and eject, as `DADiskMount`, `DADiskUnmount` and `DADiskEject`, with the
+   dissenter's status turned into a message. The app's window gains a Disks section beside Mounts.
+3. **The `mounts` check covers the disk path:** each image attached, automounted by macOS, unmounted and remounted through
+   `DiskKit`, compared with its manifest, then ejected.
+4. **Image mounts through FSKit path resources** (research conclusion 4): the modules accept `FSPathURLResource`, the app mounts an
+   image with `FSClient.mountSingleVolume`, as a `MountBackend` beside NFS. It needs its own probe and ADR.
+5. **`diskutil` and StorageKit:** find what they need to know a third-party FSKit volume (an `.fs` bundle?).
