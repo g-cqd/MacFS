@@ -86,6 +86,34 @@ import ToolingCore
         #expect(TestImages.Kind.corpus.directory == "TestCorpus")
     }
 
+    /// Hand-written specifications (the mount lifecycle, ADR-0013) are checked by TLC like the generated models.
+    @Test func gatesCheckTheHandWrittenSpecifications() {
+        let tools = ToolPaths(
+            swift: "/s",
+            swiftlint: "/l",
+            deadwood: "/d",
+            dolly: "/o",
+            arcleak: "/a",
+            fcheck: "/f",
+            modeler: "/m",
+            java: "/j",
+            tla2tools: "/t.jar",
+            lake: "/k"
+        )
+        let checks = Gates.plan(root: Self.root, tools: tools).steps.filter { $0.executable == "/j" }.map(\.arguments)
+        for specification in Gates.specifications {
+            #expect(
+                checks.contains {
+                    $0.suffix(3) == [
+                        "-config", "/repo/docs/models/\(specification).cfg", "/repo/docs/models/\(specification).tla"
+                    ]
+                },
+                "\(specification)"
+            )
+        }
+        #expect(Gates.specifications.contains("MountLifecycle"))
+    }
+
     @Test func gatesCoverEveryToolTheWhitePaperNames() {
         let tools = ToolPaths(
             swift: "/s",

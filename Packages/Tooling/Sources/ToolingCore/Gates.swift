@@ -14,6 +14,8 @@ public enum Gates {
     public static let shipped = ["Packages/FSCore/Sources", "Packages/Tooling/Sources", "Extensions", "App"]
     /// Types whose state is touched from more than one place; their TLA+ models are checked by TLC.
     public static let modelledTypes = ["ReadOnlyModule", "Browser", "ExtensionStatus"]
+    /// Hand-written TLA+ specifications in docs/models, checked by TLC: designs no single type holds (ADR-0013).
+    public static let specifications = ["MountLifecycle"]
 
     public static func plan(root: String, tools: ToolPaths) -> Plan {
         let corpus = Self.corpus.map { "\(root)/\($0)" }
@@ -34,19 +36,22 @@ public enum Gates {
         let models = "\(root)/docs/models"
         for type in modelledTypes {
             steps.append(Command(tools.modeler, ["tla", "--type", type, "--output", models] + shipped))
-            steps.append(
-                Command(
-                    tools.java,
-                    [
-                        "-cp", tools.tla2tools, "tlc2.TLC", "-workers", "auto", "-cleanup", "-config",
-                        "\(models)/\(type)Model.cfg",
-                        "\(models)/\(type)Model.tla"
-                    ]
-                )
-            )
+            steps.append(tlc(tools, "\(models)/\(type)Model"))
         }
+        for specification in specifications { steps.append(tlc(tools, "\(models)/\(specification)")) }
         // Lean: the arithmetic of AlignedReader and MountedTree, proved (Proofs/).
         steps.append(Command(tools.lake, ["-d", "\(root)/Proofs", "build"]))
         return Plan(steps: steps)
+    }
+
+    /// TLC over `<model>.tla` with `<model>.cfg`, every core.
+    private static func tlc(_ tools: ToolPaths, _ model: String) -> Command {
+        Command(
+            tools.java,
+            [
+                "-cp", tools.tla2tools, "tlc2.TLC", "-workers", "auto", "-cleanup", "-config", "\(model).cfg",
+                "\(model).tla"
+            ]
+        )
     }
 }

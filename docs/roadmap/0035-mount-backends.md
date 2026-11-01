@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 blocked-by: []
 date: 2026-10-30
 ---
@@ -19,3 +19,17 @@ ADR-0013 and research 2026-10-30-everest-code-review (#1–#7). In `MountKit`, t
 - The lifecycle in TLA+, checked by TLC in the gates (ADR-0013's invariants).
 
 The first backend is the NFS proxy over an image file (0038's options); FSKit over a device follows 0021.
+
+## Progress
+
+Built, red first, tested on fakes: `MountBackend`, `MountService` (a record before every attempt, no record no mount, unmount
+routed to the backend that mounted, a mount already gone cleared, make before break, a sweep that settles pending, mounted and
+unrecognized records and never touches a mount not on record), `SystemMountTable` (`getmntinfo`, canonical paths), the registry
+(`MountRegistry`: protobuf in a CRC-32C envelope, atomic writes, newer formats left alone, newer fields kept; ADR-0015) and the NFS
+proxy as the first backend (`NFSMountBackend`). `macfs-nfsd IMAGE --mount DIR` and `--sweep` run them through `mount_nfs`.
+
+The lifecycle is specified in TLA+ (`docs/models/MountLifecycle.tla`, in the gates): crashes between any two steps, the kernel's
+dead timeout, the user's eject, foreign mounts. TLC found that an unmount after the user ejected ours and another mount took the
+point ran `umount` on that other mount; the backend now unmounts only its own mount (a test reproduces the trace).
+
+Open: the FSKit backend (needs disk discovery, 0021), capabilities for the app's mount sheet, and the agent (0039).

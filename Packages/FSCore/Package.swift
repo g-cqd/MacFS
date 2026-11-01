@@ -38,7 +38,9 @@ let package = Package(
     ],
     dependencies: [
         // Pinned to one revision, the one AemiRegex pins (ADR-0004).
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8475434abab0493d9bda746f78e33087899391c3")
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8475434abab0493d9bda746f78e33087899391c3"),
+        // The mount registry's and the agent's encoding (ADR-0015); it pins the same aemi.
+        .package(url: "https://github.com/g-cqd/AemiProtobuf.git", revision: "7b7dbc551b4d8289640fb8b4d6870c698232cbba")
     ],
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
@@ -66,6 +68,20 @@ let package = Package(
         ),
         // What every mount technology needs on top of a reader: identifiers, listings with "." and "..".
         .target(name: "MountKit", dependencies: ["FSCore"], swiftSettings: readerSettings),
+        // The mount registry on disk: protobuf in a checked envelope (ADR-0015). Apart from MountKit, which the FSKit
+        // extensions link: only the app and the agent carry protobuf.
+        .target(
+            name: "MountRegistry",
+            dependencies: ["MountKit", "FSCore", .product(name: "AemiProtobuf", package: "AemiProtobuf")],
+            swiftSettings: strictSettings
+        ),
+        .testTarget(
+            name: "MountRegistryTests",
+            dependencies: [
+                "MountRegistry", "MountKit", "FSCore", .product(name: "AemiProtobuf", package: "AemiProtobuf")
+            ],
+            swiftSettings: strictSettings
+        ),
         // The app's logic, apart from its views so it is tested: the status checks (roadmap 0021).
         .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
@@ -73,7 +89,7 @@ let package = Package(
         .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore"], swiftSettings: readerSettings),
         .executableTarget(
             name: "macfs-nfsd",
-            dependencies: ["NFSProxy", "Formats", "FSCore"],
+            dependencies: ["NFSProxy", "Formats", "FSCore", "MountKit", "MountRegistry"],
             swiftSettings: strictSettings
         ),
         .executableTarget(name: "fsprobe", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),

@@ -6,15 +6,31 @@ import MountKit
 import NFSProxy
 
 // macfs-nfsd <image-or-device> [--port N]
+// macfs-nfsd <image-or-device> --mount <directory> [--registry PATH]
+// macfs-nfsd --sweep [--registry PATH]
 //
 // Serves a Btrfs, NTFS, ext or XFS volume read-only over NFSv3 on 127.0.0.1 and prints the command that mounts it
 // with macOS's own client: soft, so a dead proxy is unmounted rather than waited for, at a secret export that admits one
 // mount. No portmapper: the port is given to mount_nfs for both NFS and MOUNT.
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+let registry = arguments.firstIndex(of: "--registry").map { arguments[$0 + 1] } ?? MountMode.defaultRegistry
+if arguments.first == "--sweep" {
+    do { try MountMode.sweep(registry: registry) } catch {
+        print("macfs-nfsd: \(error)")
+        exit(1)
+    }
+    exit(0)
+}
 guard let path = arguments.first else {
-    print("usage: macfs-nfsd <image-or-device> [--port N]")
+    print("usage: macfs-nfsd <image-or-device> [--port N] | <image-or-device> --mount DIR [--registry PATH] | --sweep")
     exit(64)
+}
+if let index = arguments.firstIndex(of: "--mount"), index + 1 < arguments.count {
+    do { try MountMode.mount(path, at: arguments[index + 1], registry: registry) } catch {
+        print("macfs-nfsd: \(error)")
+        exit(1)
+    }
 }
 var port: UInt16 = 0
 if let index = arguments.firstIndex(of: "--port"), index + 1 < arguments.count, let value = UInt16(arguments[index + 1])

@@ -19,6 +19,8 @@ swift package --package-path Packages/Tooling --disable-sandbox mounts [--dry-ru
 swift package --package-path Packages/FSCore --disable-sandbox --allow-writing-to-package-directory format   # Aemi's formatter
 MACFS_DEV=1 swift run --package-path Packages/FSCore -c release fskbench            # kernels against C baselines
 swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img    # NFS proxy; prints the mount command
+swift run --package-path Packages/FSCore -c release macfs-nfsd TestImages/ext4.img --mount /tmp/m   # through the mount seam; Ctrl-C unmounts
+swift run --package-path Packages/FSCore -c release macfs-nfsd --sweep    # settle what a dead process left (registry in Application Support)
 xcodegen generate && xcodebuild -scheme MacFS -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
 swift test --package-path Packages/FSCore 2>&1 | swift run --package-path Packages/Tooling macfs-tool summary
 ```
@@ -102,6 +104,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **One proxy serves one mount**: the export admits a single MNT (the mount table shows its path to everyone), so after `umount`
   start `macfs-nfsd` again; a second `mount_nfs` of a live one is "Permission denied" by design.
 - **GNU coreutils come first on PATH**: `stat -f` is GNU's file-system mode there; use `/usr/bin/stat`, `/usr/bin/find`.
+- **`umount` takes a path and removes whatever is mounted there**: unmount only after the table shows our `mountedFrom` at the
+  point (TLC found the eject-then-remount trace). A pending record proves ownership by the backend's `claims`, nothing looser.
+- **Hand-written TLA+ goes in `Gates.specifications`**, beside the modeler-generated `modelledTypes`.
 - **`BoundedCache.value(for:)` makes a missing key once**: concurrent callers wait for the maker, so a `make` must never wait on
   a key whose maker waits on its own.
 - **`swift test` on the images takes the debug build**: `#filePath` locates `TestImages/`; run `images` first.
