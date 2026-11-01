@@ -1,6 +1,6 @@
 import Darwin
 
-/// Why a read-only file system could not answer.
+/// Why a file system could not answer.
 ///
 /// Every case maps to one POSIX code, which is what FSKit, NFS and WebDAV all hand back to the kernel
 /// or the client. The string says where: it reaches logs, never a user dialog.
@@ -19,6 +19,8 @@ public enum DiskError: Error, Equatable, Sendable {
     case notDirectory
     case isDirectory
     case notSymlink
+    /// A write to a volume, or a device, opened read-only (ADR-0018).
+    case readOnly
 
     public var posixCode: Int32 {
         switch self {
@@ -29,6 +31,7 @@ public enum DiskError: Error, Equatable, Sendable {
             case .notDirectory: ENOTDIR
             case .isDirectory: EISDIR
             case .notSymlink: EINVAL
+            case .readOnly: EROFS
         }
     }
 }

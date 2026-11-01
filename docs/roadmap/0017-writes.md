@@ -22,3 +22,8 @@ each behind its own gate, and one for the mount paths that carry the writes:
 | EROFS, SquashFS | none: read-only formats (0032) | — |
 | HFS standard | none until a reference exists (0034) | — |
 | The mount paths: FSKit, NFS proxy, WebDAV, File Provider | 0046 | the same checkers, after writes made through each path |
+
+**ADR-0018 accepted** (2026-11-01): one write seam (`WritableFileSystem`, `WritableBlockSource` with a flush barrier), each format's
+own crash consistency (jbd2, ext2's clean flag, the XFS log, Btrfs copy-on-write, NTFS as ntfs-3g does it, named weaker),
+read-only by default and writable by asking, named refusals shared with the FSKit check, each format's checker after every test,
+and crash states replayed from a recording device. Order: ext2, ext4's journal, XFS, Btrfs, NTFS; FSKit first.
