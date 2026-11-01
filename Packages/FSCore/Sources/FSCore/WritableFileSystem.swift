@@ -11,6 +11,10 @@ public protocol WritableFileSystem: ReadOnlyFileSystem {
     ) throws(DiskError) -> UInt64
     /// The name `name` removed from `directory`; the node with it, once it has no name left. A directory must be empty.
     func remove(_ name: [UInt8], from directory: UInt64) throws(DiskError)
+    /// `name` in `directory` renamed `newName` in `newDirectory`, replacing what had that name as POSIX's rename does.
+    func rename(_ name: [UInt8], in directory: UInt64, to newName: [UInt8], in newDirectory: UInt64) throws(DiskError)
+    /// A second name for file `id`.
+    func link(_ id: UInt64, as name: [UInt8], in directory: UInt64) throws(DiskError)
     /// `bytes` into file `id` at `offset`.
     func write(_ id: UInt64, at offset: UInt64, _ bytes: [UInt8]) throws(DiskError)
     /// Every change so far made durable.

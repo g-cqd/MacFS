@@ -34,6 +34,10 @@ in the container.
      directories, other kinds of node, a node with an extended-attribute block. The order is what preen repairs, measured on
      every crash state: blocks and bitmaps, flush, the name, flush, the inode; a remove frees the inode, flushes, then drops
      the name. 10 tests, two of them every crash state through `e2fsck -fp` then `-fn`.
-   - Next: rename and hard links, symbolic links, then htree directories.
+   - **Done (2026-11-01):** rename (POSIX's rules: replacing a file or an empty directory, EISDIR, ENOTDIR, ENOTEMPTY, never
+     into its own subtree, nothing onto itself) and hard links. A rename within one block is one write. Every crash state of
+     renames within a directory, a replacing rename and a hard link is repaired by preen; a directory moved to another parent
+     by `e2fsck -fy` (ADR-0018). 7 tests.
+   - Next: symbolic links, then htree directories.
 4. Metadata checksums (ext4's `metadata_csum`), then jbd2 for ext3/4.
 5. Through FSKit: the volume's write handlers, the kernel-offloaded write mapping, the FSKit check (roadmap 0046).

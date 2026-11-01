@@ -38,6 +38,9 @@ Measured on macOS 27 (diary 2026-11-01-11, the installed ext module, a writable 
      committed journal; a volume whose journal needs recovery is replayed before any write.
    - ext2, or ext without a journal: Linux's own model. The superblock is marked not clean while the volume is mounted writable
      and clean on unmount. A crash leaves a volume `e2fsck` must see, so MacFS refuses to write a volume that is not clean.
+     Changes are ordered so that `e2fsck -p` (preen) repairs every crash state, measured state by state. The exception is a
+     directory moved to another parent, or renamed outside its block: no order avoids two names or a stale `..` for a moment,
+     and those states need `e2fsck -fy`, as on Linux's ext2.
    - XFS: changes go through the log as transactions, checkpointed, with CRCs. A volume whose log is dirty is refused for writing
      until it is replayed (by our replay once it exists, or by Linux).
    - Btrfs: copy-on-write. Live metadata is never overwritten. A transaction writes new tree blocks, flushes, then writes the

@@ -39,28 +39,15 @@ extension ExtFileSystem {
                     ExtDirectoryEntries.firstBlock(of: UInt32(number), parent: UInt32(directory), size: Int(blockSize))
                 )
             }
-            let type = superblock.incompat & 0x0002 != 0 ? Self.typeCode(kind) : 0
-            let placed = try place(name, inode: number, type: type, in: parent, allocation: &allocation)
-            if let (block, bytes) = firstBlock { try device.write(at: block * blockSize, bytes) }
-            if placed.grown, let (block, bytes) = placed.block { try device.write(at: block * blockSize, bytes) }
-            try writeAllocation(allocation, on: device)
-            try device.flush()
-            // Phase two: the name (in a block with room, or the block the parent grows by, linked). A crash after it leaves a
-            // name for an inode not yet written, which preen clears; an unconnected directory it would not reconnect.
-            if !placed.grown, let (block, bytes) = placed.block { try device.write(at: block * blockSize, bytes) }
-            for (block, content) in allocation.changedIndirectBlocks {
-                try device.write(at: block * blockSize, content)
-            }
-            let grownSectors = UInt64(allocation.allocated.count - (kind == .directory ? 1 : 0)) * blockSize / 512
-            try touch(parent, on: device) { raw in
-                guard placed.grown else { return }
-                for (index, pointer) in allocation.pointers.enumerated() {
-                    Self.put32(pointer, at: 0x28 + index * 4, in: &raw)
-                }
-                Self.put32(UInt32(parent.size + blockSize), at: 0x04, in: &raw)
-                Self.put32(UInt32(parent.sectors + grownSectors), at: 0x1C, in: &raw)
-            }
-            try device.flush()
+            let placed = try addName(
+                name,
+                inode: number,
+                kind: kind,
+                in: parent,
+                allocation: &allocation,
+                writingFirst: firstBlock.map { [$0] } ?? [],
+                on: device
+            )
             // Phase three: the inode, and the parent's link to a new directory.
             try writeNewInode(number, kind: kind, mode: mode, owner: owner, pointers: own, on: device)
             if kind == .directory {
@@ -69,7 +56,7 @@ extension ExtFileSystem {
                     Self.put16(parent.linkCount + 1, at: 0x1A, in: &raw)
                 }
             }
-            forget(allocation, directory: directory, block: placed.block?.0)
+            forget(allocation, directory: directory, block: placed)
             free = allocation.free
             return number
         }
@@ -88,16 +75,7 @@ extension ExtFileSystem {
             var allocation = try allocation(for: parent, on: device, free: free ?? initialFreeCounts)
             let blockSize = UInt64(superblock.blockSize)
             // Phase one: the node loses this name, and goes once it has none.
-            let links = isDirectory ? 0 : target.linkCount - 1
-            if links == 0 {
-                for block in try blocksOwned(by: target) { try allocation.free(block: block) }
-                try allocation.free(inode: target.number, directory: isDirectory)
-            }
-            let now = clock()
-            try touch(target, on: device) { raw in
-                Self.put16(links, at: 0x1A, in: &raw)
-                if links == 0 { Self.put32(UInt32(truncatingIfNeeded: now.seconds), at: 0x14, in: &raw) }
-            }
+            try giveUp(target, allocation: &allocation, on: device)
             try writeAllocation(allocation, on: device)
             try device.flush()
             // Phase two: the name.
@@ -123,6 +101,42 @@ extension ExtFileSystem {
 
     // MARK: Pieces
 
+    /// `name` for inode `number` added to `directory`, in a block with room or in a block the directory grows by. Blocks
+    /// nothing points to yet (`writingFirst`, a grown block) and the allocation's bitmaps are written and flushed first; then
+    /// the name, and the directory's new pointers and size; flushed. Returns the block that holds the name.
+    func addName(
+        _ name: [UInt8],
+        inode number: UInt64,
+        kind: NodeKind,
+        in directory: ExtInode,
+        allocation: inout ExtAllocation,
+        writingFirst: [(UInt64, [UInt8])] = [],
+        on device: any WritableBlockSource
+    ) throws(DiskError) -> UInt64? {
+        let blockSize = UInt64(superblock.blockSize)
+        let type = superblock.incompat & 0x0002 != 0 ? Self.typeCode(kind) : 0
+        let before = allocation.allocated.count
+        let placed = try place(name, inode: number, type: type, in: directory, allocation: &allocation)
+        for (block, bytes) in writingFirst { try device.write(at: block * blockSize, bytes) }
+        if placed.grown, let (block, bytes) = placed.block { try device.write(at: block * blockSize, bytes) }
+        try writeAllocation(allocation, on: device)
+        try device.flush()
+        // The name. A crash after it leaves a name for an inode not yet written, which preen clears; an unconnected directory
+        // it would not reconnect.
+        if !placed.grown, let (block, bytes) = placed.block { try device.write(at: block * blockSize, bytes) }
+        for (block, content) in allocation.changedIndirectBlocks { try device.write(at: block * blockSize, content) }
+        let grownSectors = UInt64(allocation.allocated.count - before) * blockSize / 512
+        let pointers = allocation.pointers
+        try touch(directory, on: device) { raw in
+            guard placed.grown else { return }
+            for (index, pointer) in pointers.enumerated() { Self.put32(pointer, at: 0x28 + index * 4, in: &raw) }
+            Self.put32(UInt32(directory.size + blockSize), at: 0x04, in: &raw)
+            Self.put32(UInt32(directory.sectors + grownSectors), at: 0x1C, in: &raw)
+        }
+        try device.flush()
+        return placed.block?.0
+    }
+
     /// A name a directory can hold: 1 to 255 bytes, neither `.` nor `..`, without a slash or a NUL.
     static func validate(_ name: [UInt8]) throws(DiskError) {
         guard name.count <= 255 else { throw .nameTooLong }
@@ -132,7 +146,7 @@ extension ExtFileSystem {
     }
 
     /// The directory `id`, if this writer can change its names: linear, stored in blocks.
-    private func changeableDirectory(_ id: UInt64) throws(DiskError) -> ExtInode {
+    func changeableDirectory(_ id: UInt64) throws(DiskError) -> ExtInode {
         let directory = try inode(id)
         guard directory.kind == .directory else { throw .notDirectory }
         guard directory.flags & ExtInode.indexFlag == 0 else {
@@ -164,7 +178,7 @@ extension ExtFileSystem {
     }
 
     /// The directory's stored blocks, as (logical, physical).
-    private func directoryBlocks(_ directory: ExtInode) throws(DiskError) -> [(UInt64, UInt64)] {
+    func directoryBlocks(_ directory: ExtInode) throws(DiskError) -> [(UInt64, UInt64)] {
         try runs(directory)
             .flatMap { run -> [(UInt64, UInt64)] in
                 guard let physical = run.physical else { return [] }
@@ -207,7 +221,7 @@ extension ExtFileSystem {
     }
 
     /// The caches a name change made stale.
-    private func forget(_ allocation: ExtAllocation, directory: UInt64, block: UInt64?) {
+    func forget(_ allocation: ExtAllocation, directory: UInt64, block: UInt64?) {
         for changed in allocation.metadata.keys { blocks.invalidate(changed) }
         for changed in allocation.indirect.keys { blocks.invalidate(changed) }
         if let block { blocks.invalidate(block) }

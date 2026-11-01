@@ -76,6 +76,21 @@ enum ExtDirectoryEntries {
         return nil
     }
 
+    /// `block` with the entry named `name` pointing to `inode` (of `type`), or nil when it is not in this block: a rename onto
+    /// an existing name, or a moved directory's `..`, in one write.
+    static func retargeting(_ name: [UInt8], to inode: UInt32, type: UInt8, in block: [UInt8]) throws(DiskError)
+        -> [UInt8]?
+    {
+        var bytes = block
+        for record in try records(block) where record.inode != 0 && record.nameLength == name.count {
+            guard Array(block[record.cursor + 8 ..< record.cursor + 8 + record.nameLength]) == name else { continue }
+            ExtFileSystem.put32(inode, at: record.cursor, in: &bytes)
+            bytes[record.cursor + 7] = type
+            return bytes
+        }
+        return nil
+    }
+
     /// A new directory's first block: `.` for itself, `..` for its parent, the rest in `..`'s record.
     static func firstBlock(of inode: UInt32, parent: UInt32, size: Int) -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: size)
