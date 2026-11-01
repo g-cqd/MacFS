@@ -49,13 +49,17 @@ extension ReadOnlyVolume: FSVolume.Handler {
 
     func activateVolume(options: FSTaskOptions, replyHandler reply: @escaping (FSActivateResult?, (any Error)?) -> Void)
     {
+        log.info("activate, options: \(options.taskOptions, privacy: .public)")
         reply(FSActivateResult(rootItem: item(MountedTree.root)), nil)
     }
 
     func deactivateVolume(options: FSDeactivateOptions = [], replyHandler reply: @escaping ((any Error)?) -> Void) {
         reply(nil)
     }
-    func mount(options: FSTaskOptions, replyHandler reply: @escaping ((any Error)?) -> Void) { reply(nil) }
+    func mount(options: FSTaskOptions, replyHandler reply: @escaping ((any Error)?) -> Void) {
+        log.info("mount, options: \(options.taskOptions, privacy: .public)")
+        reply(nil)
+    }
     func unmount(replyHandler reply: @escaping () -> Void) { reply() }
     func synchronize(flags: FSSyncFlags, replyHandler reply: @escaping ((any Error)?) -> Void) { reply(nil) }
 

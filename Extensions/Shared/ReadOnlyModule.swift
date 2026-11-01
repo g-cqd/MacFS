@@ -41,7 +41,10 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
             let volume = ReadOnlyVolume(tree: tree, shortName: format.shortName, log: log, device: device)
             self.volume = volume
             containerStatus = .ready
-            log.info("loaded \(device.bsdName, privacy: .public): \(fileSystem.volume.label, privacy: .public)")
+            // What FSKit asked for and what the device allows: the facts a writable mount starts from (roadmap 0017).
+            log.info(
+                "loaded \(device.bsdName, privacy: .public): \(fileSystem.volume.label, privacy: .public), writable device: \(device.isWritable, privacy: .public), options: \(options.taskOptions, privacy: .public)"
+            )
             replyHandler(volume, nil)
         } catch {
             log.error("load \(device.bsdName, privacy: .public): \(String(describing: error), privacy: .public)")

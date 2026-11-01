@@ -109,7 +109,8 @@ func mounts(_ options: Options) -> Int32 {
             try? FileManager.default.createDirectory(atPath: point, withIntermediateDirectories: true)
             return point
         },
-        verification: .manifest
+        verification: .manifest,
+        pause: { Thread.sleep(forTimeInterval: Double($0.components.seconds)) }
     )
     // The agent path (roadmap 0039): the installed app mounts a clone in its container through its agent.
     let container = NSHomeDirectory() + "/Library/Containers/dev.gcqd.MacFS/Data/tmp"
@@ -166,6 +167,9 @@ func install(_ options: Options) -> Int32 {
         installed: installed,
         previous: previous,
         team: "NP94WB3P75",
+        user: getuid(),
+        enabledModules: NSHomeDirectory()
+            + "/Library/Group Containers/group.com.apple.fskit.settings/enabledModules.plist",
         extensions: { app in
             let names = (try? FileManager.default.contentsOfDirectory(atPath: app + "/Contents/Extensions")) ?? []
             return names.filter { $0.hasSuffix(".appex") }.map { String($0.dropLast(".appex".count)) }.sorted()
@@ -178,8 +182,9 @@ func install(_ options: Options) -> Int32 {
     }
     print("[OK]   installed \(installed) (the previous app is at \(previous))")
     guard options.check else { return 0 }
-    // The module processes were stopped: the first mount may come before they are back (AGENTS.md).
-    Thread.sleep(forTimeInterval: 8)
+    // The module processes and FSKit's agent were restarted: a mount 8 s later still found a helper missing ("Couldn't
+    // communicate with a helper application", diary 2026-11-01-11).
+    Thread.sleep(forTimeInterval: 20)
     return mounts(options)
 }
 

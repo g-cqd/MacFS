@@ -42,17 +42,21 @@ public struct MountCheck: Sendable {
     let root: String
     let mountPoint: @Sendable (Target) -> String
     let verification: MountVerification
+    /// Waits before the retry; the tests' does not.
+    let pause: @Sendable (Duration) -> Void
 
     public init(
         runner: any ProcessRunning,
         root: String,
         mountPoint: @escaping @Sendable (Target) -> String,
-        verification: MountVerification
+        verification: MountVerification,
+        pause: @escaping @Sendable (Duration) -> Void
     ) {
         self.runner = runner
         self.root = root
         self.mountPoint = mountPoint
         self.verification = verification
+        self.pause = pause
     }
 
     public func run(_ target: Target) -> Outcome {
@@ -65,7 +69,16 @@ public struct MountCheck: Sendable {
         else { return Outcome(target: target, problems: ["attach: no device for \(image).img"]) }
         var problems: [String] = []
         let point = mountPoint(target)
-        let mount = try? runner.run(Command("/sbin/mount", ["-F", "-t", target.type, "-o", "rdonly", device, point]))
+        let command = Command("/sbin/mount", ["-F", "-t", target.type, "-o", "rdonly", device, point])
+        var mount = try? runner.run(command)
+        // FSKit stops a module's process after its volume unmounts; a mount arriving while it lingers finds no helper (diary
+        // 2026-11-01-11). Retried once, for that answer only.
+        if let failed = mount, failed.status != 0,
+            failed.output.contains("Couldn’t communicate with a helper application")
+        {
+            pause(.seconds(5))
+            mount = try? runner.run(command)
+        }
         if let mount, mount.status == 0 {
             problems += verification.problems(at: point, manifest: "\(image).manifest", extra: target.extra)
             _ = try? runner.run(Command("/sbin/umount", [point]))

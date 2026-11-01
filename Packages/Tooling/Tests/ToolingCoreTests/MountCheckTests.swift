@@ -18,7 +18,8 @@ import ToolingCore
             runner: runner,
             root: "/repo",
             mountPoint: { "/tmp/mounts/\($0.image)" },
-            verification: MountVerification(compare: { _, _, _ in problems }, writeRefused: { _ in refused })
+            verification: MountVerification(compare: { _, _, _ in problems }, writeRefused: { _ in refused }),
+            pause: { _ in }
         )
     }
 
@@ -53,6 +54,34 @@ import ToolingCore
         #expect(runner.executables.last == "/usr/bin/hdiutil")
         #expect(runner.commands.withLock { $0.last?.arguments.first } == "detach")
         #expect(!runner.executables.contains("/sbin/umount"), "nothing to unmount")
+    }
+
+    /// FSKit stops a module's process after its volume unmounts; a mount arriving while it lingers finds no helper. Retried
+    /// once, and only for that answer.
+    @Test func aMountThatFindsNoHelperIsRetriedOnce() {
+        let mounts = Mutex(0)
+        let runner = RecordingRunner { command in
+            if command.executable == "/sbin/mount",
+                mounts.withLock({
+                    $0 += 1
+                    return $0
+                }) == 1
+            {
+                return ProcessResult(
+                    status: 1,
+                    output: "mount: Probing resource: Couldn’t communicate with a helper application."
+                )
+            }
+            return ProcessResult(status: 0, output: command.arguments.first == "attach" ? Self.attachOutput : "")
+        }
+        #expect(Self.check(runner).run(Self.target).problems == [])
+        #expect(runner.executables.filter { $0 == "/sbin/mount" }.count == 2)
+    }
+
+    @Test func anyOtherFailedMountIsNotRetried() {
+        let runner = Self.runner(failing: "/sbin/mount")
+        _ = Self.check(runner).run(Self.target)
+        #expect(runner.executables.filter { $0 == "/sbin/mount" }.count == 1)
     }
 
     @Test func anAttachWithoutADeviceStopsThere() {

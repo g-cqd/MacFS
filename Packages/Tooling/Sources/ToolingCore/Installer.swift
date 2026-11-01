@@ -27,6 +27,9 @@ public struct Installer: Sendable {
     let runner: any ProcessRunning
     let paths: Paths
     let team: String
+    /// The user whose FSKit agent is restarted, and FSKit's list of enabled modules (read, never written).
+    let user: UInt32
+    let enabledModules: String
     let extensions: @Sendable (String) -> [String]
 
     /// The repository at `root` built into `derivedData`, installed at `installed`, the app it replaces kept at `previous`;
@@ -38,11 +41,15 @@ public struct Installer: Sendable {
         installed: String,
         previous: String,
         team: String,
+        user: UInt32,
+        enabledModules: String,
         extensions: @escaping @Sendable (String) -> [String]
     ) {
         self.runner = runner
         self.paths = Paths(root: root, derivedData: derivedData, installed: installed, previous: previous)
         self.team = team
+        self.user = user
+        self.enabledModules = enabledModules
         self.extensions = extensions
     }
 
@@ -83,6 +90,9 @@ public struct Installer: Sendable {
         // copy and the previous app unregistered (the build's also removed): theirs cannot be the modules that run. Not
         // `pluginkit -r` or `-a`: both lost modules (diary 2026-11-01-07, -09).
         _ = run(Self.lsregister, ["-f", "-R", "-trusted", paths.installed])
+        // FSKit's agent restarted on a fresh view of the modules: a stale one listed only some of them, and pruned the others
+        // from the enabled list (diary 2026-11-01-11).
+        _ = run("/bin/launchctl", ["kickstart", "-k", "user/\(user)/com.apple.fskit.fskit_agent"])
         _ = run(Self.lsregister, ["-u", paths.built])
         _ = run(Self.lsregister, ["-u", paths.previous])
         _ = run("/bin/rm", ["-rf", paths.built])
@@ -93,6 +103,11 @@ public struct Installer: Sendable {
         if signature.status != 0 { installed.append("\(paths.installed): signature: \(Self.last(signature.output))") }
         let listing = run("/usr/bin/pluginkit", ["-mAv", "-p", "com.apple.fskit.fsmodule"]).output
         installed += registrations(listing, modules)
+        let enabled = run("/usr/bin/plutil", ["-p", enabledModules]).output
+        installed += modules.map { "dev.gcqd.MacFS.\($0)" }.filter { !enabled.contains("\"\($0)\"") }
+            .map {
+                "\($0) is not enabled in FSKit: enable it in System Settings › General › Login Items & Extensions › File System Extensions"
+            }
         return installed
     }
 

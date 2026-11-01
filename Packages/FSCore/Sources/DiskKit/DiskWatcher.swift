@@ -61,19 +61,6 @@ public final class DiskWatcher: Sendable {
     }
 }
 
-/// The handler behind the callbacks' context pointer.
-private final class Delivery: Sendable {
-    let handler: @Sendable (DiskEvent) -> Void
-
-    init(_ handler: @escaping @Sendable (DiskEvent) -> Void) { self.handler = handler }
-
-    static func of(_ context: UnsafeMutableRawPointer?) -> Delivery? {
-        context.map { Unmanaged<Delivery>.fromOpaque($0).takeUnretainedValue() }
-    }
-
-    func deliver(_ event: DiskEvent?) { if let event { handler(event) } }
-}
-
 extension DiskDescription {
     /// The disk's description as Disk Arbitration has it now; nil without one or without a BSD name.
     init?(_ disk: DADisk) {

@@ -31,11 +31,16 @@ import ToolingCore
                         "     dev.gcqd.MacFS.\($0)(0.1)\tUUID\tdate\t/Applications/MacFS.app/Contents/Extensions/\($0).appex"
                     }
                     return ProcessResult(status: 0, output: lines.joined(separator: "\n"))
+                case "/usr/bin/plutil" where arguments.last == Self.enabledModules:
+                    let lines = modules.enumerated().map { "  \($0.offset) => \"dev.gcqd.MacFS.\($0.element)\"" }
+                    return ProcessResult(status: 0, output: "[\n" + lines.joined(separator: "\n") + "\n]")
                 default:
                     return ProcessResult(status: 0, output: "")
             }
         }
     }
+
+    static let enabledModules = "/Users/u/Library/Group Containers/group.com.apple.fskit.settings/enabledModules.plist"
 
     func install(_ runner: RecordingRunner) -> [String] {
         Installer(
@@ -45,6 +50,8 @@ import ToolingCore
             installed: "/Applications/MacFS.app",
             previous: "/tmp/MacFS.app.previous",
             team: "NP94WB3P75",
+            user: 503,
+            enabledModules: Self.enabledModules,
             extensions: { _ in Self.modules }
         )
         .run()
@@ -91,14 +98,36 @@ import ToolingCore
             // copy and the previous app unregistered (the build's also removed), so theirs cannot be the modules that run. No
             // `pluginkit -r`/`-a`: both lost modules (diary 2026-11-01-07, -09).
             Command(lsregister, ["-f", "-R", "-trusted", "/Applications/MacFS.app"]),
+            // FSKit's agent restarted on a fresh view of the modules: a stale one listed only some of them, and pruned the others
+            // from the enabled list (diary 2026-11-01-11).
+            Command("/bin/launchctl", ["kickstart", "-k", "user/503/com.apple.fskit.fskit_agent"]),
             Command(lsregister, ["-u", Self.built]),
             Command(lsregister, ["-u", "/tmp/MacFS.app.previous"]),
             Command("/bin/rm", ["-rf", Self.built]),
             Command("/usr/bin/pkill", ["-9", "-f", "/Contents/Extensions/[^/]*\\.appex/|/Contents/MacOS/macfs-agent"]),
             Command("/usr/bin/codesign", ["--verify", "--deep", "--strict", "/Applications/MacFS.app"]),
-            Command("/usr/bin/pluginkit", ["-mAv", "-p", "com.apple.fskit.fsmodule"])
+            Command("/usr/bin/pluginkit", ["-mAv", "-p", "com.apple.fskit.fsmodule"]),
+            Command("/usr/bin/plutil", ["-p", Self.enabledModules])
         ]
         #expect(commands == expected)
+    }
+
+    /// FSKit dropping a module from its enabled list is a failure the installer names: only System Settings gives it back, and a
+    /// mount check would otherwise report it as a mount that does not work.
+    @Test func aModuleFSKitNoLongerEnablesIsReported() {
+        let runner = Self.answers { command in
+            command.executable == "/usr/bin/plutil"
+                // A longer identifier that contains the module's is not the module's.
+                ? ProcessResult(
+                    status: 0,
+                    output: "[\n  0 => \"dev.gcqd.MacFS.ExtFSModule\"\n  1 => \"dev.gcqd.MacFS.BtrfsFS.old\"\n]"
+                ) : nil
+        }
+        #expect(
+            install(runner) == [
+                "dev.gcqd.MacFS.BtrfsFS is not enabled in FSKit: enable it in System Settings › General › Login Items & Extensions › File System Extensions"
+            ]
+        )
     }
 
     /// A failed build leaves the last one in derived data, ready to be installed by mistake (AGENTS.md): nothing after it runs.
