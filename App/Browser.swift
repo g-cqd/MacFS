@@ -21,6 +21,8 @@ final class Browser {
     private(set) var problem: String?
     private var tree: MountedTree?
     private var scope: URL?
+    /// The image opened, for mounting it through the agent (inside its security scope while it is open here).
+    private(set) var image: URL?
 
     func open(_ url: URL) {
         scope?.stopAccessingSecurityScopedResource()
@@ -32,6 +34,7 @@ final class Browser {
             }
             let fileSystem = try format.open(source)
             tree = try MountedTree(fileSystem)
+            image = url
             self.format = format
             title = fileSystem.volume.label.isEmpty ? url.lastPathComponent : fileSystem.volume.label
             path = [(MountedTree.root, title)]

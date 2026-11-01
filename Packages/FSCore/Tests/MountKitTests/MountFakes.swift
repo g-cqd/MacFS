@@ -37,12 +37,16 @@ final class FakeBackend: MountBackend {
         self.unavailable = unavailable
     }
 
-    func availability(of source: String) -> MountAvailability {
+    /// Descriptors the backend was handed, which it owns from then on.
+    let descriptors = Mutex<[Int32]>([])
+
+    func availability(of request: MountRequest) -> MountAvailability {
         unavailable.map { .unavailable($0) } ?? .available
     }
 
     func mount(_ request: MountRequest) throws(MountError) -> String {
         log.add("mount \(kind) \(request.mountPoint)")
+        if let descriptor = request.descriptor { descriptors.withLock { $0.append(descriptor) } }
         duringMount.withLock { $0 }?()
         if failMount.withLock({ $0 }) { throw .backend("\(kind) refused") }
         let from = "fake-\(kind):\(request.source)"

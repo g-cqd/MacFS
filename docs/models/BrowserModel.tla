@@ -5,8 +5,8 @@
 \* the segment that contains the closure.
 EXTENDS Naturals
 CONSTANTS Procs, Opaque
-VARIABLES title, format, path, rows, problem, tree, scope, pc
-vars == <<title, format, path, rows, problem, tree, scope, pc>>
+VARIABLES title, format, path, rows, problem, tree, scope, image, pc
+vars == <<title, format, path, rows, problem, tree, scope, image, pc>>
 
 Dom_title == Opaque
 Dom_format == {"btrfs", "ntfs", "ext", "xfs", "nil"}
@@ -15,6 +15,7 @@ Dom_rows == Opaque
 Dom_problem == Opaque \cup {"nil"}
 Dom_tree == Opaque \cup {"nil"}
 Dom_scope == Opaque \cup {"nil"}
+Dom_image == Opaque \cup {"nil"}
 PCs == {"idle"}
 
 TypeOK ==
@@ -26,6 +27,7 @@ TypeOK ==
     /\ problem \in Dom_problem
     /\ tree \in Dom_tree
     /\ scope \in Dom_scope
+    /\ image \in Dom_image
 
 Init ==
     /\ pc = [p \in Procs |-> "idle"]
@@ -36,11 +38,13 @@ Init ==
     /\ problem = CHOOSE v \in Dom_problem : TRUE
     /\ tree = CHOOSE v \in Dom_tree : TRUE
     /\ scope = CHOOSE v \in Dom_scope : TRUE
+    /\ image = CHOOSE v \in Dom_image : TRUE
 
-\* open(_:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:25
+\* open(_:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:27
 open_0(p) ==
     /\ pc[p] = "idle"
     /\ format' \in Dom_format
+    /\ image' \in Dom_image
     /\ path' \in Dom_path
     /\ problem' \in Dom_problem
     /\ scope' \in Dom_scope
@@ -49,27 +53,27 @@ open_0(p) ==
     /\ pc' = [pc EXCEPT ![p] = "idle"]
     /\ UNCHANGED <<rows>>
 
-\* enter(_:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:44
+\* enter(_:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:47
 enter_0(p) ==
     /\ pc[p] = "idle"
     /\ path' \in Dom_path
     /\ pc' = [pc EXCEPT ![p] = "idle"]
-    /\ UNCHANGED <<title, format, rows, problem, tree, scope>>
+    /\ UNCHANGED <<title, format, rows, problem, tree, scope, image>>
 
-\* up(to:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:50
+\* up(to:), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:53
 up_0(p) ==
     /\ pc[p] = "idle"
     /\ path' \in Dom_path
     /\ pc' = [pc EXCEPT ![p] = "idle"]
-    /\ UNCHANGED <<title, format, rows, problem, tree, scope>>
+    /\ UNCHANGED <<title, format, rows, problem, tree, scope, image>>
 
-\* list(), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:56
+\* list(), segment 1 of 1, /Users/gc/Developer/MacFS/App/Browser.swift:59
 list_0(p) ==
     /\ pc[p] = "idle"
     /\ problem' = "nil"
     /\ rows' \in Dom_rows
     /\ pc' = [pc EXCEPT ![p] = "idle"]
-    /\ UNCHANGED <<title, format, path, tree, scope>>
+    /\ UNCHANGED <<title, format, path, tree, scope, image>>
 
 Next == \E p \in Procs : open_0(p) \/ enter_0(p) \/ up_0(p) \/ list_0(p)
 

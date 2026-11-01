@@ -33,6 +33,8 @@ let package = Package(
         .library(name: "MountKit", targets: ["MountKit"]),
         .library(name: "AppSupport", targets: ["AppSupport"]),
         .library(name: "NFSProxy", targets: ["NFSProxy"]),
+        .library(name: "MountRegistry", targets: ["MountRegistry"]),
+        .library(name: "MountAgent", targets: ["MountAgent"]),
         .executable(name: "macfs-nfsd", targets: ["macfs-nfsd"]),
         .executable(name: "macfs-agent", targets: ["macfs-agent"]),
         .executable(name: "fsprobe", targets: ["fsprobe"])
@@ -99,7 +101,11 @@ let package = Package(
         .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
-        .target(name: "NFSProxy", dependencies: ["MountKit", "FSCore", "Formats"], swiftSettings: readerSettings),
+        .target(
+            name: "NFSProxy",
+            dependencies: ["MountKit", "FSCore", "Formats", aemiIO],
+            swiftSettings: readerSettings
+        ),
         .executableTarget(
             name: "macfs-nfsd",
             dependencies: ["NFSProxy", "Formats", "FSCore", "MountKit", "MountRegistry"],

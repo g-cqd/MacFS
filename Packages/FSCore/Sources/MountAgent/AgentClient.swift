@@ -5,22 +5,31 @@ import MountRegistry
 /// The app's side of the agent (roadmap 0039): typed calls over a byte transport, which XPC provides in the app and the
 /// dispatcher itself provides in tests. Errors come back as the `MountError` the service threw; anything else is `.agent`.
 public struct AgentClient: Sendable {
-    private let transport: @Sendable ([UInt8]) throws -> [UInt8]
+    private let transport: @Sendable ([UInt8], Int32?) throws -> [UInt8]
 
-    public init(transport: @escaping @Sendable ([UInt8]) throws -> [UInt8]) { self.transport = transport }
+    /// `transport` carries the request's bytes, and a descriptor beside them when a mount sends the opened image.
+    public init(transport: @escaping @Sendable ([UInt8], Int32?) throws -> [UInt8]) { self.transport = transport }
 
     public func list() throws(MountError) -> [MountRecord] {
         try call(AgentRequest(operation: AgentRequest.Operation.list.rawValue)).records.map(\.record)
     }
 
-    public func mount(source: String, kind: MountBackendKind, at mountPoint: String) throws(MountError) -> MountRecord {
+    /// Mounts `source`; an empty `mountPoint` lets the agent choose. A `descriptor` of the opened source is sent beside the
+    /// request, and the agent owns its copy (the caller keeps and closes its own).
+    public func mount(
+        source: String,
+        kind: MountBackendKind,
+        at mountPoint: String,
+        descriptor: Int32? = nil
+    ) throws(MountError) -> MountRecord {
         let reply = try call(
             AgentRequest(
                 operation: AgentRequest.Operation.mount.rawValue,
                 source: source,
                 kind: kind.rawValue,
                 mountPoint: mountPoint
-            )
+            ),
+            descriptor: descriptor
         )
         guard let record = reply.records.first else { throw .agent("the agent mounted nothing it can name") }
         return record.record
@@ -42,9 +51,11 @@ public struct AgentClient: Sendable {
         return report
     }
 
-    private func call(_ request: AgentRequest) throws(MountError) -> AgentReply {
+    private func call(_ request: AgentRequest, descriptor: Int32? = nil) throws(MountError) -> AgentReply {
         let bytes: [UInt8]
-        do { bytes = try transport(try ProtobufEncoder().encodeToBytes(request)) } catch { throw .agent("\(error)") }
+        do { bytes = try transport(try ProtobufEncoder().encodeToBytes(request), descriptor) } catch {
+            throw .agent("\(error)")
+        }
         guard let reply = try? ProtobufDecoder().decode(AgentReply.self, fromBytes: bytes) else {
             throw .agent("the agent's reply is not one")
         }

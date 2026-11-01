@@ -1,3 +1,4 @@
+import Darwin
 import Synchronization
 
 /// The one way MacFS mounts (ADR-0013): routes each request to the backend of its kind, keeps the registry as the truth (a
@@ -27,9 +28,16 @@ public final class MountService: Sendable {
 
     public func records() -> [MountRecord] { state.withLock { $0 } }
 
-    public func mount(source: String, kind: MountBackendKind, at mountPoint: String) throws(MountError) -> MountRecord {
+    /// Mounts `source` with the backend of `kind`. A `descriptor` of the source is handed to the backend, which owns it from
+    /// then on; a request refused before any backend has it closes the descriptor here.
+    public func mount(
+        source: String,
+        kind: MountBackendKind,
+        at mountPoint: String,
+        descriptor: Int32? = nil
+    ) throws(MountError) -> MountRecord {
         try state.withLock { (records) throws(MountError) -> MountRecord in
-            try mount(source: source, kind: kind, at: mountPoint, &records)
+            try mount(source: source, kind: kind, at: mountPoint, descriptor: descriptor, &records)
         }
     }
 
@@ -42,7 +50,7 @@ public final class MountService: Sendable {
         try state.withLock { (records) throws(MountError) -> MountChange in
             guard let old = records.first(where: { $0.id == id }) else { throw .notFound(id) }
             guard old.isRecognized else { throw .unrecognized(id) }
-            let new = try mount(source: old.source, kind: kind, at: mountPoint, &records)
+            let new = try mount(source: old.source, kind: kind, at: mountPoint, descriptor: nil, &records)
             do {
                 try unmount(id: id, &records)
                 return MountChange(record: new, oldUnmounted: true)
@@ -102,26 +110,36 @@ public final class MountService: Sendable {
         source: String,
         kind: MountBackendKind,
         at path: String,
+        descriptor: Int32?,
         _ records: inout [MountRecord]
     ) throws(MountError) -> MountRecord {
-        guard let backend = backends[kind] else { throw .noBackend(kind) }
-        if case .unavailable(let reason) = backend.availability(of: source) { throw .unavailable(kind, reason) }
+        // Until a backend has it, the descriptor is the service's to close.
+        func refuse(_ error: MountError) -> MountError {
+            if let descriptor { close(descriptor) }
+            return error
+        }
+        guard let backend = backends[kind] else { throw refuse(.noBackend(kind)) }
         let mountPoint = table.canonical(path)
+        let request = MountRequest(id: newID(), source: source, mountPoint: mountPoint, descriptor: descriptor)
+        if case .unavailable(let reason) = backend.availability(of: request) {
+            throw refuse(.unavailable(kind, reason))
+        }
         let taken =
             records.contains { $0.mountPoint == mountPoint } || table.entries().contains { $0.mountPoint == mountPoint }
-        guard !taken else { throw .mountPointInUse(path) }
+        guard !taken else { throw refuse(.mountPointInUse(path)) }
         var record = MountRecord(
-            id: newID(),
+            id: request.id,
             kind: kind,
             source: source,
             mountPoint: mountPoint,
             mountedFrom: "",
             state: .pending
         )
-        try store.save(records + [record])  // no record, no mount: an unrecorded mount could never be swept
+        // No record, no mount: an unrecorded mount could never be swept.
+        do { try store.save(records + [record]) } catch { throw refuse(error) }
         records.append(record)
         do {
-            record.mountedFrom = try backend.mount(MountRequest(id: record.id, source: source, mountPoint: mountPoint))
+            record.mountedFrom = try backend.mount(request)
         } catch {
             records.removeAll { $0.id == record.id }
             try? store.save(records)  // a pending record left behind is settled by the sweep

@@ -9,11 +9,12 @@
 | Core | `FSCore` | `DiskError`, `DiskBytes` (bounds-checked loads), `BlockSource` and `FileBlockSource` (image or raw device), `AlignedReader`, `BoundedCache`, `TreeWalk`, the model (`NodeAttributes`, `DirectoryEntry`, `VolumeDescription`) and the seam: `ReadOnlyFileSystem`. |
 | Readers | `Btrfs`, `NTFS`, `ExtFS` | One `ReadOnlyFileSystem` each. Synchronous, thread-safe, caches bounded. |
 | Registry | `Formats` | `DiskFormat`: names, short names, probe (a full open), open. The one list every consumer uses. |
-| Mount glue | `MountKit` | `MountedTree`: identifiers (root = 2, parent of root = 1), listings with `.` and `..`, cookies (proved in Lean, `Proofs/`). The mount seam (ADR-0013): `MountBackend`, `MountService` (registry first, make before break, sweep), `SystemMountTable`; its lifecycle in TLA+ (`docs/models/MountLifecycle.tla`). |
+| Mount glue | `MountKit` | `MountedTree`: identifiers (root = 2, parent of root = 1), listings with `.` and `..`, cookies (proved in Lean, `Proofs/`). The mount seam (ADR-0016): `MountBackend`, `MountService` (registry first, make before break, sweep), `SystemMountTable`; its lifecycle in TLA+ (`docs/models/MountLifecycle.tla`). |
 | Mount registry | `MountRegistry` | The registry on disk: protobuf (AemiProtobuf) in a CRC-32C envelope, atomic writes (ADR-0015). Linked by the app, the agent and `macfs-nfsd`, never by the FSKit extensions. |
 | NFS proxy | `NFSProxy`, `macfs-nfsd` | NFSv3 and MOUNT v3, read-only, over loopback TCP (ADR-0010, ADR-0014): `NFSDispatcher` is a call-to-reply function over `MountedTree` whose only state is whether its export (`NFSExport`: a secret path, mounted once, a secret in every handle) was mounted; `LoopbackServer` is the socket shell, with bounded connections and a connection's calls answered concurrently; `NFSMountCommand` mounts it soft, so a dead proxy is unmounted by the kernel. |
 | FSKit | `Extensions/Shared`, one `@main` per format | `ReadOnlyModule` (`FSUnaryFileSystem`), `ReadOnlyVolume` (`FSVolume.Handler`, `ReadWriteHandler`, macOS 27 API). |
-| App | `App` | Module status, a link to the extension settings, and an in-app browser over the same readers. Mounting from the app goes through one backend seam, and proxy mounts belong to a launchd agent (ADR-0013; roadmap 0035, 0039). |
+| App | `App` | Module status, a link to the extension settings, and an in-app browser over the same readers. Mounting from the app goes through one backend seam, and proxy mounts belong to a sandboxed launch agent the app registers (ADR-0016; roadmap 0035, 0039). |
+| Mount agent | `MountAgent`, `macfs-agent` | The agent's protocol (protobuf requests and replies, a dispatcher over `MountService`, a typed client), its XPC shells (same-team peers, the image as a descriptor), and the agent itself, bundled in the app. |
 | Tooling | `Packages/Tooling` | `macfs-tool` and its command plugins: images, gates, plists. |
 
 ## Readers, as built

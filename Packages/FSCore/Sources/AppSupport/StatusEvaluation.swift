@@ -46,6 +46,7 @@ public enum StatusEvaluation {
         for format in DiskFormat.allCases {
             checks.append(module(format, facts: facts, installed: installed))
         }
+        checks.append(agent(facts.agent, installed: installed))
         checks.append(
             StatusCheck(
                 id: "note.ntfs",
@@ -90,6 +91,46 @@ public enum StatusEvaluation {
                     detail: installed
                         ? "Not registered with FSKit. Reinstall MacFS to register its modules."
                         : "Not registered: the app is not in /Applications.",
+                    remedy: installed ? .reinstall : .moveToApplications
+                )
+        }
+    }
+
+    /// The mount agent owns proxy mounts, so they outlive the app (roadmap 0039).
+    private static func agent(_ agent: SystemFacts.Agent, installed: Bool) -> StatusCheck {
+        let (id, title) = ("agent", "Mount agent")
+        switch agent {
+            case .enabled:
+                return StatusCheck(
+                    id: id,
+                    title: title,
+                    state: .ok,
+                    detail: "Running when needed. Mounts it holds stay up after MacFS quits."
+                )
+            case .notRegistered:
+                return StatusCheck(
+                    id: id,
+                    title: title,
+                    state: .attention,
+                    detail: "Not registered: images cannot be mounted through the NFS proxy until it is.",
+                    remedy: .registerAgent
+                )
+            case .requiresApproval:
+                return StatusCheck(
+                    id: id,
+                    title: title,
+                    state: .attention,
+                    detail: "Registered, waiting for approval in System Settings → General → Login Items & Extensions.",
+                    remedy: .openLoginItems
+                )
+            case .notFound:
+                return StatusCheck(
+                    id: id,
+                    title: title,
+                    state: .failed,
+                    detail: installed
+                        ? "Not found in the app. Reinstall MacFS."
+                        : "Not available: the app is not in /Applications.",
                     remedy: installed ? .reinstall : .moveToApplications
                 )
         }

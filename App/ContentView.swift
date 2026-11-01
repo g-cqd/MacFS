@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     let status: ExtensionStatus
     @State private var browser = Browser()
+    @State private var mounts = Mounts()
     @State private var selection: Browser.Row.ID?
     @AppStorage("checkStatusAtLaunch") private var checkAtLaunch = true
     @Environment(\.openSettings) private var openSettings
@@ -34,8 +35,33 @@ struct ContentView: View {
                         }
                     }
                 }
+                Section("Mounts") {
+                    ForEach(mounts.records, id: \.id) { record in
+                        HStack {
+                            Label(
+                                record.mountPoint.split(separator: "/").last.map(String.init) ?? record.mountPoint,
+                                systemImage: "externaldrive.connected.to.line.below"
+                            )
+                            .help("\(record.source) at \(record.mountPoint)")
+                            Spacer()
+                            Button {
+                                Task { await mounts.unmount(record) }
+                            } label: {
+                                Image(systemName: "eject")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Unmount")
+                        }
+                    }
+                    if let problem = mounts.problem {
+                        Text(problem).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
-            .task { if checkAtLaunch { await status.refresh() } }
+            .task {
+                if checkAtLaunch { await status.refresh() }
+                if status.facts.agent == .enabled { await mounts.refresh() }
+            }
         } detail: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -46,6 +72,11 @@ struct ContentView: View {
                         }
                     }
                     Spacer()
+                    Button("Mount") {
+                        if let image = browser.image { Task { await mounts.mount(image) } }
+                    }
+                    .disabled(browser.image == nil || mounts.busy || status.facts.agent != .enabled)
+                    .help("Mount it in Finder through the NFS proxy; it stays mounted after MacFS quits")
                     Button("Open Image…", action: chooseImage)
                 }
                 Table(browser.rows, selection: $selection) {

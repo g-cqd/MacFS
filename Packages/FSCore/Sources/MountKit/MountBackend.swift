@@ -2,7 +2,7 @@
 public protocol MountBackend: Sendable {
     var kind: MountBackendKind { get }
 
-    func availability(of source: String) -> MountAvailability
+    func availability(of request: MountRequest) -> MountAvailability
 
     /// Mounts, and returns what the mount table will show as the mount's source.
     func mount(_ request: MountRequest) throws(MountError) -> String

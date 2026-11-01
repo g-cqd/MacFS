@@ -108,6 +108,12 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **GNU coreutils come first on PATH**: `stat -f` is GNU's file-system mode there; use `/usr/bin/stat`, `/usr/bin/find`.
 - **`umount` takes a path and removes whatever is mounted there**: unmount only after the table shows our `mountedFrom` at the
   point (TLC found the eject-then-remount trace). A pending record proves ownership by the backend's `claims`, nothing looser.
+- **A sandboxed app may register only a sandboxed agent** (BTM: "SMAppService target executable must be sandboxed because the app
+  is sandboxed"), and a sandboxed tool needs its Info.plist in the binary (`CREATE_INFOPLIST_SECTION_IN_BINARY`) or it traps at
+  launch. A sandboxed agent can run `mount_nfs`.
+- **`SMAppService.register` from a shell-launched app is "Operation not permitted"**: launch through `open -a MacFS --args ...`
+  and read `/usr/bin/log show --predicate 'subsystem == "dev.gcqd.MacFS"'` (zsh's `log` is a reserved word).
+- **Assigning a `RawSpan` into an `XPCDictionary` crashes the Swift 6.4 compiler**: `XPCDictionary.setBytes(_:for:)` uses the C API.
 - **One owner per registry**: a sweep unmounts what its own process does not serve. The agent uses `registry.pb`,
   `macfs-nfsd --mount` uses `registry-cli.pb`.
 - **The agent answers only binaries of team NP94WB3P75** (`isFromSameTeam`, both ways). The local Apple Development identities
@@ -130,7 +136,7 @@ NTFS reads LZNT1 and Btrfs LZO through arm64 kernels (0014), Btrfs zstd through 
 is arm64 assembly (0013; docs/research/2026-10-30-compression-kernels.md), Btrfs zlib through MacFS's own inflate held to
 libz. XFS reads through its own module (0031) and looks names up by hash (0037). The NFS proxy mounts soft at a single-use secret
 export, bounds its connections and answers a connection's calls concurrently (0038 in progress, ADR-0014); concurrent cache misses are
-made once (`BoundedCache`). Everest's features are on the roadmap with their improvements (ADR-0013, 0035–0044, research
+made once (`BoundedCache`). Everest's features are on the roadmap with their improvements (ADR-0016, 0035–0044, research
 2026-10-30-everest-code-review); writes cover every format and mount path (0017, 0026–0028, 0045, 0046); promotion to aemi is
 studied (0047). Next by value: the mount seam and registry (0035), then the agent (0039); on the codec side, zstd literals' Huffman
 streams. Read each entry's `status:` and `blocked-by:` before starting it.

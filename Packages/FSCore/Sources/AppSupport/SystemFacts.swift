@@ -6,10 +6,20 @@ public struct SystemFacts: Sendable, Equatable {
     public let modules: [String: Bool]
     /// Why FSKit could not be asked, when it could not.
     public let queryFailure: String?
+    /// The mount agent's registration, as `SMAppService` reports it (roadmap 0039).
+    public let agent: Agent
 
-    public init(appPath: String, modules: [String: Bool], queryFailure: String?) {
+    public enum Agent: Sendable, Equatable {
+        case enabled
+        case notRegistered
+        case requiresApproval
+        case notFound
+    }
+
+    public init(appPath: String, modules: [String: Bool], queryFailure: String?, agent: Agent) {
         self.appPath = appPath
         self.modules = modules
         self.queryFailure = queryFailure
+        self.agent = agent
     }
 }

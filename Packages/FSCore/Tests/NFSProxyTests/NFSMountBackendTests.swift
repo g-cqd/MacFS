@@ -186,9 +186,56 @@ final class FakeSystem: CommandRunning, MountTable {
     }
 
     @Test func anUnreadableSourceIsUnavailable() {
+        func request(_ source: String, _ descriptor: Int32? = nil) -> MountRequest {
+            MountRequest(id: "x", source: source, mountPoint: "/m", descriptor: descriptor)
+        }
         #expect(
-            backend.availability(of: "/nonexistent/disk.img") == .unavailable("/nonexistent/disk.img cannot be read")
+            backend.availability(of: request("/nonexistent/disk.img"))
+                == .unavailable("/nonexistent/disk.img cannot be read")
         )
-        #expect(backend.availability(of: "/etc/hosts") == .available)
+        #expect(backend.availability(of: request("/etc/hosts")) == .available)
+        #expect(
+            backend.availability(of: request("/nonexistent/disk.img", 0)) == .available,
+            "a descriptor needs no path"
+        )
+    }
+
+    /// The volume is read through the descriptor it was handed, not its path (which the agent may not be allowed to open),
+    /// and the descriptor is closed when the mount goes, or when it fails to come up.
+    @Test func theHandedDescriptorIsTheSourceAndIsClosedWithTheMount() throws {
+        let opened = Mutex<[Int32?]>([])
+        let backend = NFSMountBackend(runner: system, table: system, owner: (501, 20)) { request in
+            opened.withLock { $0.append(request.descriptor) }
+            return try MountedTree(InMemoryFileSystem(root: 5, files: 3))
+        }
+        let probe = DescriptorProbe()
+        let request = MountRequest(
+            id: "d",
+            source: "/not/readable.img",
+            mountPoint: directory + "/d",
+            descriptor: probe.descriptor
+        )
+        let from = try backend.mount(request)
+        #expect(opened.withLock { $0 } == [probe.descriptor])
+        #expect(!probe.isClosed, "open while mounted")
+        try backend.unmount(
+            MountRecord(
+                id: "d",
+                kind: .nfs,
+                source: request.source,
+                mountPoint: request.mountPoint,
+                mountedFrom: from,
+                state: .mounted
+            )
+        )
+        #expect(probe.isClosed, "closed with the mount")
+        system.mountStatus.withLock { $0 = 13 }
+        let failing = DescriptorProbe()
+        #expect(throws: MountError.self) {
+            try backend.mount(
+                MountRequest(id: "e", source: "/x.img", mountPoint: directory + "/e", descriptor: failing.descriptor)
+            )
+        }
+        #expect(failing.isClosed, "closed when the mount failed")
     }
 }

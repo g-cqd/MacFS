@@ -1,3 +1,4 @@
+import Darwin
 import MountKit
 import Synchronization
 import Testing
@@ -245,6 +246,33 @@ import Testing
         #expect(throws: MountError.unrecognized("n1")) { try service.unmount(id: "n1") }
         #expect(service.records() == [newer])
         #expect(!log.all.contains { $0.hasPrefix("unmount") })
+    }
+
+    /// An open descriptor of the source (the sandboxed app's, ADR-0013) reaches the backend, which owns it from then on.
+    @Test func aDescriptorReachesTheBackend() throws {
+        let probe = DescriptorProbe()
+        _ = try service.mount(source: "/i/a.img", kind: .nfs, at: "/m/a", descriptor: probe.descriptor)
+        #expect(nfs.descriptors.withLock { $0 } == [probe.descriptor])
+        #expect(!probe.isClosed)
+        probe.closeDescriptor()
+    }
+
+    /// A request refused before any backend has it closes its descriptor: nothing else would.
+    @Test func aRefusedRequestClosesItsDescriptor() throws {
+        _ = try service.mount(source: "/i/a.img", kind: .nfs, at: "/m/a")
+        for (kind, point) in [(MountBackendKind.webDAV, "/m/b"), (.fileProvider, "/m/b"), (.nfs, "/m/a")] {
+            let probe = DescriptorProbe()
+            #expect(throws: MountError.self) {
+                try service.mount(source: "/i/b.img", kind: kind, at: point, descriptor: probe.descriptor)
+            }
+            #expect(probe.isClosed, "\(kind) at \(point): closed")
+        }
+        store.failSave.withLock { $0 = true }
+        let probe = DescriptorProbe()
+        #expect(throws: MountError.registry("disk full")) {
+            try service.mount(source: "/i/c.img", kind: .nfs, at: "/m/c", descriptor: probe.descriptor)
+        }
+        #expect(probe.isClosed, "unrecorded: closed")
     }
 
     @Test func kindsHaveStableNumbers() {

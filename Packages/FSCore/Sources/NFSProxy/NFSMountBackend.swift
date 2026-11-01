@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 public import MountKit
 import Synchronization
@@ -10,14 +11,16 @@ public final class NFSMountBackend: MountBackend {
     private let runner: any CommandRunning
     private let table: any MountTable
     private let owner: (uid: UInt32, gid: UInt32)
-    private let open: @Sendable (String) throws -> MountedTree
+    private let open: @Sendable (MountRequest) throws -> MountedTree
     private let servers = Mutex<[String: LoopbackServer]>([:])
+    /// Descriptors handed with a request, closed once their mount is gone.
+    private let descriptors = Mutex<[String: Int32]>([:])
 
     public init(
         runner: any CommandRunning,
         table: any MountTable,
         owner: (uid: UInt32, gid: UInt32),
-        open: @escaping @Sendable (String) throws -> MountedTree
+        open: @escaping @Sendable (MountRequest) throws -> MountedTree
     ) {
         self.runner = runner
         self.table = table
@@ -25,27 +28,35 @@ public final class NFSMountBackend: MountBackend {
         self.open = open
     }
 
-    public func availability(of source: String) -> MountAvailability {
-        FileManager.default.isReadableFile(atPath: source) ? .available : .unavailable("\(source) cannot be read")
+    public func availability(of request: MountRequest) -> MountAvailability {
+        if request.descriptor != nil { return .available }  // read through what the app opened, not the path
+        return FileManager.default.isReadableFile(atPath: request.source)
+            ? .available : .unavailable("\(request.source) cannot be read")
     }
 
     public func mount(_ request: MountRequest) throws(MountError) -> String {
+        // The descriptor is ours from here: kept while the mount lives, closed on every way out.
+        func fail(_ error: MountError) -> MountError {
+            if let descriptor = request.descriptor { close(descriptor) }
+            return error
+        }
         let tree: MountedTree
-        do { tree = try open(request.source) } catch { throw .backend("\(request.source): \(error)") }
+        do { tree = try open(request) } catch { throw fail(.backend("\(request.source): \(error)")) }
         let export = NFSExport.random()
         let server: LoopbackServer
         do {
             server = try LoopbackServer(dispatcher: NFSDispatcher(tree: tree, owner: owner, export: export), port: 0)
-        } catch { throw .backend("the proxy did not start: \(error)") }
+        } catch { throw fail(.backend("the proxy did not start: \(error)")) }
         try? FileManager.default.createDirectory(atPath: request.mountPoint, withIntermediateDirectories: true)
         let command = NFSMountCommand(port: server.port, export: export, mountPoint: request.mountPoint)
         let result = runner.run(command.executable, command.arguments)
         guard result.status == 0 else {
             server.stop()
             _ = unsafe rmdir(request.mountPoint)
-            throw .backend("mount_nfs exited \(result.status): \(result.output)")
+            throw fail(.backend("mount_nfs exited \(result.status): \(result.output)"))
         }
         servers.withLock { $0[request.id] = server }
+        if let descriptor = request.descriptor { descriptors.withLock { $0[request.id] = descriptor } }
         return "127.0.0.1:\(export.path)"
     }
 
@@ -55,18 +66,24 @@ public final class NFSMountBackend: MountBackend {
     /// mount (TLC's trace, docs/models/MountLifecycle.tla).
     public func unmount(_ record: MountRecord) throws(MountError) {
         guard isMounted(record) else {
-            servers.withLock { $0.removeValue(forKey: record.id) }?.stop()
+            release(record)
             return
         }
         var result = runner.run("/sbin/umount", [record.mountPoint])
         if isMounted(record) { result = runner.run("/sbin/umount", ["-f", record.mountPoint]) }
         guard !isMounted(record) else { throw .backend("umount -f exited \(result.status): \(result.output)") }
-        servers.withLock { $0.removeValue(forKey: record.id) }?.stop()
+        release(record)
         _ = unsafe rmdir(record.mountPoint)  // only if empty, as a mount point left by us is
     }
 
-    public func forget(_ record: MountRecord) {
+    /// Stops the record's proxy, then closes the descriptor it read through (never before: the proxy may be mid-read).
+    private func release(_ record: MountRecord) {
         servers.withLock { $0.removeValue(forKey: record.id) }?.stop()
+        if let descriptor = descriptors.withLock({ $0.removeValue(forKey: record.id) }) { close(descriptor) }
+    }
+
+    public func forget(_ record: MountRecord) {
+        release(record)
         _ = unsafe rmdir(record.mountPoint)  // only if empty
     }
 

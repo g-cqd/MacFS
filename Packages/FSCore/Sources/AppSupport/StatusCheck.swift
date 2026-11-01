@@ -10,6 +10,10 @@ public struct StatusCheck: Identifiable, Sendable, Equatable {
         case openExtensionSettings
         case moveToApplications
         case reinstall
+        /// Register the mount agent with launchd (`SMAppService.register`).
+        case registerAgent
+        /// Open Login Items, where a registered agent is approved.
+        case openLoginItems
     }
 
     public let id: String

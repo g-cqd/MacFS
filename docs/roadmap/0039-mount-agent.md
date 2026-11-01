@@ -6,8 +6,8 @@ date: 2026-10-30
 
 # 0039 — A launchd agent owns proxy mounts
 
-ADR-0013 #6. The app is sandboxed and cannot run `mount_nfs`; Everest, unsandboxed, hosts its server in the app, so its mounts die
-with it. `macfs-agent`, registered with `SMAppService.agent`, hosts the NFS (and later WebDAV) servers, runs the mount commands,
+ADR-0016 (superseding ADR-0013 #6). Everest hosts its server in the app, so its mounts die with it; a proxy mount must outlive the
+app, so its server lives in an agent. `macfs-agent`, registered with `SMAppService.agent`, hosts the NFS (and later WebDAV) servers, runs the mount commands,
 keeps the registry (0035) and sweeps it at start; the app asks over XPC (AemiProtobuf). Mounts survive the app quitting. The status
 pane reports the agent's registration and approval like the modules'.
 
@@ -23,6 +23,11 @@ sweep unmounts the dead proxy's mount.
 Each owner has its own registry (`registry.pb` for the agent, `registry-cli.pb` for `macfs-nfsd --mount`): a sweep unmounts what
 its process does not serve, so two owners of one registry would unmount each other.
 
-Open: bundling the agent in the app (`Contents/Library/LaunchAgents`, `SMAppService.agent`), the app group entitlement, the status
-pane's agent check, the app's mount action; and the image's path: an unsandboxed agent opening a file in Downloads or Documents
-meets TCC, so the app should pass the open file (a descriptor or a bookmark), not its path.
+In the app (ADR-0016): `macfs-agent` in `Contents/MacOS`, its plist in `Contents/Library/LaunchAgents`, registered with
+`SMAppService.agent`; sandboxed, because a sandboxed app may register nothing else; the app group for the Mach service. The app
+opens the image the user chose and sends the descriptor (XPC duplicates it); the agent reads through it and picks the mount point in
+its container. The status pane has the agent's line (registered, waiting for approval, missing) with its remedy; the window has
+Mount and a Mounts list with Unmount. Checked live through the installed app: registration, a mount of an image in the app's
+container (unreadable to the agent by path), the mount read against the reference manifest after the app quit, an unmount.
+
+Open: a repeatable check of agent mounts in the `mounts` plugin; mount points outside the agent's container.

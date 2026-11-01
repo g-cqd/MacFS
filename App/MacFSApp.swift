@@ -4,6 +4,8 @@ import SwiftUI
 struct MacFSApp: App {
     @State private var status = ExtensionStatus()
 
+    init() { Automation.runIfAsked(CommandLine.arguments) }
+
     var body: some Scene {
         WindowGroup("MacFS") {
             ContentView(status: status)

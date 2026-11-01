@@ -6,5 +6,9 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>NP94WB3P75.dev.gcqd.MacFS</string>
+	</array>
 </dict>
 </plist>

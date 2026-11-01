@@ -9,19 +9,19 @@ import MountRegistry
 import NFSProxy
 
 // macfs-agent [--service NAME] [--registry PATH]          the launch agent: owns proxy mounts (roadmap 0039)
-// macfs-agent call list|sweep|mount IMAGE DIR|unmount ID [--service NAME]
+// macfs-agent call list|sweep|mount IMAGE [DIR]|unmount ID [--service NAME]   (mount sends the opened image's descriptor)
 //
 // launchd starts the agent on demand through its Mach service. It sweeps the registry first, then answers MacFS's own
 // binaries only (same team). `call` is a client for scripts and checks; signed by another team, it is refused.
 
-if #available(macOS 26, *) {
+if #available(macOS 27, *) {
     run()
 } else {
-    print("macfs-agent: needs macOS 26 (XPC peer requirements)")
+    print("macfs-agent: needs macOS 27 (XPC peer requirements and descriptors)")
     exit(1)
 }
 
-@available(macOS 26, *)
+@available(macOS 27, *)
 func run() -> Never {
     let arguments = Array(CommandLine.arguments.dropFirst())
     func option(_ name: String) -> String? { arguments.firstIndex(of: name).map { arguments[$0 + 1] } }
@@ -42,8 +42,16 @@ func run() -> Never {
                     print(
                         "kept \(report.kept.count), unmounted \(report.unmounted.count), forgotten \(report.forgotten.count)"
                     )
-                case "mount" where arguments.count >= 4:
-                    let record = try client.mount(source: arguments[2], kind: .nfs, at: arguments[3])
+                case "mount" where arguments.count >= 3:
+                    // As the app does: open the image here, send the descriptor, and let the agent read through it.
+                    let fd = open(arguments[2], O_RDONLY)
+                    guard fd >= 0 else {
+                        print("macfs-agent: cannot open \(arguments[2]): errno \(errno)")
+                        exit(1)
+                    }
+                    defer { close(fd) }
+                    let point = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
+                    let record = try client.mount(source: arguments[2], kind: .nfs, at: point, descriptor: fd)
                     print("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
                 case "unmount" where arguments.count >= 3:
                     try client.unmount(id: arguments[2])
@@ -72,7 +80,11 @@ func run() -> Never {
         print("macfs-agent: \(registry): unmounted \(swept.unmounted.count), forgotten \(swept.forgotten.count)")
         fflush(stdout)
         signal(SIGPIPE, SIG_IGN)
-        let listener = try AgentListener(service: service, dispatcher: AgentDispatcher(service: mounts))
+        let mountsDirectory = (registry as NSString).deletingLastPathComponent + "/Mounts"
+        let listener = try AgentListener(
+            service: service,
+            dispatcher: AgentDispatcher(service: mounts, mounts: mountsDirectory)
+        )
         withExtendedLifetime(listener) { dispatchMain() }
     } catch {
         print("macfs-agent: \(error)")

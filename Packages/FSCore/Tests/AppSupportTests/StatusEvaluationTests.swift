@@ -11,11 +11,12 @@ import Testing
     static func facts(
         path: String = "/Applications/MacFS.app",
         modules: [String: Bool]? = everyModule,
-        failure: String? = nil
+        failure: String? = nil,
+        agent: SystemFacts.Agent = .enabled
     )
         -> SystemFacts
     {
-        SystemFacts(appPath: path, modules: modules ?? [:], queryFailure: failure)
+        SystemFacts(appPath: path, modules: modules ?? [:], queryFailure: failure, agent: agent)
     }
 
     @Test func everythingInPlaceIsReady() {
@@ -83,5 +84,33 @@ import Testing
         let report = StatusEvaluation.report(StatusEvaluation.checks(Self.facts()), facts: Self.facts())
         #expect(report.contains("/Applications/MacFS.app"))
         for format in DiskFormat.allCases { #expect(report.contains(format.moduleBundleIdentifier)) }
+    }
+
+    // MARK: - The mount agent (roadmap 0039)
+
+    /// The agent's line, one per state `SMAppService` reports, each with what the user can do about it.
+    @Test(arguments: [
+        (SystemFacts.Agent.enabled, StatusCheck.State.ok, nil as StatusCheck.Remedy?),
+        (.notRegistered, .attention, .registerAgent),
+        (.requiresApproval, .attention, .openLoginItems),
+        (.notFound, .failed, .reinstall)
+    ])
+    func theAgentHasALine(_ agent: SystemFacts.Agent, _ state: StatusCheck.State, _ remedy: StatusCheck.Remedy?) throws
+    {
+        let check = try #require(StatusEvaluation.checks(Self.facts(agent: agent)).first { $0.id == "agent" })
+        #expect(check.state == state && check.remedy == remedy, "\(agent)")
+        #expect(check.title == "Mount agent")
+        #expect(!check.detail.isEmpty)
+    }
+
+    /// Outside /Applications the agent cannot be registered either: the remedy is to move the app, not to register.
+    @Test func anAgentOutsideApplicationsPointsAtTheApp() throws {
+        let check = try #require(
+            StatusEvaluation.checks(Self.facts(path: "/Users/u/Downloads/MacFS.app", agent: .notFound))
+                .first {
+                    $0.id == "agent"
+                }
+        )
+        #expect(check.remedy == .moveToApplications)
     }
 }

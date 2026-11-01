@@ -22,6 +22,8 @@ enum StatusStyle {
         switch remedy {
             case .openExtensionSettings: "Open Extension Settings…"
             case .moveToApplications, .reinstall: "Show in Finder"
+            case .registerAgent: "Register"
+            case .openLoginItems: "Open Login Items"
         }
     }
 }

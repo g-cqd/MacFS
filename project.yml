@@ -55,6 +55,37 @@ targetTemplates:
         GENERATE_INFOPLIST_FILE: NO
 
 targets:
+  # The launch agent that owns proxy mounts (roadmap 0039, ADR-0013): unsandboxed (it runs mount_nfs), answering only binaries
+  # of this team. Copied into Contents/MacOS; launchd starts it through Contents/Library/LaunchAgents (SMAppService.agent).
+  macfs-agent:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/FSCore/Sources/macfs-agent
+    dependencies:
+      - package: FSCore
+        product: MountAgent
+      - package: FSCore
+        product: MountRegistry
+      - package: FSCore
+        product: NFSProxy
+      - package: FSCore
+        product: Formats
+      - package: FSCore
+        product: MountKit
+      - package: FSCore
+        product: FSCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.gcqd.MacFS.agent
+        PRODUCT_NAME: macfs-agent
+        SKIP_INSTALL: YES
+        ENABLE_APP_SANDBOX: YES
+        CODE_SIGN_ENTITLEMENTS: App/Agent.entitlements
+        # A sandboxed tool needs an Info.plist in its binary, or the sandbox traps at launch.
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+
   BtrfsFS:
     templates: [FSKitModule]
 
@@ -72,6 +103,12 @@ targets:
     platform: macOS
     sources:
       - path: App
+        excludes: ["LaunchAgents"]
+      - path: App/LaunchAgents/dev.gcqd.MacFS.agent.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
     dependencies:
       - package: FSCore
         product: Formats
@@ -86,6 +123,12 @@ targets:
       - target: ExtFSModule
       - target: NTFSFS
       - target: XFSModule
+      - target: macfs-agent
+        embed: true
+        copy:
+          destination: executables
+      - package: FSCore
+        product: MountAgent
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.gcqd.MacFS
