@@ -16,13 +16,13 @@ import Testing
 
     static func sectors(_ volume: ExtFileSystem, _ id: UInt64) throws -> UInt64 { try volume.inode(id).sectors }
 
-    static func e2fsck(_ device: MemoryBlockSource) throws {
+    static func e2fsck(_ device: MemoryBlockSource) async throws {
         guard Checkers.isAvailable else { return }
-        let result = try #require(Checkers.run(["e2fsck", "-fn"], on: ["volume": device.bytes])?["volume"])
+        let result = try #require(await Checkers.run(["e2fsck", "-fn"], on: ["volume": device.bytes])?["volume"])
         #expect(result.status == 0, "\(result.output)")
     }
 
-    @Test func aFileGrowsAndReadsBack() throws {
+    @Test func aFileGrowsAndReadsBack() async throws {
         let (device, volume) = try Self.open()
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
         try volume.write(hello, at: 12, Array("world\n".utf8))
@@ -30,11 +30,11 @@ import Testing
         #expect(try volume.read(hello, at: 0, count: 100) == Array("hello btrfs\nworld\n".utf8))
         try volume.close()
         #expect(try ExtFileSystem(source: device).read(hello, at: 0, count: 100) == Array("hello btrfs\nworld\n".utf8))
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// Past the twelve direct blocks the file needs an indirect block: allocated, filled, then linked.
-    @Test func growingPastTheDirectBlocksAllocatesAnIndirectOne() throws {
+    @Test func growingPastTheDirectBlocksAllocatesAnIndirectOne() async throws {
         let (device, volume) = try Self.open()
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
         let payload = (0 ..< 20_000).map { UInt8(truncatingIfNeeded: $0 &* 7) }
@@ -43,10 +43,10 @@ import Testing
         #expect(try Self.sectors(volume, hello) == 21 * 2)
         try volume.close()
         #expect(try ExtFileSystem(source: device).read(hello, at: 0, count: 30_000) == payload)
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
-    @Test func aHoleIsFilledAndTheRestOfItStaysAHole() throws {
+    @Test func aHoleIsFilledAndTheRestOfItStaysAHole() async throws {
         let (device, volume) = try Self.open()
         let sparse = try ExtHtreeTests.path(volume, "big/sparse.bin")
         let before = try Self.sectors(volume, sparse)
@@ -57,12 +57,12 @@ import Testing
         var expected = [UInt8](repeating: 0, count: 8192)
         expected.replaceSubrange(4096 ..< 4099, with: [1, 2, 3])
         #expect(read == expected)
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// A write far past the end: the bytes between read as zeros (even where the old last block held bytes past the old end),
     /// and only the written blocks are allocated.
-    @Test func aWriteFarPastTheEndLeavesAHole() throws {
+    @Test func aWriteFarPastTheEndLeavesAHole() async throws {
         let (device, volume) = try Self.open()
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
         let block = try #require(try volume.runs(try volume.inode(hello)).first?.physical)
@@ -76,12 +76,12 @@ import Testing
         // The first block, the new last block and the indirect block that maps it.
         #expect(try Self.sectors(volume, hello) == 3 * 2)
         try volume.close()
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// Growing a file already mapped through a double indirect block adds a pointer to its existing second-level block, which
     /// keeps every pointer it had.
-    @Test func growingADoubleIndirectFileKeepsItsBlocks() throws {
+    @Test func growingADoubleIndirectFileKeepsItsBlocks() async throws {
         let (device, volume) = try Self.open()
         let random = try ExtHtreeTests.path(volume, "big/random.bin")
         let size = try volume.attributes(of: random).size
@@ -90,12 +90,12 @@ import Testing
         try volume.close()
         let after = try ExtFileSystem(source: device).read(random, at: 0, count: Int(size) + 2048)
         #expect(after == before + [UInt8](repeating: 0x5A, count: 1024))
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// A group whose count says full is passed over, even if its bitmap shows free bits (its count would go below zero): the
     /// search goes on to the next group, wrapping at the end.
-    @Test func aFullGroupIsPassedOver() throws {
+    @Test func aFullGroupIsPassedOver() async throws {
         let device = try ExtWriteTests.copy("ext2")
         let reader = try ExtFileSystem(source: device)
         let superblock = reader.superblock
@@ -116,7 +116,7 @@ import Testing
         )
     }
 
-    @Test func theFreeCountsFollowTheAllocation() throws {
+    @Test func theFreeCountsFollowTheAllocation() async throws {
         let (device, volume) = try Self.open()
         let free = try volume.statistics().freeBlocks
         try volume.write(try ExtHtreeTests.path(volume, "hello.txt"), at: 0, [UInt8](repeating: 1, count: 20_000))
@@ -124,11 +124,11 @@ import Testing
         #expect(try volume.statistics().freeBlocks == free - 20)
         try volume.close()
         #expect(try ExtFileSystem(source: device).statistics().freeBlocks == free - 20)
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// More than the volume holds: refused before anything is written.
-    @Test func aWriteLargerThanTheFreeSpaceSaysNoSpace() throws {
+    @Test func aWriteLargerThanTheFreeSpaceSaysNoSpace() async throws {
         let (device, volume) = try Self.open()
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
         let before = device.bytes
@@ -139,7 +139,7 @@ import Testing
 
     /// Every crash state of a growing write: e2fsck's preen repairs it (leaked blocks at worst), the check after finds
     /// nothing, and the file never shows a new block's old contents: past its old size it reads the new bytes or ends.
-    @Test func everyCrashStateOfAGrowingWriteIsRepairableAndExposesNothing() throws {
+    @Test func everyCrashStateOfAGrowingWriteIsRepairableAndExposesNothing() async throws {
         let original = try ExtWriteTests.copy("ext2")
         let recorder = CrashRecorder(original)
         let volume = try ExtWriteTests.writable(recorder)
@@ -159,7 +159,7 @@ import Testing
         let images = Dictionary(
             uniqueKeysWithValues: states.enumerated().map { ("state\($0.offset)", $0.element.image()) }
         )
-        let results = try #require(Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
+        let results = try #require(await Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
         for (index, state) in states.enumerated() {
             let steps = results["state\(index)"] ?? []
             #expect(steps.count == 2 && steps[0].status <= 1, "\(state.name): preen \(steps.first?.output ?? "")")

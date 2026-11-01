@@ -9,7 +9,7 @@ import Testing
 @Suite struct ExtRenameTests {
     static func name(_ text: String) -> [UInt8] { Array(text.utf8) }
 
-    @Test func aFileIsRenamedInItsDirectory() throws {
+    @Test func aFileIsRenamedInItsDirectory() async throws {
         let (device, volume) = try ExtNamespaceTests.open()
         let root = volume.rootID
         let hello = try volume.lookup(Self.name("hello.txt"), in: root).id
@@ -17,11 +17,11 @@ import Testing
         #expect(try volume.lookup(Self.name("greeting.txt"), in: root).id == hello)
         #expect(throws: DiskError.notFound) { try volume.lookup(Self.name("hello.txt"), in: root) }
         try volume.close()
-        try ExtNamespaceTests.e2fsck(device)
+        try await ExtNamespaceTests.e2fsck(device)
     }
 
     /// A directory moved to another parent: its `..` follows, both parents' link counts too.
-    @Test func aDirectoryMovesToAnotherParent() throws {
+    @Test func aDirectoryMovesToAnotherParent() async throws {
         let (device, volume) = try ExtNamespaceTests.open()
         let root = volume.rootID
         let big = try volume.lookup(Self.name("big"), in: root).id
@@ -34,11 +34,11 @@ import Testing
         #expect(try volume.attributes(of: root).linkCount == rootLinks - 1)
         #expect(try volume.attributes(of: big).linkCount == bigLinks + 1)
         try volume.close()
-        try ExtNamespaceTests.e2fsck(device)
+        try await ExtNamespaceTests.e2fsck(device)
     }
 
     /// Onto an existing file: the target's old file loses that name, and goes once it has none.
-    @Test func aRenameReplacesAFile() throws {
+    @Test func aRenameReplacesAFile() async throws {
         let (device, volume) = try ExtNamespaceTests.open()
         let root = volume.rootID
         let free = try volume.statistics().freeBlocks
@@ -52,10 +52,10 @@ import Testing
         try volume.rename(Self.name("hello.txt"), in: root, to: Self.name("medium.txt"), in: dir)
         #expect(try volume.statistics().freeBlocks == free + 1, "hundred.txt's one block, freed with its last name")
         try volume.close()
-        try ExtNamespaceTests.e2fsck(device)
+        try await ExtNamespaceTests.e2fsck(device)
     }
 
-    @Test func renamesFollowPOSIX() throws {
+    @Test func renamesFollowPOSIX() async throws {
         let (_, volume) = try ExtNamespaceTests.open()
         let root = volume.rootID
         let dir = try volume.lookup(Self.name("dir"), in: root).id
@@ -82,7 +82,7 @@ import Testing
         #expect(try volume.lookup(Self.name("hello.txt"), in: root).kind == .regular)
     }
 
-    @Test func aHardLinkIsASecondName() throws {
+    @Test func aHardLinkIsASecondName() async throws {
         let (device, volume) = try ExtNamespaceTests.open()
         let root = volume.rootID
         let hello = try volume.lookup(Self.name("hello.txt"), in: root).id
@@ -92,7 +92,7 @@ import Testing
         #expect(throws: DiskError.isDirectory) { try volume.link(root, as: Self.name("loop"), in: root) }
         #expect(throws: DiskError.exists) { try volume.link(hello, as: Self.name("dir"), in: root) }
         try volume.close()
-        try ExtNamespaceTests.e2fsck(device)
+        try await ExtNamespaceTests.e2fsck(device)
     }
 
     static func crashStates(_ session: (ExtFileSystem) throws -> Void) throws -> [CrashState] {
@@ -108,12 +108,12 @@ import Testing
     }
 
     /// `repair` then `e2fsck -fn` on every state: the repair exits 0 or 1 (fixed), the check after finds nothing.
-    static func expectRepairable(_ states: [CrashState], by repair: [String]) throws {
+    static func expectRepairable(_ states: [CrashState], by repair: [String]) async throws {
         guard Checkers.isAvailable else { return }
         let images = Dictionary(
             uniqueKeysWithValues: states.enumerated().map { ("state\($0.offset)", $0.element.image()) }
         )
-        let results = try #require(Checkers.run([repair, ["e2fsck", "-fn"]], on: images))
+        let results = try #require(await Checkers.run([repair, ["e2fsck", "-fn"]], on: images))
         for (index, state) in states.enumerated() {
             let steps = results["state\(index)"] ?? []
             #expect(steps.count == 2 && steps[0].status <= 1, "\(state.name): repair \(steps.first?.output ?? "")")
@@ -123,7 +123,7 @@ import Testing
 
     /// Renames within a directory (a file, a directory), one replacing a file, and a hard link: preen repairs every crash
     /// state.
-    @Test func everyCrashStateOfRenamesAndLinksIsRepairedByPreen() throws {
+    @Test func everyCrashStateOfRenamesAndLinksIsRepairedByPreen() async throws {
         let states = try Self.crashStates { volume in
             let root = volume.rootID
             let dir = try volume.lookup(Self.name("dir"), in: root).id
@@ -136,16 +136,16 @@ import Testing
                 in: dir
             )
         }
-        try Self.expectRepairable(states, by: ["e2fsck", "-fp"])
+        try await Self.expectRepairable(states, by: ["e2fsck", "-fp"])
     }
 
     /// A directory moved to another parent: without a journal some crash states need `e2fsck -fy` (two names, or `..`
     /// behind), as on Linux's ext2; every one of them it repairs.
-    @Test func everyCrashStateOfADirectoryMoveIsRepairedByE2fsck() throws {
+    @Test func everyCrashStateOfADirectoryMoveIsRepairedByE2fsck() async throws {
         let states = try Self.crashStates { volume in
             let dir = try volume.lookup(Self.name("dir"), in: volume.rootID).id
             try volume.rename(Self.name("moving"), in: volume.rootID, to: Self.name("moved"), in: dir)
         }
-        try Self.expectRepairable(states, by: ["e2fsck", "-fy"])
+        try await Self.expectRepairable(states, by: ["e2fsck", "-fy"])
     }
 }

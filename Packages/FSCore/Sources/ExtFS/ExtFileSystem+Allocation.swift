@@ -67,15 +67,7 @@ extension ExtFileSystem {
         for (block, content) in allocation.changedIndirectBlocks { try device.write(at: block * blockSize, content) }
         let sectors = inode.sectors + UInt64(allocation.allocated.count) * blockSize / 512
         guard sectors <= UInt64(UInt32.max) else { throw .unsupported("a file of more than 2 TiB of sectors") }
-        try touch(inode, on: device) { raw in
-            for (index, pointer) in allocation.pointers.enumerated() {
-                Self.put32(pointer, at: 0x28 + index * 4, in: &raw)
-            }
-            let size = max(inode.size, end)
-            Self.put32(UInt32(truncatingIfNeeded: size), at: 0x04, in: &raw)
-            Self.put32(UInt32(truncatingIfNeeded: size >> 32), at: 0x6C, in: &raw)
-            Self.put32(UInt32(sectors), at: 0x1C, in: &raw)
-        }
+        try touchMapping(inode, pointers: allocation.pointers, size: max(inode.size, end), sectors: sectors, on: device)
         for block in allocation.metadata.keys { blocks.invalidate(block) }
         for block in allocation.indirect.keys { blocks.invalidate(block) }
         mappings.invalidate(inode.number)

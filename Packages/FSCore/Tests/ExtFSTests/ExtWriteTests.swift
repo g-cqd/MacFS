@@ -28,7 +28,7 @@ import Testing
 
     /// What this slice does not maintain is refused by name: a journal (jbd2 comes next), metadata checksums, a volume not
     /// cleanly unmounted, a device opened read-only.
-    @Test func whatTheWriterDoesNotMaintainIsRefused() throws {
+    @Test func whatTheWriterDoesNotMaintainIsRefused() async throws {
         #expect(throws: DiskError.unsupported("writing a volume with a journal (ext3/ext4)")) {
             try Self.writable(try Self.copy("ext3"))
         }
@@ -44,7 +44,7 @@ import Testing
     }
 
     /// metadata_csum without a journal: an ext4 copy with its journal flags cleared and its superblock checksum redone.
-    @Test func metadataChecksumsAreRefusedForNow() throws {
+    @Test func metadataChecksumsAreRefusedForNow() async throws {
         let device = try Self.copy("ext4")
         var raw = try device.read(at: 1024, count: 1024)
         raw[0x5C] &= ~0x04  // has_journal
@@ -56,7 +56,7 @@ import Testing
     }
 
     /// A read-only-compatible feature the writer does not know: the reader may read it, the writer must not write it.
-    @Test func anUnknownReadOnlyFeatureIsRefused() throws {
+    @Test func anUnknownReadOnlyFeatureIsRefused() async throws {
         let device = try Self.copy("ext2")
         var raw = try device.read(at: 1024, count: 1024)
         raw[0x67] |= 0x80  // ro_compat bit 31
@@ -68,7 +68,7 @@ import Testing
     }
 
     /// Multiple-mount protection: the reader reads such a volume; the writer would have to keep the MMP block alive.
-    @Test func multipleMountProtectionIsRefused() throws {
+    @Test func multipleMountProtectionIsRefused() async throws {
         let device = try Self.copy("ext2")
         var raw = try device.read(at: 1024, count: 1024)
         raw[0x61] |= 0x01  // incompat 0x100
@@ -81,7 +81,7 @@ import Testing
 
     /// A fast symlink keeps its target in the inode's block area: written as a file, that text would be taken for block
     /// numbers. Refused, and nothing written.
-    @Test func aSymlinkOrAnInlineFileIsNotWrittenAsBlocks() throws {
+    @Test func aSymlinkOrAnInlineFileIsNotWrittenAsBlocks() async throws {
         let device = try Self.copy("ext2")
         let volume = try Self.writable(device)
         let before = device.bytes
@@ -103,7 +103,7 @@ import Testing
     }
 
     /// Where a write lands: runs of an extent-mapped file, contiguous or not; a gap or a hole is no place to write.
-    @Test func piecesFollowTheRunsAndStopAtAGap() {
+    @Test func piecesFollowTheRunsAndStopAtAGap() async {
         let runs = [
             ExtRun(logical: 0, physical: 100, count: 2), ExtRun(logical: 2, physical: 500, count: 1),
             ExtRun(logical: 4, physical: 700, count: 1)
@@ -123,7 +123,7 @@ import Testing
 
     // MARK: Overwrites
 
-    @Test func anOverwriteIsReadBackAndMovesTheFilesTimes() throws {
+    @Test func anOverwriteIsReadBackAndMovesTheFilesTimes() async throws {
         let device = try Self.copy("ext2")
         let volume = try Self.writable(device)
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
@@ -139,7 +139,7 @@ import Testing
     }
 
     /// Across block boundaries of a file mapped through indirect blocks: exactly the bytes asked change.
-    @Test func anOverwriteAcrossBlocksChangesOnlyThoseBytes() throws {
+    @Test func anOverwriteAcrossBlocksChangesOnlyThoseBytes() async throws {
         let device = try Self.copy("ext2")
         let volume = try Self.writable(device)
         let counting = try ExtHtreeTests.path(volume, "big/counting.txt")
@@ -153,7 +153,7 @@ import Testing
     }
 
     /// A directory is not written as a file (its entries are a later slice): refused, nothing written.
-    @Test func aDirectoryIsNotWrittenAsAFile() throws {
+    @Test func aDirectoryIsNotWrittenAsAFile() async throws {
         let device = try Self.copy("ext2")
         let original = device.bytes
         let volume = try Self.writable(device)
@@ -167,7 +167,7 @@ import Testing
 
     // MARK: The volume's state
 
-    @Test func theVolumeIsNotCleanWhileWritableAndCleanAfterClose() throws {
+    @Test func theVolumeIsNotCleanWhileWritableAndCleanAfterClose() async throws {
         let device = try Self.copy("ext2")
         let mounts = try DiskBytes(try device.read(at: 1024, count: 1024)).u16(0x34)
         let volume = try Self.writable(device)
@@ -180,7 +180,7 @@ import Testing
     }
 
     /// After the unmount, nothing more is written: the volume was declared clean.
-    @Test func nothingIsWrittenAfterClose() throws {
+    @Test func nothingIsWrittenAfterClose() async throws {
         let volume = try Self.writable(try Self.copy("ext2"))
         let hello = try ExtHtreeTests.path(volume, "hello.txt")
         try volume.close()
@@ -190,7 +190,7 @@ import Testing
 
     // MARK: The oracle
 
-    @Test(.enabled(if: Checkers.isAvailable)) func e2fsckAcceptsTheVolumeAfterWrites() throws {
+    @Test(.enabled(if: Checkers.isAvailable)) func e2fsckAcceptsTheVolumeAfterWrites() async throws {
         let device = try Self.copy("ext2")
         let volume = try Self.writable(device)
         try volume.write(try ExtHtreeTests.path(volume, "hello.txt"), at: 0, Array("HELLO".utf8))
@@ -200,13 +200,13 @@ import Testing
             [UInt8](repeating: 0x2A, count: 3000)
         )
         try volume.close()
-        let result = try #require(Checkers.run(["e2fsck", "-fn"], on: ["written": device.bytes])?["written"])
+        let result = try #require(await Checkers.run(["e2fsck", "-fn"], on: ["written": device.bytes])?["written"])
         #expect(result.status == 0, "\(result.output)")
     }
 
     /// Every state a power loss could leave (ADR-0018 decision 6): our reader opens it and reads the file as old or new bytes,
     /// block by block; e2fsck finds nothing wrong (a volume not clean is checked, not refused).
-    @Test func everyCrashStateIsAVolumeE2fsckAccepts() throws {
+    @Test func everyCrashStateIsAVolumeE2fsckAccepts() async throws {
         let original = try Self.copy("ext2")
         let mounts = try DiskBytes(try original.read(at: 1024, count: 1024)).u16(0x34)
         let recorder = CrashRecorder(original)
@@ -253,7 +253,7 @@ import Testing
         let images = Dictionary(
             uniqueKeysWithValues: states.enumerated().map { ("state\($0.offset)", $0.element.image()) }
         )
-        let results = try #require(Checkers.run(["e2fsck", "-fn"], on: images))
+        let results = try #require(await Checkers.run(["e2fsck", "-fn"], on: images))
         for (index, state) in states.enumerated() {
             let result = results["state\(index)"]
             #expect(result?.status == 0, "\(state.name): \(result?.output ?? "no result")")

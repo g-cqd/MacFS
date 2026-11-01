@@ -38,6 +38,10 @@ in the container.
      into its own subtree, nothing onto itself) and hard links. A rename within one block is one write. Every crash state of
      renames within a directory, a replacing rename and a hard link is repaired by preen; a directory moved to another parent
      by `e2fsck -fy` (ADR-0018). 7 tests.
-   - Next: symbolic links, then htree directories.
+   - **Done (2026-11-01):** symbolic links (fast under 60 bytes, else in a block), sizes (truncation frees the blocks past the
+     end, indirect ones included, and zeroes the rest of the last block; growth leaves a hole) and attributes (mode, owner,
+     access and modification times; the change time follows). Every crash state of a truncation and of symlinks made is
+     repaired by preen. 4 tests.
+   - Next: htree directories.
 4. Metadata checksums (ext4's `metadata_csum`), then jbd2 for ext3/4.
 5. Through FSKit: the volume's write handlers, the kernel-offloaded write mapping, the FSKit check (roadmap 0046).

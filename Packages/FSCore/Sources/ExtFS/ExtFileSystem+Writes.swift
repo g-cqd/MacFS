@@ -46,12 +46,7 @@ extension ExtFileSystem: WritableFileSystem {
 
     public func write(_ id: UInt64, at offset: UInt64, _ bytes: [UInt8]) throws(DiskError) {
         let device = try openDevice()
-        let inode = try inode(id)
-        guard inode.kind != .directory else { throw .isDirectory }
-        guard inode.kind == .regular else { throw .unsupported("writing a \(inode.kind)") }
-        guard inode.flags & (ExtInode.inlineDataFlag | ExtInode.encryptedFlag) == 0 else {
-            throw .unsupported("writing an inline or encrypted file")
-        }
+        let inode = try regularFile(id, "writing")
         guard !bytes.isEmpty else { return }
         let end = offset + UInt64(bytes.count)
         let blockSize = UInt64(superblock.blockSize)
@@ -132,6 +127,34 @@ extension ExtFileSystem: WritableFileSystem {
         try device.flush()
     }
 
+    /// File `id`, if its bytes are stored in blocks this writer maps: a regular file, neither inline nor encrypted. `verb`
+    /// names what was refused.
+    func regularFile(_ id: UInt64, _ verb: String) throws(DiskError) -> ExtInode {
+        let inode = try inode(id)
+        guard inode.kind != .directory else { throw .isDirectory }
+        guard inode.kind == .regular else { throw .unsupported("\(verb) a \(inode.kind)") }
+        guard inode.flags & (ExtInode.inlineDataFlag | ExtInode.encryptedFlag) == 0 else {
+            throw .unsupported("\(verb) an inline or encrypted file")
+        }
+        return inode
+    }
+
+    /// The inode's block pointers, size and 512-byte sectors set, with its change and modification times.
+    func touchMapping(
+        _ inode: ExtInode,
+        pointers: [UInt32],
+        size: UInt64,
+        sectors: UInt64,
+        on device: any WritableBlockSource
+    ) throws(DiskError) {
+        try touch(inode, on: device) { raw in
+            for (index, pointer) in pointers.enumerated() { Self.put32(pointer, at: 0x28 + index * 4, in: &raw) }
+            Self.put32(UInt32(truncatingIfNeeded: size), at: 0x04, in: &raw)
+            Self.put32(UInt32(truncatingIfNeeded: size >> 32), at: 0x6C, in: &raw)
+            Self.put32(UInt32(sectors), at: 0x1C, in: &raw)
+        }
+    }
+
     /// The free counts as the volume had them when it was opened.
     var initialFreeCounts: ExtFreeCounts { ExtFreeCounts(blocks: superblock.freeBlocks, inodes: superblock.freeInodes) }
 
@@ -141,10 +164,11 @@ extension ExtFileSystem: WritableFileSystem {
         return device
     }
 
-    /// The inode's change and modification times set to now, with their nanoseconds where the inode has room.
+    /// The inode's `times` (change and modification by default) set to now, with their nanoseconds where the inode has room.
     func touch(
         _ inode: ExtInode,
         on device: any WritableBlockSource,
+        times: [(Int, Int)] = [(0x0C, 0x84), (0x10, 0x88)],
         _ more: (inout [UInt8]) -> Void = { _ in }
     ) throws(DiskError) {
         let location = try inodeLocation(inode.number)
@@ -152,7 +176,7 @@ extension ExtFileSystem: WritableFileSystem {
         let at = location.block * blockSize + UInt64(location.offset)
         var raw = try device.read(at: at, count: superblock.inodeSize)
         let (low, extra) = Self.stamp(clock())
-        for (field, extraField) in [(0x0C, 0x84), (0x10, 0x88)] {
+        for (field, extraField) in times {
             Self.put32(low, at: field, in: &raw)
             if 128 + inode.extraSize >= extraField + 4 { Self.put32(extra, at: extraField, in: &raw) }
         }

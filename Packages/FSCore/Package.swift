@@ -112,7 +112,11 @@ let package = Package(
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
         // Crash states of a recorded write sequence, for every format's write tests (ADR-0018). Tests only.
-        .target(name: "CrashTesting", dependencies: ["FSCore"], swiftSettings: strictSettings),
+        .target(
+            name: "CrashTesting",
+            dependencies: ["FSCore", "SystemCommands", "MountKit"],
+            swiftSettings: strictSettings
+        ),
         // The disks macOS attached, from Disk Arbitration (roadmap 0021): a watcher and a pure model of a description.
         .target(name: "DiskKit", dependencies: ["Formats"], swiftSettings: strictSettings),
         // System commands with a deadline (ADR-0017). Apart from MountKit, which the FSKit modules link: only the agent

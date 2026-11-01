@@ -15,6 +15,16 @@ public protocol WritableFileSystem: ReadOnlyFileSystem {
     func rename(_ name: [UInt8], in directory: UInt64, to newName: [UInt8], in newDirectory: UInt64) throws(DiskError)
     /// A second name for file `id`.
     func link(_ id: UInt64, as name: [UInt8], in directory: UInt64) throws(DiskError)
+    /// A symbolic link named `name` in `directory`, to `target`.
+    func createSymlink(
+        _ name: [UInt8],
+        target: [UInt8],
+        in directory: UInt64,
+        owner: (uid: UInt32, gid: UInt32)
+    ) throws(DiskError) -> UInt64
+    /// File `id` cut or extended (with a hole) to `size` bytes.
+    func setSize(_ id: UInt64, to size: UInt64) throws(DiskError)
+    func setAttributes(_ id: UInt64, _ changes: AttributeChanges) throws(DiskError)
     /// `bytes` into file `id` at `offset`.
     func write(_ id: UInt64, at offset: UInt64, _ bytes: [UInt8]) throws(DiskError)
     /// Every change so far made durable.

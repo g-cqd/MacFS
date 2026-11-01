@@ -95,6 +95,10 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   Settings restores. Register with `lsregister -f -R -trusted`, before unregistering any other copy. `pluginkit -a` dropped one.
 - **Write tests judge with each format's own checker** (ADR-0018), in a container image built once:
   `container build -t macfs-checkers:1 -f Scripts/checkers/Containerfile Scripts/checkers`. Without it, those tests are skipped.
+- **No container left running when nothing uses it** (the owner's rule). `Checkers` starts the container system when a test needs
+  it and stops it when the test process exits, if it started it; runs are `--rm`, one at a time, through `SystemCommandRunner`.
+  After building an image, `container builder stop` and `container system stop`; after an interrupted run,
+  `container list --all` and remove what is left.
 - **macOS 27 mounts NTFS disks with its own reader** (`UVFSService`, `ntfs.fs`), not ours; ours (`ntfsro`) runs when named.
 - **`diskutil` cannot unmount or mount our FSKit volumes** (StorageKit error 119; it shows "no file system"), while Disk
   Arbitration's own calls and Finder's Eject can. Use `hdiutil detach`, `umount` or `DADiskUnmount`.

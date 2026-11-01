@@ -16,13 +16,13 @@ import Testing
 
     static func name(_ text: String) -> [UInt8] { Array(text.utf8) }
 
-    static func e2fsck(_ device: MemoryBlockSource) throws {
+    static func e2fsck(_ device: MemoryBlockSource) async throws {
         guard Checkers.isAvailable else { return }
-        let result = try #require(Checkers.run(["e2fsck", "-fn"], on: ["volume": device.bytes])?["volume"])
+        let result = try #require(await Checkers.run(["e2fsck", "-fn"], on: ["volume": device.bytes])?["volume"])
         #expect(result.status == 0, "\(result.output)")
     }
 
-    @Test func aCreatedFileIsFoundWrittenAndKept() throws {
+    @Test func aCreatedFileIsFoundWrittenAndKept() async throws {
         let (device, volume) = try Self.open()
         let id = try volume.create(
             Self.name("new.txt"),
@@ -43,10 +43,10 @@ import Testing
             try reread.read(try reread.lookup(Self.name("new.txt"), in: reread.rootID).id, at: 0, count: 10)
                 == Self.name("abc")
         )
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
-    @Test func aCreatedDirectoryHoldsItsOwnFiles() throws {
+    @Test func aCreatedDirectoryHoldsItsOwnFiles() async throws {
         let (device, volume) = try Self.open()
         let rootLinks = try volume.attributes(of: volume.rootID).linkCount
         let directory = try volume.create(
@@ -64,11 +64,11 @@ import Testing
         let inner = try volume.create(Self.name("inner"), kind: .regular, in: directory, mode: 0o600, owner: (0, 0))
         #expect(try volume.lookup(Self.name("inner"), in: directory).id == inner)
         try volume.close()
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// More names than a directory block holds: the directory gets a new block.
-    @Test func aFullDirectoryGrowsABlock() throws {
+    @Test func aFullDirectoryGrowsABlock() async throws {
         let (device, volume) = try Self.open()
         let directory = try volume.create(
             Self.name("many"),
@@ -83,10 +83,10 @@ import Testing
         try volume.close()
         let reread = try ExtFileSystem(source: device)
         #expect(Set(try reread.entries(of: directory, from: 0, limit: 100).map(\.name)) == Set(names))
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
-    @Test func aRemovedFileIsGoneAndItsSpaceFree() throws {
+    @Test func aRemovedFileIsGoneAndItsSpaceFree() async throws {
         let (device, volume) = try Self.open()
         let free = try volume.statistics().freeBlocks
         let counting = try ExtHtreeTests.path(volume, "big/counting.txt")
@@ -97,11 +97,11 @@ import Testing
         #expect(try volume.statistics().freeBlocks == free + blocks)
         try volume.close()
         #expect(try ExtFileSystem(source: device).statistics().freeBlocks == free + blocks)
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
     /// One of two names: the other still reads the file, now with one link.
-    @Test func removingOneOfTwoNamesKeepsTheFile() throws {
+    @Test func removingOneOfTwoNamesKeepsTheFile() async throws {
         let (device, volume) = try Self.open()
         let medium = try ExtHtreeTests.path(volume, "dir/medium.txt")
         let bytes = try volume.read(medium, at: 0, count: 10_000)
@@ -109,10 +109,10 @@ import Testing
         #expect(try volume.attributes(of: medium).linkCount == 1)
         #expect(try volume.read(medium, at: 0, count: 10_000) == bytes)
         try volume.close()
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
-    @Test func onlyAnEmptyDirectoryIsRemoved() throws {
+    @Test func onlyAnEmptyDirectoryIsRemoved() async throws {
         let (device, volume) = try Self.open()
         let rootLinks = try volume.attributes(of: volume.rootID).linkCount
         _ = try volume.create(Self.name("empty"), kind: .directory, in: volume.rootID, mode: 0o755, owner: (0, 0))
@@ -120,10 +120,10 @@ import Testing
         #expect(try volume.attributes(of: volume.rootID).linkCount == rootLinks)
         #expect(throws: DiskError.notEmpty) { try volume.remove(Self.name("dir"), from: volume.rootID) }
         try volume.close()
-        try Self.e2fsck(device)
+        try await Self.e2fsck(device)
     }
 
-    @Test func namesFollowTheRules() throws {
+    @Test func namesFollowTheRules() async throws {
         let (_, volume) = try Self.open()
         let root = volume.rootID
         #expect(throws: DiskError.exists) {
@@ -157,7 +157,7 @@ import Testing
         #expect(DiskError.nameTooLong.posixCode == ENAMETOOLONG && DiskError.invalidName.posixCode == EINVAL)
     }
 
-    @Test func anIndexedDirectoryIsNotChangedYet() throws {
+    @Test func anIndexedDirectoryIsNotChangedYet() async throws {
         let (device, volume) = try Self.open()
         let sub = try ExtHtreeTests.path(volume, "dir/sub")
         let before = device.bytes
@@ -172,7 +172,7 @@ import Testing
 
     /// Every crash state of a create, a mkdir and a remove: preen repairs it, the check after finds nothing, and each name is
     /// there or not, never half made.
-    @Test func everyCrashStateOfNameChangesIsRepairable() throws {
+    @Test func everyCrashStateOfNameChangesIsRepairable() async throws {
         let original = try ExtWriteTests.copy("ext2")
         let recorder = CrashRecorder(original)
         let volume = try ExtWriteTests.writable(recorder)
@@ -195,7 +195,7 @@ import Testing
         let images = Dictionary(
             uniqueKeysWithValues: states.enumerated().map { ("state\($0.offset)", $0.element.image()) }
         )
-        let results = try #require(Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
+        let results = try #require(await Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
         for (index, state) in states.enumerated() {
             let steps = results["state\(index)"] ?? []
             #expect(steps.count == 2 && steps[0].status <= 1, "\(state.name): preen \(steps.first?.output ?? "")")
@@ -204,7 +204,7 @@ import Testing
     }
 
     /// A directory growing a block, a name removed and an empty directory removed: every crash state repairable too.
-    @Test func everyCrashStateOfAGrowingDirectoryAndAnRmdirIsRepairable() throws {
+    @Test func everyCrashStateOfAGrowingDirectoryAndAnRmdirIsRepairable() async throws {
         let device = try ExtWriteTests.copy("ext2")
         let setup = try ExtWriteTests.writable(device)
         let many = try setup.create(Self.name("many"), kind: .directory, in: setup.rootID, mode: 0o755, owner: (0, 0))
@@ -237,7 +237,7 @@ import Testing
         let images = Dictionary(
             uniqueKeysWithValues: states.enumerated().map { ("state\($0.offset)", $0.element.image()) }
         )
-        let results = try #require(Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
+        let results = try #require(await Checkers.run([["e2fsck", "-fp"], ["e2fsck", "-fn"]], on: images))
         for (index, state) in states.enumerated() {
             let steps = results["state\(index)"] ?? []
             #expect(steps.count == 2 && steps[0].status <= 1, "\(state.name): preen \(steps.first?.output ?? "")")
