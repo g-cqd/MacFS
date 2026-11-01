@@ -2,7 +2,7 @@ import Formats
 import Foundation
 import ToolingCore
 
-// macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus]
+// macfs-tool <images|gates|analyzers|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus]
 // The command plugins call this; it can also be run directly with `swift run macfs-tool`.
 
 struct Options {
@@ -33,8 +33,28 @@ func parse(_ arguments: [String]) -> Options? {
     return options
 }
 
-func locator() -> ToolLocator {
-    ToolLocator(environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory()) { path in
+/// The family's analyzers lock, copied from aemi (roadmap 0010).
+func analyzerLock(_ root: String) throws -> AnalyzerLock {
+    try AnalyzerLock(contentsOf: root + "/Scripts/analyzers.lock")
+}
+
+/// Installs every locked analyzer that is missing or of another version; prints what it did.
+func installAnalyzers(_ root: String, dryRun: Bool) throws -> Int32 {
+    let installer = AnalyzerInstaller(runner: SystemProcessRunner(capture: true), home: NSHomeDirectory())
+    for pin in try analyzerLock(root).pins {
+        if dryRun {
+            print("\(pin.tool) \(pin.version): \(pin.url) (sha256 \(pin.macOS))")
+            continue
+        }
+        let outcome = try installer.install(pin)
+        print("[\(outcome == .installed ? "INSTALLED" : "OK")] \(pin.tool) \(pin.version)")
+    }
+    return 0
+}
+
+func locator(_ root: String? = nil) -> ToolLocator {
+    let lock = root.flatMap { try? analyzerLock($0) }
+    return ToolLocator(environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory(), lock: lock) { path in
         path.hasSuffix(".jar")
             ? FileManager.default.isReadableFile(atPath: path) : FileManager.default.isExecutableFile(atPath: path)
     }
@@ -104,7 +124,7 @@ func mounts(_ options: Options) -> Int32 {
 func main() -> Int32 {
     guard let options = parse(Array(CommandLine.arguments.dropFirst())) else {
         print(
-            "usage: macfs-tool <images|gates|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus] [--mirror HOST]"
+            "usage: macfs-tool <images|gates|analyzers|plists|mounts|summary> [--root DIR] [--dry-run] [--check] [--bench|--corpus] [--mirror HOST]"
         )
         return 64
     }
@@ -123,8 +143,12 @@ func main() -> Int32 {
                         root: options.root, container: container, kind: options.kind, mirror: options.mirror),
                     dryRun: options.dryRun)
             case "gates":
+                if !options.dryRun { _ = try installAnalyzers(options.root, dryRun: false) }
                 return try report(
-                    Gates.plan(root: options.root, tools: try locator().gatePaths()), dryRun: options.dryRun)
+                    Gates.plan(root: options.root, tools: try locator(options.root).gatePaths()), dryRun: options.dryRun
+                )
+            case "analyzers":
+                return try installAnalyzers(options.root, dryRun: options.dryRun)
             case "plists":
                 return try plists(options)
             case "mounts":

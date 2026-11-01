@@ -23,7 +23,9 @@ xcodegen generate && xcodebuild -scheme MacFS -derivedDataPath .build/xcode CODE
 swift test --package-path Packages/FSCore 2>&1 | swift run --package-path Packages/Tooling macfs-tool summary
 ```
 
-`gates` needs fcheck and modeler, which have no releases yet: `MACFS_FCHECK=…/fcheck MACFS_MODELER=…/modeler` (roadmap 0010). Lean
+`gates` first installs the analyzers `Scripts/analyzers.lock` pins (aemi's lock, copied; SHA-256 and `--version` checked) into
+`~/Library/Caches/g-cqd-analyzers`, shared with aemi's `analyzers.sh`; `macfs-tool analyzers` installs only. `MACFS_<TOOL>` still
+overrides a path (roadmap 0010). Lean
 comes from elan (`~/.elan/bin/lake`), TLC from `~/.local/share/tla/tla2tools.jar`.
 
 ## Gates
@@ -36,6 +38,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 ## Traps
 
 - **A green image test can be blind.** Each image needs a test that it exercises its layout; two did not at first (diary 2026-10-30-01).
+- **Dependencies move together**: aemi in FSCore, AemiRegex (which pins aemi) in Tooling, `Scripts/analyzers.lock` and the style
+  configs from the same aemi revision (ADR-0004). Check the heads' pins before bumping one.
 - **Formatting moves dolly anchors.** After `format`, run `gates`: an accept directive must sit directly above the anchor line.
 - **BSD `sed` has no `\b`** and fails silently; use `perl -pi -e`. Assert every scripted edit's anchor exists.
 - **Never `git checkout` a file to undo a mutation.** Copy first, restore the copy.

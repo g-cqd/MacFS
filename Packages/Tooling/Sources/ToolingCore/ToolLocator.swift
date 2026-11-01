@@ -1,24 +1,31 @@
 /// Finds the gates' tools: `MACFS_<NAME>` first, then pinned install locations, then `PATH`.
 ///
-/// Pinned locations are the release caches the Aemi packages share (deadwood, dolly and arcleak at the
-/// versions AemiRegex pins); fcheck and modeler have no releases yet, so they come from an override or
-/// a source build in the MacFS cache (roadmap 0010).
+/// The analyzers are pinned by the family's lock (`Scripts/analyzers.lock`) and found where aemi's `analyzers.sh` and
+/// `macfs-tool analyzers` install them, `~/Library/Caches/g-cqd-analyzers/<tool>-<version>/` (roadmap 0010).
 public struct ToolLocator: Sendable {
     public struct Missing: Error, Equatable {
         public let tools: [String]
         public init(tools: [String]) { self.tools = tools }
     }
 
-    public static let pins: [String: String] = ["deadwood": "0.11.1", "dolly": "0.11.0", "arcleak": "0.12.0"]
-
     private let environment: [String: String]
     private let home: String
+    private let lock: AnalyzerLock?
     private let isExecutable: @Sendable (String) -> Bool
 
-    public init(environment: [String: String], home: String, isExecutable: @escaping @Sendable (String) -> Bool) {
+    public init(
+        environment: [String: String], home: String, lock: AnalyzerLock? = nil,
+        isExecutable: @escaping @Sendable (String) -> Bool
+    ) {
         self.environment = environment
         self.home = home
+        self.lock = lock
         self.isExecutable = isExecutable
+    }
+
+    /// The shared install directory of a locked tool.
+    public static func installDirectory(_ pin: AnalyzerLock.Pin, home: String) -> String {
+        "\(home)/Library/Caches/g-cqd-analyzers/\(pin.tool)-\(pin.version)"
     }
 
     public func find(_ name: String, pinned: [String] = []) -> String? {
@@ -29,11 +36,9 @@ public struct ToolLocator: Sendable {
         return path.map { "\($0)/\(name)" }.first(where: isExecutable)
     }
 
-    private func pinnedLocations(_ name: String) -> [String] {
-        if let version = Self.pins[name] {
-            return ["macfs", "aemiregex"].map { "\(home)/Library/Caches/\($0)/analyzers/\(name)-\(version)/\(name)" }
-        }
-        return ["\(home)/Library/Caches/macfs/tools/\(name)/\(name)"]
+    public func pinnedLocations(_ name: String) -> [String] {
+        guard let pin = lock?[name] else { return [] }
+        return ["\(Self.installDirectory(pin, home: home))/\(name)"]
     }
 
     public func gatePaths() throws(Missing) -> ToolPaths {

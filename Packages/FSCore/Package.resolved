@@ -1,12 +1,12 @@
 {
-  "originHash" : "0992633cf2e79cc1f8cb0df6f914878736b521c3ce6953732acd5e4724a67f93",
+  "originHash" : "03af6c34d9fa7cb8b2af5d382203576d4e0663c4f04ca6c17d34657c45bb9ab7",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "2fbe4e417cca85876ffe6bd55241238a7a61443a"
+        "revision" : "8475434abab0493d9bda746f78e33087899391c3"
       }
     },
     {

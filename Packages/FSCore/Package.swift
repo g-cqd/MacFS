@@ -38,7 +38,7 @@ let package = Package(
     ],
     dependencies: [
         // Pinned to one revision, the one AemiRegex pins (ADR-0004).
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "2fbe4e417cca85876ffe6bd55241238a7a61443a")
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8475434abab0493d9bda746f78e33087899391c3")
     ],
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
