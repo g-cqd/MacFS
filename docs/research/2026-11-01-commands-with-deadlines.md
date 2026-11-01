@@ -36,5 +36,25 @@ racing the command against a sleep. On macOS it links only the SDK's System (swi
 4. Tooling (xcodebuild's minutes of output, of which the installer shows the last line) needs the end of the output rather
    than the start: a later step of roadmap 0048.
 
-Not measured: a command stuck in the kernel (a hard NFS mount), which SIGKILL cannot end; the runner would then wait for the
-teardown.
+## Addendum: live, a frozen NFS server (same day)
+
+`macfs-nfsd` serving the ext4 image, mounted with the proxy's own `mount_nfs` options (soft, `deadtimeout=10`), then stopped
+with SIGSTOP. The backend's sequence through the runner (`umount` with a 10 s deadline, then `umount -f`), from a harness linking
+`SystemCommands`:
+
+| Run | Result |
+|---|---|
+| plain `umount` from a shell | returned after 21 s, unmounted |
+| runner, first version | stopped at 10 s, but the call returned at **16.6 s**: SIGKILL cannot end a process in the kernel, and the runner waited for its reap |
+| runner, with the caller bounded to deadline + grace + 1 s | returned at **13.0 s**, status 124, "nor end after SIGKILL"; the kernel finished the unmount itself |
+| runner, the kernel faster | `umount` succeeded at 6 s |
+| a reader holding the frozen mount | `umount` "Resource busy" at once, `umount -f` in 1.6 s |
+
+No stray `umount` and no mount were left after any run.
+
+## Addendum: the cooperative pool
+
+With eleven of its tests running at once, each calling the synchronous runner from a Swift Testing task, the suite reported
+commands that had finished as timed out: each call blocked a pool thread, and the commands' own tasks found none free. That is
+Everest's deadlock, reproduced. The runner now refuses a call made from a task (`withUnsafeCurrentTask`), and its tests call it
+from threads of their own, as the agent does from its XPC queue.

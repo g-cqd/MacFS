@@ -5,8 +5,9 @@
 ///    the modules FSKit modules); the agent's Info.plist in its binary (a sandboxed tool traps at launch without one) and its
 ///    team. Every check reports before it refuses.
 /// 3. The installed app kept as `previous`, the build copied in.
-/// 4. The build's copy unregistered and removed (it gets registered on build, and its modules ran instead of the installed ones),
-///    the installed app registered, the old module and agent processes stopped.
+/// 4. The installed app registered with its modules, then the build's copy and the previous app unregistered (the build's is
+///    registered on build, and its modules ran instead of the installed ones) and the build's removed; the old module and agent
+///    processes stopped.
 /// 5. The installed signature verified, and every module registered from the installed app.
 ///
 /// `run` returns the problems; none means installed.
@@ -77,11 +78,14 @@ public struct Installer: Sendable {
             return ["copy: \(Self.last(copied.output)) (the previous app is at \(paths.previous))"]
         }
 
-        // The build's copy unregistered and removed, so its modules cannot be the ones that run. Not `pluginkit -r` and `-a`:
-        // re-registering a module that way lost its enablement in System Settings (diary 2026-11-01-07).
+        // The installed app registered with its modules (`-R`: `-f` alone registered none, and FSKit then dropped their
+        // enablement), before the other copies are unregistered, so the modules are never without a registration. The build's
+        // copy and the previous app unregistered (the build's also removed): theirs cannot be the modules that run. Not
+        // `pluginkit -r` or `-a`: both lost modules (diary 2026-11-01-07, -09).
+        _ = run(Self.lsregister, ["-f", "-R", "-trusted", paths.installed])
         _ = run(Self.lsregister, ["-u", paths.built])
+        _ = run(Self.lsregister, ["-u", paths.previous])
         _ = run("/bin/rm", ["-rf", paths.built])
-        _ = run(Self.lsregister, ["-f", paths.installed])
         _ = run("/usr/bin/pkill", ["-9", "-f", "/Contents/Extensions/[^/]*\\.appex/|/Contents/MacOS/macfs-agent"])
 
         var installed: [String] = []

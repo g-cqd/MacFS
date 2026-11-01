@@ -40,7 +40,10 @@ func analyzerLock(_ root: String) throws -> AnalyzerLock {
 
 /// Installs every locked analyzer that is missing or of another version; prints what it did.
 func installAnalyzers(_ root: String, dryRun: Bool) throws -> Int32 {
-    let installer = AnalyzerInstaller(runner: SystemProcessRunner(capture: true), home: NSHomeDirectory())
+    let installer = AnalyzerInstaller(
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.download),
+        home: NSHomeDirectory()
+    )
     for pin in try analyzerLock(root).pins {
         if dryRun {
             print("\(pin.tool) \(pin.version): \(pin.url) (sha256 \(pin.macOS))")
@@ -61,7 +64,7 @@ func locator(_ root: String? = nil) -> ToolLocator {
 }
 
 func report(_ plan: Plan, dryRun: Bool) throws -> Int32 {
-    let result = try plan.execute(with: SystemProcessRunner(), dryRun: dryRun)
+    let result = try plan.execute(with: SystemProcessRunner(timeout: Deadline.planStep), dryRun: dryRun)
     if dryRun { result.lines.forEach { print($0) } }
     for failure in result.failed { print("[FAIL] \(failure.display)") }
     return result.succeeded ? 0 : 1
@@ -99,7 +102,7 @@ func mounts(_ options: Options) -> Int32 {
     }
     let base = FileManager.default.temporaryDirectory.appendingPathComponent("macfs-mounts-\(getpid())").path
     let check = MountCheck(
-        runner: SystemProcessRunner(capture: true),
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
         root: options.root,
         mountPoint: { target in
             let point = base + "/" + target.image
@@ -111,12 +114,12 @@ func mounts(_ options: Options) -> Int32 {
     // The agent path (roadmap 0039): the installed app mounts a clone in its container through its agent.
     let container = NSHomeDirectory() + "/Library/Containers/dev.gcqd.MacFS/Data/tmp"
     let app = AppLaunch(
-        runner: SystemProcessRunner(capture: true),
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
         app: "/Applications/MacFS.app",
         resultFile: container + "/agentcheck-result.txt"
     )
     let agent = AgentMountCheck(
-        runner: SystemProcessRunner(capture: true),
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
         root: options.root,
         container: container,
         launch: app.run,
@@ -157,7 +160,7 @@ func install(_ options: Options) -> Int32 {
     }
     print("Building and installing (xcodebuild's output is kept; its last line is shown on failure)...")
     let installer = Installer(
-        runner: SystemProcessRunner(capture: true),
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.build),
         root: options.root,
         derivedData: derivedData,
         installed: installed,

@@ -5,19 +5,24 @@ import Synchronization
 import Testing
 
 /// Commands as a fake system runs them: `mount_nfs` succeeds unless told otherwise and adds a table entry, `umount` removes it
-/// unless the mount is busy (then only `-f` does).
+/// unless the mount is busy (then only `-f` does) or hung (then it is stopped at its deadline, and only `-f` does). A
+/// `mount_nfs` stopped at its deadline may have mounted anyway, as the kernel can finish the call after the process dies.
 final class FakeSystem: CommandRunning, MountTable {
     let commands = Mutex<[[String]]>([])
+    let deadlines = Mutex<[Duration]>([])
+    let hung = Mutex(false)
+    let mountsAfterDeadline = Mutex(false)
     let mounted = Mutex<[MountTableEntry]>([])
     let mountStatus = Mutex<Int32>(0)
     let busy = Mutex(false)
 
-    func run(_ executable: String, _ arguments: [String]) -> CommandResult {
+    func run(_ executable: String, _ arguments: [String], timeout: Duration) -> CommandResult {
         commands.withLock { $0.append([executable] + arguments) }
+        deadlines.withLock { $0.append(timeout) }
         switch executable {
             case "/sbin/mount_nfs":
                 let status = mountStatus.withLock { $0 }
-                if status == 0 {
+                if status == 0 || mountsAfterDeadline.withLock({ $0 }) {
                     let from = arguments[arguments.count - 2]
                     mounted.withLock {
                         $0.append(MountTableEntry(mountPoint: arguments.last!, mountedFrom: from, type: "nfs"))
@@ -27,6 +32,7 @@ final class FakeSystem: CommandRunning, MountTable {
             case "/sbin/umount":
                 let force = arguments.first == "-f"
                 if busy.withLock({ $0 }), !force { return CommandResult(status: 16, output: "Resource busy") }
+                if hung.withLock({ $0 }), !force { return CommandResult(status: 124, output: "umount was stopped") }
                 mounted.withLock { table in table.removeAll { $0.mountPoint == arguments.last! } }
                 return CommandResult(status: 0, output: "")
             default:
@@ -142,6 +148,53 @@ final class FakeSystem: CommandRunning, MountTable {
             ]
         )
         #expect(system.entries().isEmpty)
+    }
+
+    /// Every command has a deadline: `mount_nfs` the longer one, each `umount` a shorter one, so a dead server's mount costs an
+    /// unmount at most two of them (roadmap 0048).
+    @Test func everyCommandHasItsDeadline() throws {
+        let backend = backend
+        let from = try backend.mount(request())
+        system.hung.withLock { $0 = true }
+        try backend.unmount(record(from))
+        #expect(system.ran.map { $0.first! } == ["/sbin/mount_nfs", "/sbin/umount", "/sbin/umount"])
+        #expect(
+            system.deadlines.withLock { $0 }
+                == [NFSMountBackend.mountDeadline, NFSMountBackend.unmountDeadline, NFSMountBackend.unmountDeadline]
+        )
+        #expect(NFSMountBackend.unmountDeadline < NFSMountBackend.mountDeadline)
+        #expect(system.entries().isEmpty)
+    }
+
+    /// A `mount_nfs` stopped at its deadline whose mount came up anyway is forced off before its proxy stops: a proxy stopped
+    /// under a live mount is the wedge ADR-0014 avoids.
+    @Test func aMountStoppedAtItsDeadlineButMountedAnywayIsTakenDownBeforeItsProxy() {
+        system.mountStatus.withLock { $0 = 124 }
+        system.mountsAfterDeadline.withLock { $0 = true }
+        #expect(throws: MountError.self) { try backend.mount(request()) }
+        #expect(system.ran.map { Array($0.prefix(2)) } == [["/sbin/mount_nfs", "-o"], ["/sbin/umount", "-f"]])
+        #expect(system.entries().isEmpty)
+    }
+
+    /// A mount that did not come up leaves alone what else is mounted at its point: `umount` takes a path, and would remove it.
+    @Test func aFailedMountDoesNotUnmountSomethingElseAtItsPoint() {
+        let other = MountTableEntry(mountPoint: directory + "/r1", mountedFrom: "/dev/disk9s1", type: "apfs")
+        system.mounted.withLock { $0 = [other] }
+        system.mountStatus.withLock { $0 = 32 }
+        #expect(throws: MountError.self) { try backend.mount(request()) }
+        #expect(system.ran.map { $0.first! } == ["/sbin/mount_nfs"])
+        #expect(system.entries() == [other])
+    }
+
+    func record(_ from: String, _ id: String = "r1") -> MountRecord {
+        MountRecord(
+            id: id,
+            kind: .nfs,
+            source: "/i/a.img",
+            mountPoint: directory + "/" + id,
+            mountedFrom: from,
+            state: .mounted
+        )
     }
 
     /// A record whose proxy this process does not have (a previous process's) is not served: the sweep unmounts it.

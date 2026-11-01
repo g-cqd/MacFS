@@ -1,4 +1,4 @@
-public struct ProcessResult: Sendable {
+public struct ProcessResult: Sendable, Equatable {
     public let status: Int32
     public let output: String
 

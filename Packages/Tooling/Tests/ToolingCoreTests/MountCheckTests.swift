@@ -160,11 +160,40 @@ import ToolingCore
     }
 }
 
-/// The system runner keeps a command's standard output when asked: the mount check reads the device `hdiutil` reports.
+/// The system runner (roadmap 0048): captured, both streams merged as they were written and kept to their end, where a build's
+/// error is; never longer than its deadline. Called from a thread of its own, as `macfs-tool` calls it.
 @Suite struct SystemProcessRunnerTests {
-    @Test func capturedOutputIsKept() throws {
-        let result = try SystemProcessRunner(capture: true).run(Command("/bin/echo", ["/dev/disk9"]))
-        #expect(result.status == 0)
-        #expect(result.output == "/dev/disk9\n")
+    static func run(_ runner: SystemProcessRunner, _ command: Command) async -> ProcessResult? {
+        await withCheckedContinuation { finished in
+            Thread.detachNewThread { finished.resume(returning: try? runner.run(command)) }
+        }
+    }
+
+    @Test func capturedOutputIsKeptWithBothStreamsInOrder() async {
+        let result = await Self.run(
+            SystemProcessRunner(capture: true),
+            Command("/bin/sh", ["-c", "echo /dev/disk9; echo warning >&2; echo done"])
+        )
+        #expect(result == ProcessResult(status: 0, output: "/dev/disk9\nwarning\ndone"))
+    }
+
+    @Test func aLongCapturedOutputKeepsItsEnd() async {
+        let result = await Self.run(
+            SystemProcessRunner(capture: true),
+            Command("/bin/sh", ["-c", "/usr/bin/yes | /usr/bin/head -c 20000000; echo '** BUILD FAILED **'; exit 65"])
+        )
+        #expect(result?.status == 65)
+        #expect(result?.output.hasSuffix("y\n** BUILD FAILED **") == true)
+        #expect((result?.output.utf8.count ?? .max) <= SystemProcessRunner.kept)
+    }
+
+    @Test func aCommandPastItsDeadlineIsStopped() async {
+        let start = ContinuousClock.now
+        let result = await Self.run(
+            SystemProcessRunner(capture: true, timeout: .seconds(1)),
+            Command("/bin/sleep", ["30"])
+        )
+        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(result?.status == 124)
     }
 }

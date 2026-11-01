@@ -86,11 +86,14 @@ import ToolingCore
             Command("/bin/rm", ["-rf", "/tmp/MacFS.app.previous"]),
             Command("/bin/mv", ["/Applications/MacFS.app", "/tmp/MacFS.app.previous"]),
             Command("/usr/bin/ditto", [Self.built, "/Applications/MacFS.app"]),
-            // The build's copy unregistered and removed, so its modules cannot be the ones that run; no `pluginkit -r`/`-a`,
-            // which lost a module's enablement in System Settings (diary 2026-11-01-07).
+            // The installed app registered with its modules (`-R`: `-f` alone registered none, and FSKit then dropped their
+            // enablement), before the other copies are unregistered: the modules are never without a registration. The build's
+            // copy and the previous app unregistered (the build's also removed), so theirs cannot be the modules that run. No
+            // `pluginkit -r`/`-a`: both lost modules (diary 2026-11-01-07, -09).
+            Command(lsregister, ["-f", "-R", "-trusted", "/Applications/MacFS.app"]),
             Command(lsregister, ["-u", Self.built]),
+            Command(lsregister, ["-u", "/tmp/MacFS.app.previous"]),
             Command("/bin/rm", ["-rf", Self.built]),
-            Command(lsregister, ["-f", "/Applications/MacFS.app"]),
             Command("/usr/bin/pkill", ["-9", "-f", "/Contents/Extensions/[^/]*\\.appex/|/Contents/MacOS/macfs-agent"]),
             Command("/usr/bin/codesign", ["--verify", "--deep", "--strict", "/Applications/MacFS.app"]),
             Command("/usr/bin/pluginkit", ["-mAv", "-p", "com.apple.fskit.fsmodule"])

@@ -8,6 +8,10 @@ import Synchronization
 /// unmounts what a previous process left (the kernel also does, `deadtimeout` seconds after the proxy died).
 public final class NFSMountBackend: MountBackend {
     public let kind = MountBackendKind.nfs
+    /// `mount_nfs` to a proxy in this process: it answers at once, so a mount that takes this long will not come up.
+    public static let mountDeadline: Duration = .seconds(30)
+    /// Each `umount`: a hung one is stopped and forced, so a dead server's mount takes at most two of these.
+    public static let unmountDeadline: Duration = .seconds(10)
     private let runner: any CommandRunning
     private let table: any MountTable
     private let owner: (uid: UInt32, gid: UInt32)
@@ -49,15 +53,21 @@ public final class NFSMountBackend: MountBackend {
         } catch { throw fail(.backend("the proxy did not start: \(error)")) }
         try? FileManager.default.createDirectory(atPath: request.mountPoint, withIntermediateDirectories: true)
         let command = NFSMountCommand(port: server.port, export: export, mountPoint: request.mountPoint)
-        let result = runner.run(command.executable, command.arguments)
+        let result = runner.run(command.executable, command.arguments, timeout: Self.mountDeadline)
+        let from = "127.0.0.1:\(export.path)"
         guard result.status == 0 else {
+            // A `mount_nfs` stopped at its deadline may have mounted anyway (the kernel can finish the call after the process
+            // dies): forced off first, as the proxy must not stop under a live mount (ADR-0014).
+            if table.entries().contains(where: { $0.mountPoint == request.mountPoint && $0.mountedFrom == from }) {
+                _ = runner.run("/sbin/umount", ["-f", request.mountPoint], timeout: Self.unmountDeadline)
+            }
             server.stop()
             _ = unsafe rmdir(request.mountPoint)
             throw fail(.backend("mount_nfs exited \(result.status): \(result.output)"))
         }
         servers.withLock { $0[request.id] = server }
         if let descriptor = request.descriptor { descriptors.withLock { $0[request.id] = descriptor } }
-        return "127.0.0.1:\(export.path)"
+        return from
     }
 
     /// `umount`, then `umount -f` if the mount stays; the proxy stops once the mount is gone, never before (a proxy stopped
@@ -69,8 +79,10 @@ public final class NFSMountBackend: MountBackend {
             release(record)
             return
         }
-        var result = runner.run("/sbin/umount", [record.mountPoint])
-        if isMounted(record) { result = runner.run("/sbin/umount", ["-f", record.mountPoint]) }
+        var result = runner.run("/sbin/umount", [record.mountPoint], timeout: Self.unmountDeadline)
+        if isMounted(record) {
+            result = runner.run("/sbin/umount", ["-f", record.mountPoint], timeout: Self.unmountDeadline)
+        }
         guard !isMounted(record) else { throw .backend("umount -f exited \(result.status): \(result.output)") }
         release(record)
         _ = unsafe rmdir(record.mountPoint)  // only if empty, as a mount point left by us is

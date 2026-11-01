@@ -20,8 +20,10 @@ runner):
 2. The build's checks, each reported before refusing: its signature deep and strict, each part's entitlements (app and agent
    sandboxed with the app group, modules sandboxed FSKit modules), the agent's Info.plist in its binary, and its team.
 3. The previous app kept, the build copied in.
-4. The build's copy unregistered and removed (it had been registered, and its modules ran instead of the installed ones), the
-   installed app registered, the old processes stopped.
+4. The installed app registered with its modules (`lsregister -f -R -trusted`), then the build's copy and the previous app
+   unregistered and the build's removed, so the modules are never without a registration; the old processes stopped. (The
+   first order, `-u` the build then `-f` the installed app, left the modules unregistered and FSKit dropped their enablement:
+   diary 2026-11-01-09.)
 5. The installed signature verified, and each module registered once, from `/Applications`.
 
 `--check` runs the mount check after. 20 tests, 20 hand mutants killed. Live: two installs in a row, all four modules enabled
