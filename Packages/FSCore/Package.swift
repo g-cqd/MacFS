@@ -156,7 +156,11 @@ let package = Package(
             swiftSettings: strictSettings
         ),
         .testTarget(name: "NTFSTests", dependencies: ["NTFS", "FSCore", "CFSKernels"], swiftSettings: strictSettings),
-        .testTarget(name: "ExtFSTests", dependencies: ["ExtFS", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(
+            name: "ExtFSTests",
+            dependencies: ["ExtFS", "FSCore", "CrashTesting"],
+            swiftSettings: strictSettings
+        ),
         .testTarget(name: "XFSTests", dependencies: ["XFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),

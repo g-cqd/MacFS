@@ -68,9 +68,11 @@ Measured on macOS 27 (diary 2026-11-01-11, the installed ext module, a writable 
    - every prefix that ends at a flush;
    - within the last unflushed epoch, a bounded set of subsets and reorderings.
 
-   Each crash state must pass the format's checker after the format's own recovery, and must read as either the state before
-   the operation or the one after it, never anything else (NTFS: anything chkdsk repairs without losing data written before
-   the last clean unmount). A journaled format's commit protocol is also modelled in TLA+ and checked by TLC before its code is
+   Each crash state must pass the format's checker after the format's own recovery. Its metadata must read as either the state
+   before the operation or the one after it, never anything else. File data written since the last flush may hold any mix of
+   old and new blocks, as on Linux. NTFS: anything chkdsk repairs without losing data written before the last clean unmount.
+   Two invariants are checked on every state: no change is on disk without the mount recorded, and the volume never says
+   clean before every change has landed. A journaled format's commit protocol is also modelled in TLA+ and checked by TLC before its code is
    written.
 7. **Order.** ext2 first (the smallest writer, no journal), then ext4's journal, then XFS, Btrfs and NTFS. FSKit first among the
    mount paths, then the NFS proxy (WRITE, COMMIT with stable semantics), WebDAV and File Provider (roadmap 0046). Each format

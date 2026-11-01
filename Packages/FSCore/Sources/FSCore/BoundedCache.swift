@@ -17,6 +17,8 @@ public final class BoundedCache<Key: Hashable & Sendable, Value: Sendable>: Send
     /// One make in progress; waiters block on `done` outside the lock.
     @usableFromInline final class Making: Sendable {
         @usableFromInline let done = DispatchGroup()
+        /// Set when the key is invalidated while this make runs: its value is then not cached.
+        @usableFromInline let stale = Atomic(false)
         @usableFromInline init() { done.enter() }
     }
 
@@ -38,15 +40,27 @@ public final class BoundedCache<Key: Hashable & Sendable, Value: Sendable>: Send
         state.withLock { $0.values[key] }
     }
 
-    @inlinable public func insert(_ value: Value, for key: Key) {
+    /// Forgets `key`'s value: a writer's, after changing what it was made from. A make already under way keeps its result for
+    /// its own caller but does not cache it.
+    @inlinable public func invalidate(_ key: Key) {
         state.withLock { state in
-            if state.values.updateValue(value, forKey: key) != nil { return }
-            state.order.append(key)
-            if state.order.count > capacity {
-                let evicted = state.order.prefix(capacity / 2)
-                for old in evicted { state.values[old] = nil }
-                state.order.removeFirst(evicted.count)
-            }
+            guard state.values.removeValue(forKey: key) != nil || state.making[key] != nil else { return }
+            state.order.removeAll { $0 == key }
+            state.making[key]?.stale.store(true, ordering: .relaxed)
+        }
+    }
+
+    @inlinable public func insert(_ value: Value, for key: Key) {
+        state.withLock { Self.insert(value, for: key, into: &$0, capacity: capacity) }
+    }
+
+    @inlinable static func insert(_ value: Value, for key: Key, into state: inout State, capacity: Int) {
+        if state.values.updateValue(value, forKey: key) != nil { return }
+        state.order.append(key)
+        if state.order.count > capacity {
+            let evicted = state.order.prefix(capacity / 2)
+            for old in evicted { state.values[old] = nil }
+            state.order.removeFirst(evicted.count)
         }
     }
 
@@ -73,7 +87,12 @@ public final class BoundedCache<Key: Hashable & Sendable, Value: Sendable>: Send
                         making.done.leave()
                     }
                     let made = try make()
-                    insert(made, for: key)
+                    // Under the lock `invalidate` sets the flag under: no invalidation slips between the check and the insert.
+                    state.withLock { state in
+                        if !making.stale.load(ordering: .relaxed) {
+                            Self.insert(made, for: key, into: &state, capacity: capacity)
+                        }
+                    }
                     return made
             }
         }

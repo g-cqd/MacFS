@@ -1,5 +1,6 @@
 import AemiKernel
 public import FSCore
+import Synchronization
 
 /// A read-only ext2, ext3 or ext4 volume. Node identifiers are inode numbers; the root is inode 2.
 /// The journal is not replayed: a volume that needs recovery reads as of its last checkpoint.
@@ -10,7 +11,12 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     let source: any BlockSource
     let superblock: ExtSuperblock
     private let inodeTables: [UInt64]
-    private let blocks: CachedBlocks
+    let blocks: CachedBlocks
+    /// The device writes go to; nil for a read-only volume (ADR-0018).
+    let device: (any WritableBlockSource)?
+    let clock: @Sendable () -> Timestamp
+    /// Set by `close`: no change after the unmount.
+    let closed = Mutex(false)
     let mappings = BoundedCache<UInt64, [ExtRun]>(capacity: 512)
     let listings = BoundedCache<UInt64, [ExtDirectoryBlock.Entry]>(capacity: 256)
 
@@ -18,8 +24,18 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         (try? source.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).map(ExtSuperblock.looksLikeOne) ?? false
     }
 
-    public init(source: any BlockSource) throws(DiskError) {
+    public convenience init(source: any BlockSource) throws(DiskError) {
+        try self.init(source: source, device: nil, clock: { .epoch })
+    }
+
+    init(
+        source: any BlockSource,
+        device: (any WritableBlockSource)?,
+        clock: @escaping @Sendable () -> Timestamp
+    ) throws(DiskError) {
         self.source = source
+        self.device = device
+        self.clock = clock
         superblock = try ExtSuperblock(try source.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
         blocks = CachedBlocks(source, blockSize: superblock.blockSize, blockCount: superblock.blockCount)
         let groups = superblock.groupCount
@@ -69,15 +85,20 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
 
     func block(_ number: UInt64) throws(DiskError) -> DiskBytes { try blocks.block(number) }
 
-    func inode(_ number: UInt64) throws(DiskError) -> ExtInode {
+    /// The inode table block holding inode `number`, and the inode's offset in it.
+    func inodeLocation(_ number: UInt64) throws(DiskError) -> (block: UInt64, offset: Int) {
         guard number >= 1, number <= UInt64(superblock.inodeCount) else { throw .notFound }
         let index = number - 1
         let group = Int(index / UInt64(superblock.inodesPerGroup))
         let slot = index % UInt64(superblock.inodesPerGroup)
         let byteInTable = slot * UInt64(superblock.inodeSize)
         let blockSize = UInt64(superblock.blockSize)
-        let block = try block(inodeTables[group] + byteInTable / blockSize)
-        let raw = try block.slice(Int(byteInTable % blockSize), superblock.inodeSize)
+        return (inodeTables[group] + byteInTable / blockSize, Int(byteInTable % blockSize))
+    }
+
+    func inode(_ number: UInt64) throws(DiskError) -> ExtInode {
+        let location = try inodeLocation(number)
+        let raw = try block(location.block).slice(location.offset, superblock.inodeSize)
         let inode = try ExtInode(raw, number: number, checksums: superblock.checksums)
         guard inode.mode != 0 || number == rootID else { throw .notFound }
         if let checksums = superblock.checksums {

@@ -1,0 +1,3 @@
+# Every format's own checker (ADR-0018 decision 5), on the Alpine the test images are built with (TestImages/versions.txt).
+FROM alpine:3.22
+RUN apk add --no-cache e2fsprogs xfsprogs btrfs-progs ntfs-3g-progs

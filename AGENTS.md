@@ -89,6 +89,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   MountKit must not depend on it (the FSKit modules link MountKit). `macfs-tool` must stay free of `await`.
 - **`lsregister -f` alone does not register the app's modules**; FSKit then drops them from its enabled list, which only System
   Settings restores. Register with `lsregister -f -R -trusted`, before unregistering any other copy. `pluginkit -a` dropped one.
+- **Write tests judge with each format's own checker** (ADR-0018), in a container image built once:
+  `container build -t macfs-checkers:1 -f Scripts/checkers/Containerfile Scripts/checkers`. Without it, those tests are skipped.
 - **macOS 27 mounts NTFS disks with its own reader** (`UVFSService`, `ntfs.fs`), not ours; ours (`ntfsro`) runs when named.
 - **`diskutil` cannot unmount or mount our FSKit volumes** (StorageKit error 119; it shows "no file system"), while Disk
   Arbitration's own calls and Finder's Eject can. Use `hdiutil detach`, `umount` or `DADiskUnmount`.

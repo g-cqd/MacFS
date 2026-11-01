@@ -15,6 +15,9 @@ public final class CachedBlocks: Sendable {
         cache = BoundedCache(capacity: capacity)
     }
 
+    /// Forgets block `number`, after a writer changed it.
+    public func invalidate(_ number: UInt64) { cache.invalidate(number) }
+
     /// Block `number`, which must lie within the volume's `blockCount`.
     public func block(_ number: UInt64) throws(DiskError) -> DiskBytes {
         try cache.value(for: number) { () throws(DiskError) -> DiskBytes in
