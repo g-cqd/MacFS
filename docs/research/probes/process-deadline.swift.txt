@@ -1,0 +1,43 @@
+import Foundation
+
+struct Outcome { var status: String; var out: String; var err: String }
+
+/// Our own deadline over Process: termination handler + semaphore, pipes drained on their own threads, SIGTERM then SIGKILL.
+func runSync(_ path: String, _ args: [String], timeout: TimeInterval, grace: TimeInterval) -> Outcome {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: path)
+    p.arguments = args
+    let out = Pipe(), err = Pipe()
+    p.standardOutput = out; p.standardError = err
+    let exited = DispatchSemaphore(value: 0)
+    p.terminationHandler = { _ in exited.signal() }
+    final class Box: @unchecked Sendable { var data = Data() }
+    let o = Box(), e = Box(), drained = DispatchGroup()
+    for (pipe, box) in [(out, o), (err, e)] {
+        drained.enter()
+        Thread.detachNewThread { box.data = pipe.fileHandleForReading.readDataToEndOfFile(); drained.leave() }
+    }
+    do { try p.run() } catch { return Outcome(status: "error \(error)", out: "", err: "") }
+    var status = ""
+    if exited.wait(timeout: .now() + timeout) == .timedOut {
+        p.terminate()
+        if exited.wait(timeout: .now() + grace) == .timedOut { kill(p.processIdentifier, SIGKILL); exited.wait() }
+        status = "timed out, "
+    }
+    let drainedInTime = drained.wait(timeout: .now() + 2) == .success
+    status += "\(p.terminationReason == .exit ? "exited" : "signalled")(\(p.terminationStatus))" + (drainedInTime ? "" : " PIPE STILL OPEN")
+    return Outcome(status: status, out: String(decoding: o.data.prefix(64 * 1024), as: UTF8.self), err: String(decoding: e.data, as: UTF8.self))
+}
+
+let cases: [(String, String, [String])] = [
+    ("normal", "/bin/sh", ["-c", "echo out; echo err >&2"]),
+    ("hangs", "/bin/sleep", ["100"]),
+    ("ignores TERM, grandchild", "/bin/sh", ["-c", "trap '' TERM; /bin/sleep 100; echo never"]),
+    ("50 MB of output", "/bin/sh", ["-c", "/usr/bin/yes | /usr/bin/head -c 50000000"]),
+]
+for (name, path, args) in cases {
+    let t0 = Date()
+    let o = runSync(path, args, timeout: 1, grace: 1)
+    print(String(format: "%-26@ %5.2fs  %@  out=%@ err=%@", name as NSString, Date().timeIntervalSince(t0), o.status as NSString,
+                 o.out.trimmingCharacters(in: .whitespacesAndNewlines).prefix(10).description, o.err.trimmingCharacters(in: .whitespacesAndNewlines)))
+}

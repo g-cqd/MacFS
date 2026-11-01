@@ -1,0 +1,76 @@
+import Foundation
+import Subprocess
+import System
+
+struct Outcome { var status: String; var out: String; var err: String }
+
+/// The sync bridge: the run happens in an unstructured task; the calling (non-pool) thread blocks on a semaphore.
+func runSync(_ path: String, _ args: [String], timeout: Duration, grace: Duration) -> Outcome {
+    final class Box: @unchecked Sendable { var value: Outcome? }
+    let box = Box(), done = DispatchSemaphore(value: 0)
+    Task {
+        let options: PlatformOptions = {
+            var options = PlatformOptions()
+            options.processGroupID = 0  // its own group, so the teardown reaches grandchildren
+            options.teardownSequence = [.gracefulShutDown(toProcessGroup: true, allowedDurationToNextStep: grace)]
+            return options
+        }()
+        do {
+            let result = try await withThrowingTaskGroup(of: Outcome?.self) { group in
+                group.addTask {
+                    // Streams, each kept to its first 64 KiB and drained after, so a chatty command keeps its status.
+                    let r = try await run(
+                        .path(FilePath(path)), arguments: Arguments(args), platformOptions: options,
+                        input: .none, output: .sequence, error: .sequence
+                    ) { execution in
+                        func keep(_ stream: SubprocessOutputSequence) async throws -> [UInt8] {
+                            var kept: [UInt8] = []
+                            for try await buffer in stream where kept.count < 64 * 1024 {
+                                buffer.withUnsafeBytes { kept += $0.prefix(64 * 1024 - kept.count) }
+                            }
+                            return kept
+                        }
+                        async let out = keep(execution.standardOutput)
+                        let err = try await keep(execution.standardError)
+                        return (try await out, err)
+                    }
+                    let (out, err) = r.closureResult
+                    return Outcome(status: "\(r.terminationStatus)", out: String(decoding: out, as: UTF8.self), err: String(decoding: err, as: UTF8.self))
+                }
+                group.addTask { try await Task.sleep(for: timeout); return nil }
+                let first = try await group.next()!
+                group.cancelAll()
+                if let first { return first }
+                _ = try? await group.next()
+                return Outcome(status: "timed out", out: "", err: "")
+            }
+            box.value = result
+        } catch { box.value = Outcome(status: "error \(error)", out: "", err: "") }
+        done.signal()
+    }
+    done.wait()
+    return box.value!
+}
+
+let cases: [(String, String, [String])] = [
+    ("normal", "/bin/sh", ["-c", "echo out; echo err >&2"]),
+    ("hangs", "/bin/sleep", ["100"]),
+    ("ignores TERM, grandchild", "/bin/sh", ["-c", "trap '' TERM; /bin/sleep 100; echo never"]),
+    ("fds the child sees", "/bin/sh", ["-c", "ls /dev/fd | tr '\\n' ' '"]),
+    ("50 MB of output", "/bin/sh", ["-c", "/usr/bin/yes | /usr/bin/head -c 50000000"]),
+]
+var ends: [Int32] = [0, 0]
+_ = pipe(&ends)  // no FD_CLOEXEC, as a descriptor received over XPC
+print("parent holds \(ends[0]), \(ends[1])")
+Thread.detachNewThread {
+    for (name, path, args) in cases {
+        let t0 = Date()
+        let o = runSync(path, args, timeout: .seconds(1), grace: .seconds(1))
+        print(String(format: "%-26@ %5.2fs  %@  out=%@ err=%@", name as NSString, Date().timeIntervalSince(t0), o.status.prefix(90).description,
+                     o.out.trimmingCharacters(in: .whitespacesAndNewlines).prefix(10).description, o.err.trimmingCharacters(in: .whitespacesAndNewlines)))
+    }
+    let left = (try? String(contentsOfFile: "/dev/null")) ?? ""
+    _ = left
+    exit(0)
+}
+dispatchMain()

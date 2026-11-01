@@ -84,6 +84,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   `pkill -9 -f XFSModule.appex`.
 - **swiftly's proxy exports `TOOLCHAINS` and `SDKROOT` to `swift package` plugins**: xcodebuild then links the app with the
   open-source toolchain and fails. The installer runs it under `env -u TOOLCHAINS -u SDKROOT`.
+- **The agent's commands go through `SystemCommands`** (swift-subprocess, ADR-0017), with a deadline and process-group teardown.
+  Its `run` blocks: never call it from the cooperative pool. MountKit must not depend on it (the FSKit modules link MountKit).
 - **macOS 27 mounts NTFS disks with its own reader** (`UVFSService`, `ntfs.fs`), not ours; ours (`ntfsro`) runs when named.
 - **`diskutil` cannot unmount or mount our FSKit volumes** (StorageKit error 119; it shows "no file system"), while Disk
   Arbitration's own calls and Finder's Eject can. Use `hdiutil detach`, `umount` or `DADiskUnmount`.

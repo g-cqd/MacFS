@@ -31,6 +31,7 @@ let package = Package(
         .library(name: "ExtFS", targets: ["ExtFS"]),
         .library(name: "Formats", targets: ["Formats"]),
         .library(name: "MountKit", targets: ["MountKit"]),
+        .library(name: "SystemCommands", targets: ["SystemCommands"]),
         .library(name: "AppSupport", targets: ["AppSupport"]),
         .library(name: "NFSProxy", targets: ["NFSProxy"]),
         .library(name: "MountRegistry", targets: ["MountRegistry"]),
@@ -43,7 +44,12 @@ let package = Package(
         // Pinned to one revision, the one AemiRegex pins (ADR-0004).
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8475434abab0493d9bda746f78e33087899391c3"),
         // The mount registry's and the agent's encoding (ADR-0015); it pins the same aemi.
-        .package(url: "https://github.com/g-cqd/AemiProtobuf.git", revision: "7b7dbc551b4d8289640fb8b4d6870c698232cbba")
+        .package(
+            url: "https://github.com/g-cqd/AemiProtobuf.git",
+            revision: "7b7dbc551b4d8289640fb8b4d6870c698232cbba"
+        ),
+        // The agent's commands: deadlines, process-group teardown, bounded output (ADR-0017). Exact, like the pins above.
+        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.2")
     ],
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
@@ -101,9 +107,16 @@ let package = Package(
         .target(name: "AppSupport", dependencies: ["Formats"], swiftSettings: strictSettings),
         .testTarget(name: "AppSupportTests", dependencies: ["AppSupport", "Formats"], swiftSettings: strictSettings),
         // A read-only NFSv3 server over MountKit, mounted by macOS's own client (ADR-0005, roadmap 0007).
+        // System commands with a deadline (ADR-0017). Apart from MountKit, which the FSKit modules link: only the agent
+        // carries swift-subprocess.
+        .target(
+            name: "SystemCommands",
+            dependencies: ["MountKit", .product(name: "Subprocess", package: "swift-subprocess")],
+            swiftSettings: strictSettings
+        ),
         .target(
             name: "NFSProxy",
-            dependencies: ["MountKit", "FSCore", "Formats", aemiIO],
+            dependencies: ["MountKit", "SystemCommands", "FSCore", "Formats", aemiIO],
             swiftSettings: readerSettings
         ),
         .executableTarget(
@@ -139,6 +152,11 @@ let package = Package(
         .testTarget(name: "XFSTests", dependencies: ["XFS", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "FormatsTests", dependencies: ["Formats", "FSCore"], swiftSettings: strictSettings),
         .testTarget(name: "MountKitTests", dependencies: ["MountKit", "FSCore"], swiftSettings: strictSettings),
+        .testTarget(
+            name: "SystemCommandsTests",
+            dependencies: ["SystemCommands", "MountKit"],
+            swiftSettings: strictSettings
+        ),
         .testTarget(
             name: "NFSProxyTests",
             dependencies: ["NFSProxy", "MountKit", "FSCore"],

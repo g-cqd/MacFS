@@ -3,6 +3,7 @@ import Darwin
 import FSCore
 import Formats
 public import MountKit
+import SystemCommands
 
 extension NFSMountBackend {
     /// The backend as the agent and `macfs-nfsd` run it: system commands, this user as owner, any volume `DiskFormat` reads, from
