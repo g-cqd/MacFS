@@ -19,7 +19,13 @@ in the container.
    multiple-mount protection, unknown read-only features, a volume not cleanly unmounted, a read-only device, symlinks, inline
    or encrypted files, and anything needing allocation (growing, holes). `e2fsck -fn` accepts the volume after writes and every
    crash state; the two crash invariants of ADR-0018 hold on every state. 13 tests; every mutant killed.
-2. Allocation: block and inode bitmaps, group descriptors and the superblock's counts; growing a file, filling holes.
+2. **Done (2026-11-01):** block allocation on ext2 (no descriptor checksums, no clusters, indirect-mapped files): files grow
+   and holes fill through the block bitmaps, the group descriptors' counts and the indirect blocks (single, double, triple),
+   placed after the file's last block; the superblock's free count at `close`, as Linux writes it, and live in `statistics`.
+   New data and indirect blocks are written and flushed before anything links them; a crash leaves at worst leaked blocks.
+   Every crash state passes `e2fsck -fp` then `e2fsck -fn`, and none shows a new block's old contents. A gap after the old end
+   reads as zeros. More than the free space is refused before anything is written (ENOSPC). 10 tests; mutants killed but for
+   the search's start (a placement heuristic). Not yet: inode allocation (it comes with create), extent-mapped files.
 3. Create, remove, rename and link: directory entries (linear, then htree), inode allocation and link counts.
 4. Metadata checksums (ext4's `metadata_csum`), then jbd2 for ext3/4.
 5. Through FSKit: the volume's write handlers, the kernel-offloaded write mapping, the FSKit check (roadmap 0046).

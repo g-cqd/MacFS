@@ -21,6 +21,8 @@ public enum DiskError: Error, Equatable, Sendable {
     case notSymlink
     /// A write to a volume, or a device, opened read-only (ADR-0018).
     case readOnly
+    /// No free block or inode left for a change.
+    case noSpace
 
     public var posixCode: Int32 {
         switch self {
@@ -32,6 +34,7 @@ public enum DiskError: Error, Equatable, Sendable {
             case .isDirectory: EISDIR
             case .notSymlink: EINVAL
             case .readOnly: EROFS
+            case .noSpace: ENOSPC
         }
     }
 }

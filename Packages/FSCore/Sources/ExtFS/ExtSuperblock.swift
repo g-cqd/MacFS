@@ -67,6 +67,7 @@ struct ExtSuperblock: Sendable {
         guard try bytes.u16(0x38) == Self.magic else { throw .corrupt("no ext superblock") }
         let roCompat = try bytes.u32(0x64)
         hasMetadataChecksums = roCompat & 0x0400 != 0
+        hasGroupDescriptorChecksums = roCompat & 0x0410 != 0
         if hasMetadataChecksums {
             // ext4_superblock_csum: crc32c seeded with ~0, not inverted, over the bytes before the field.
             guard CRC32C.update(~0, raw[0 ..< 0x3FC]) == (try bytes.u32(0x3FC)) else { throw .checksum("superblock") }
@@ -126,6 +127,8 @@ struct ExtSuperblock: Sendable {
     }
 
     var is64Bit: Bool { incompat & 0x0080 != 0 }
+    /// `gdt_csum` or `metadata_csum`: group descriptors carry a checksum.
+    let hasGroupDescriptorChecksums: Bool
     var groupCount: UInt64 { (blockCount - firstDataBlock + UInt64(blocksPerGroup) - 1) / UInt64(blocksPerGroup) }
 
     /// Where the group descriptors live: Linux's `ext4_bg_has_super` and `descriptor_loc` (fs/ext4/super.c, balloc.c).

@@ -152,15 +152,11 @@ import Testing
         #expect(try ExtFileSystem(source: device).read(counting, at: 0, count: 300_000) == expected)
     }
 
-    /// Growing a file, filling a hole and writing a directory need allocation, a later slice: refused, nothing written.
-    @Test func whatNeedsAllocationIsRefusedForNow() throws {
+    /// A directory is not written as a file (its entries are a later slice): refused, nothing written.
+    @Test func aDirectoryIsNotWrittenAsAFile() throws {
         let device = try Self.copy("ext2")
         let original = device.bytes
         let volume = try Self.writable(device)
-        let hello = try ExtHtreeTests.path(volume, "hello.txt")
-        #expect(throws: DiskError.self) { try volume.write(hello, at: 10, Array("longer than it was".utf8)) }
-        let sparse = try ExtHtreeTests.path(volume, "big/sparse.bin")
-        #expect(throws: DiskError.self) { try volume.write(sparse, at: 4096, [1]) }
         #expect(throws: DiskError.isDirectory) { try volume.write(volume.rootID, at: 0, [1]) }
         try volume.close()
         // Only the superblock's mount fields differ: the state is back to clean, the times and the mount count moved.

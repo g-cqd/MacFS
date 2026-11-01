@@ -52,20 +52,25 @@ extension ExtFileSystem: WritableFileSystem {
         guard inode.flags & (ExtInode.inlineDataFlag | ExtInode.encryptedFlag) == 0 else {
             throw .unsupported("writing an inline or encrypted file")
         }
+        guard !bytes.isEmpty else { return }
         let end = offset + UInt64(bytes.count)
-        guard end <= inode.size else { throw .unsupported("growing a file (allocation comes in a later slice)") }
-        guard
-            let pieces = Self.pieces(
-                of: try runs(inode),
-                from: offset,
-                to: end,
-                blockSize: UInt64(superblock.blockSize)
-            )
-        else { throw .unsupported("writing into a hole (allocation comes in a later slice)") }
-        for piece in pieces {
-            try device.write(at: piece.at, Array(bytes[piece.from ..< piece.to]))
+        let blockSize = UInt64(superblock.blockSize)
+        let runs = try runs(inode)
+        if end <= inode.size, let pieces = Self.pieces(of: runs, from: offset, to: end, blockSize: blockSize) {
+            for piece in pieces { try device.write(at: piece.at, Array(bytes[piece.from ..< piece.to])) }
+            try touch(inode, on: device)
+            return
         }
-        try touch(inode, on: device)
+        try freeBlocks.withLock { (free) throws(DiskError) in
+            free = try allocatingWrite(
+                inode,
+                runs: runs,
+                at: offset,
+                bytes,
+                on: device,
+                free: free ?? superblock.freeBlocks
+            )
+        }
     }
 
     /// Where the bytes `from ..< to` of a file lie on disk, as (device offset, range in the bytes); nil when a block in the range
@@ -99,7 +104,14 @@ extension ExtFileSystem: WritableFileSystem {
         // Every change durable before the volume says clean.
         try device.flush()
         let state = try DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).u16(0x3A)
-        try markSuperblock(on: device, state: state | Self.validState, time: 0x30)
+        let free = freeBlocks.withLock { $0 }
+        let wide = superblock.is64Bit
+        try markSuperblock(on: device, state: state | Self.validState, time: 0x30) { raw in
+            // The free count the session's allocations left, as Linux writes it: lazily, at the unmount.
+            guard let free else { return }
+            Self.put32(UInt32(truncatingIfNeeded: free), at: 0x0C, in: &raw)
+            if wide { Self.put32(UInt32(truncatingIfNeeded: free >> 32), at: 0x158, in: &raw) }
+        }
         closed.withLock { $0 = true }
     }
 
@@ -126,7 +138,11 @@ extension ExtFileSystem: WritableFileSystem {
     }
 
     /// The inode's change and modification times set to now, with their nanoseconds where the inode has room.
-    private func touch(_ inode: ExtInode, on device: any WritableBlockSource) throws(DiskError) {
+    func touch(
+        _ inode: ExtInode,
+        on device: any WritableBlockSource,
+        _ more: (inout [UInt8]) -> Void = { _ in }
+    ) throws(DiskError) {
         let location = try inodeLocation(inode.number)
         let blockSize = UInt64(superblock.blockSize)
         let at = location.block * blockSize + UInt64(location.offset)
@@ -139,6 +155,7 @@ extension ExtFileSystem: WritableFileSystem {
             Self.put32(low, at: field, in: &raw)
             if 128 + inode.extraSize >= extraField + 4 { Self.put32(extra, at: extraField, in: &raw) }
         }
+        more(&raw)
         try device.write(at: at, raw)
         blocks.invalidate(location.block)
     }
