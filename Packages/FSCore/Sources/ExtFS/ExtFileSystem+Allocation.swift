@@ -2,15 +2,15 @@ import FSCore
 
 extension ExtFileSystem {
     /// A write that needs blocks (roadmap 0026 step 2): new data and indirect blocks taken and written, flushed, then linked
-    /// from the existing indirect blocks and the inode. Returns the free blocks left.
+    /// from the existing indirect blocks and the inode. Returns the free counts left.
     func allocatingWrite(
         _ inode: ExtInode,
         runs: [ExtRun],
         at offset: UInt64,
         _ bytes: [UInt8],
         on device: any WritableBlockSource,
-        free: UInt64
-    ) throws(DiskError) -> UInt64 {
+        free: ExtFreeCounts
+    ) throws(DiskError) -> ExtFreeCounts {
         guard inode.flags & ExtInode.extentsFlag == 0 else {
             throw .unsupported("growing an extent-mapped file (a later slice)")
         }
@@ -29,14 +29,8 @@ extension ExtFileSystem {
             return start + logical - run.logical
         }
         let missing = (first ... last).filter { physical($0) == nil }
-        var allocation = ExtAllocation(
-            superblock: superblock,
-            device: device,
-            freeBlocks: free,
-            pointers: try (0 ..< 15).map { (index) throws(DiskError) -> UInt32 in try inode.blockArea.u32(index * 4) },
-            goal: runs.compactMap { run in run.physical.map { $0 + run.count } }.max() ?? 0
-        )
-        guard allocation.worstCase(missing: UInt64(missing.count)) <= free else { throw .noSpace }
+        var allocation = try allocation(for: inode, on: device, free: free)
+        guard allocation.worstCase(missing: UInt64(missing.count)) <= free.blocks else { throw .noSpace }
         // Phase one: what is new, and the bytes of blocks already stored.
         for logical in first ... last {
             let blockStart = logical * blockSize
@@ -67,10 +61,7 @@ extension ExtFileSystem {
                 try device.write(at: stored * blockSize + from, [UInt8](repeating: 0, count: Int(to - from)))
             }
         }
-        for (block, content) in allocation.metadata.sorted(by: { $0.key < $1.key }) {
-            try device.write(at: block * blockSize, content)
-        }
-        for (block, content) in allocation.newIndirectBlocks { try device.write(at: block * blockSize, content) }
+        try writeAllocation(allocation, on: device)
         try device.flush()
         // Phase two: the links.
         for (block, content) in allocation.changedIndirectBlocks { try device.write(at: block * blockSize, content) }
@@ -88,6 +79,6 @@ extension ExtFileSystem {
         for block in allocation.metadata.keys { blocks.invalidate(block) }
         for block in allocation.indirect.keys { blocks.invalidate(block) }
         mappings.invalidate(inode.number)
-        return allocation.freeBlocks
+        return allocation.free
     }
 }

@@ -26,6 +26,14 @@ in the container.
    Every crash state passes `e2fsck -fp` then `e2fsck -fn`, and none shows a new block's old contents. A gap after the old end
    reads as zeros. More than the free space is refused before anything is written (ENOSPC). 10 tests; mutants killed but for
    the search's start (a placement heuristic). Not yet: inode allocation (it comes with create), extent-mapped files.
-3. Create, remove, rename and link: directory entries (linear, then htree), inode allocation and link counts.
+3. Create, remove, rename and link.
+   - **Done (2026-11-01):** create (files, directories) and remove (unlink, rmdir) in linear directories: inode bitmaps and the
+     descriptors' inode and directory counts, entries inserted into a record's slack or a new block the directory grows by,
+     removed into the record before; link counts; a removed node's blocks (data and indirect) and inode freed, its deletion
+     time set. Names checked (EEXIST, ENAMETOOLONG, EINVAL; ENOTEMPTY for a directory with names). Refused: indexed (htree)
+     directories, other kinds of node, a node with an extended-attribute block. The order is what preen repairs, measured on
+     every crash state: blocks and bitmaps, flush, the name, flush, the inode; a remove frees the inode, flushes, then drops
+     the name. 10 tests, two of them every crash state through `e2fsck -fp` then `-fn`.
+   - Next: rename and hard links, symbolic links, then htree directories.
 4. Metadata checksums (ext4's `metadata_csum`), then jbd2 for ext3/4.
 5. Through FSKit: the volume's write handlers, the kernel-offloaded write mapping, the FSKit check (roadmap 0046).

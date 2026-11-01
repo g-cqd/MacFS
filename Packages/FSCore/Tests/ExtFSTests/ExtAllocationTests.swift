@@ -105,7 +105,7 @@ import Testing
         var allocation = ExtAllocation(
             superblock: superblock,
             device: device,
-            freeBlocks: superblock.freeBlocks,
+            free: ExtFreeCounts(blocks: superblock.freeBlocks, inodes: superblock.freeInodes),
             pointers: [UInt32](repeating: 0, count: 15),
             goal: superblock.firstDataBlock + 7 * UInt64(superblock.blocksPerGroup)
         )

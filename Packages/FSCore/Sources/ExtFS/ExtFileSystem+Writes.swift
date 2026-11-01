@@ -61,14 +61,14 @@ extension ExtFileSystem: WritableFileSystem {
             try touch(inode, on: device)
             return
         }
-        try freeBlocks.withLock { (free) throws(DiskError) in
+        try freeCounts.withLock { (free) throws(DiskError) in
             free = try allocatingWrite(
                 inode,
                 runs: runs,
                 at: offset,
                 bytes,
                 on: device,
-                free: free ?? superblock.freeBlocks
+                free: free ?? initialFreeCounts
             )
         }
     }
@@ -104,13 +104,14 @@ extension ExtFileSystem: WritableFileSystem {
         // Every change durable before the volume says clean.
         try device.flush()
         let state = try DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).u16(0x3A)
-        let free = freeBlocks.withLock { $0 }
+        let free = freeCounts.withLock { $0 }
         let wide = superblock.is64Bit
         try markSuperblock(on: device, state: state | Self.validState, time: 0x30) { raw in
-            // The free count the session's allocations left, as Linux writes it: lazily, at the unmount.
+            // The free counts the session's changes left, as Linux writes them: lazily, at the unmount.
             guard let free else { return }
-            Self.put32(UInt32(truncatingIfNeeded: free), at: 0x0C, in: &raw)
-            if wide { Self.put32(UInt32(truncatingIfNeeded: free >> 32), at: 0x158, in: &raw) }
+            Self.put32(UInt32(truncatingIfNeeded: free.blocks), at: 0x0C, in: &raw)
+            if wide { Self.put32(UInt32(truncatingIfNeeded: free.blocks >> 32), at: 0x158, in: &raw) }
+            Self.put32(free.inodes, at: 0x10, in: &raw)
         }
         closed.withLock { $0 = true }
     }
@@ -131,8 +132,11 @@ extension ExtFileSystem: WritableFileSystem {
         try device.flush()
     }
 
+    /// The free counts as the volume had them when it was opened.
+    var initialFreeCounts: ExtFreeCounts { ExtFreeCounts(blocks: superblock.freeBlocks, inodes: superblock.freeInodes) }
+
     /// The device, unless the volume is read-only or closed.
-    private func openDevice() throws(DiskError) -> any WritableBlockSource {
+    func openDevice() throws(DiskError) -> any WritableBlockSource {
         guard let device, !closed.withLock({ $0 }) else { throw .readOnly }
         return device
     }
@@ -147,10 +151,7 @@ extension ExtFileSystem: WritableFileSystem {
         let blockSize = UInt64(superblock.blockSize)
         let at = location.block * blockSize + UInt64(location.offset)
         var raw = try device.read(at: at, count: superblock.inodeSize)
-        let now = clock()
-        let low = UInt32(truncatingIfNeeded: now.seconds)
-        let epoch = UInt32(truncatingIfNeeded: (now.seconds - Int64(Int32(bitPattern: low))) >> 32) & 3
-        let extra = epoch | UInt32(now.nanoseconds) << 2
+        let (low, extra) = Self.stamp(clock())
         for (field, extraField) in [(0x0C, 0x84), (0x10, 0x88)] {
             Self.put32(low, at: field, in: &raw)
             if 128 + inode.extraSize >= extraField + 4 { Self.put32(extra, at: extraField, in: &raw) }
@@ -158,6 +159,13 @@ extension ExtFileSystem: WritableFileSystem {
         more(&raw)
         try device.write(at: at, raw)
         blocks.invalidate(location.block)
+    }
+
+    /// A time as an inode keeps it: the low 32 bits of the seconds, and the `_extra` word (two epoch bits, the nanoseconds).
+    static func stamp(_ time: Timestamp) -> (low: UInt32, extra: UInt32) {
+        let low = UInt32(truncatingIfNeeded: time.seconds)
+        let epoch = UInt32(truncatingIfNeeded: (time.seconds - Int64(Int32(bitPattern: low))) >> 32) & 3
+        return (low, epoch | UInt32(time.nanoseconds) << 2)
     }
 
     static func put16(_ value: UInt16, at offset: Int, in bytes: inout [UInt8]) {

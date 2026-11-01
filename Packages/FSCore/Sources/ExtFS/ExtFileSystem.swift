@@ -19,7 +19,7 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     let closed = Mutex(false)
     /// The volume's free blocks as this session's writes left them (nil until one allocates), written at `close`. Its lock
     /// also makes writes one at a time.
-    let freeBlocks = Mutex<UInt64?>(nil)
+    let freeCounts = Mutex<ExtFreeCounts?>(nil)
     let mappings = BoundedCache<UInt64, [ExtRun]>(capacity: 512)
     let listings = BoundedCache<UInt64, [ExtDirectoryBlock.Entry]>(capacity: 256)
 
@@ -114,8 +114,8 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
         VolumeStatistics(
             blockSize: superblock.blockSize,
             totalBlocks: superblock.blockCount,
-            freeBlocks: freeBlocks.withLock { $0 } ?? superblock.freeBlocks,
-            files: UInt64(superblock.inodeCount - superblock.freeInodes)
+            freeBlocks: freeCounts.withLock { $0?.blocks } ?? superblock.freeBlocks,
+            files: UInt64(superblock.inodeCount - (freeCounts.withLock { $0?.inodes } ?? superblock.freeInodes))
         )
     }
 }

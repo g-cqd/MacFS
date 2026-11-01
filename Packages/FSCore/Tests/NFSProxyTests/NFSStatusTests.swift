@@ -9,7 +9,7 @@ struct NFSStatusTests {
         (DiskError.notFound, UInt32(2)), (.notDirectory, 20), (.isDirectory, 21), (.accessDenied("x"), 13),
         (.unsupported("x"), 10_004), (.notSymlink, 22), (.corrupt("x"), 5), (.checksum("x"), 5),
         (.io(errno: 9, "x"), 5),
-        (.readOnly, 30), (.noSpace, 28)
+        (.readOnly, 30), (.noSpace, 28), (.exists, 17), (.notEmpty, 66), (.nameTooLong, 63), (.invalidName, 22)
     ])
     func eachErrorHasItsStatus(error: DiskError, status: UInt32) {
         #expect(NFSStatus.of(error) == status)

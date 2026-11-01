@@ -94,6 +94,8 @@ struct ExtSuperblock: Sendable {
         inodesPerGroup = try bytes.u32(0x28)
         let revision = try bytes.u32(0x4C)
         inodeSize = revision == 0 ? 128 : Int(try bytes.u16(0x58))
+        firstInode = revision == 0 ? 11 : try bytes.u32(0x54)
+        wantExtraSize = revision == 0 ? 0 : Int(try bytes.u16(0x15C))
         guard blocksPerGroup > 0, inodesPerGroup > 0, inodeSize >= 128, inodeSize <= blockSize,
             inodeSize.nonzeroBitCount == 1
         else {
@@ -129,6 +131,10 @@ struct ExtSuperblock: Sendable {
     var is64Bit: Bool { incompat & 0x0080 != 0 }
     /// `gdt_csum` or `metadata_csum`: group descriptors carry a checksum.
     let hasGroupDescriptorChecksums: Bool
+    /// `s_first_ino`: the first inode not reserved (11 before revision 1).
+    let firstInode: UInt32
+    /// `s_want_extra_isize`: the extra inode bytes a new inode reserves.
+    let wantExtraSize: Int
     var groupCount: UInt64 { (blockCount - firstDataBlock + UInt64(blocksPerGroup) - 1) / UInt64(blocksPerGroup) }
 
     /// Where the group descriptors live: Linux's `ext4_bg_has_super` and `descriptor_loc` (fs/ext4/super.c, balloc.c).

@@ -23,6 +23,13 @@ public enum DiskError: Error, Equatable, Sendable {
     case readOnly
     /// No free block or inode left for a change.
     case noSpace
+    /// A name that is already in the directory.
+    case exists
+    /// A directory removed while it still has names.
+    case notEmpty
+    case nameTooLong
+    /// A name a directory cannot hold: empty, `.`, `..`, or with a slash or a NUL.
+    case invalidName
 
     public var posixCode: Int32 {
         switch self {
@@ -35,6 +42,10 @@ public enum DiskError: Error, Equatable, Sendable {
             case .notSymlink: EINVAL
             case .readOnly: EROFS
             case .noSpace: ENOSPC
+            case .exists: EEXIST
+            case .notEmpty: ENOTEMPTY
+            case .nameTooLong: ENAMETOOLONG
+            case .invalidName: EINVAL
         }
     }
 }

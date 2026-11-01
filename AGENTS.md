@@ -46,6 +46,10 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   configs from the same aemi revision (ADR-0004). Check the heads' pins before bumping one.
 - **Formatting moves dolly anchors.** After `format`, run `gates`: an accept directive must sit directly above the anchor line.
 - **BSD `sed` has no `\b`** and fails silently; use `perl -pi -e`. Assert every scripted edit's anchor exists.
+- **Mutation testing runs once a day, not after every slice** (the owner, 2026-11-01). Between runs, each change is still
+  seen failing first (red, then green). The daily run covers the code changed since the last one; its survivors become tests
+  or are written down as equivalent. Count a test binary that crashes as a kill (a non-zero exit), keep the harness's file
+  variable local, and check after an interrupted run that no mutant is left in a source file.
 - **Never `git checkout` a file to undo a mutation.** Copy first, restore the copy.
 - **Shared directories collect `.DS_Store`.** Build anything that is hashed in the container's own `/tmp`.
 - **After a failed `xcodebuild`, use a fresh `-derivedDataPath`**: a stale one embedded extensions without their Info.plist.
