@@ -22,8 +22,8 @@ for the proxy helper's IPC and AemiJSON for configuration and reports, when thos
 
 The analyzers are pinned the same way, by the family's lock: `Scripts/analyzers.lock` is aemi's, copied, and moves with the aemi pin
 (roadmap 0010). AemiJSON (head pins aemi `8475434`) and AemiProtobuf (head pins aemi `a20fb18` and AemiJSON `0869500`) join a MacFS
-graph only when they pin the same aemi as MacFS: on 2026-11-01 AemiJSON does, AemiProtobuf does not (it builds against `8475434`
-and AemiJSON `a64a378`, checked in a scratch clone, but the bump is that repository's to make).
+graph only when they pin the same aemi as MacFS. On 2026-11-01 AemiJSON did; AemiProtobuf was bumped to aemi `8475434` and
+AemiJSON `1a79d01` (`7b7dbc5`, its own gates green) and is chosen for the registry and the agent's messages (ADR-0015).
 
 `DiskBytes` wraps Aemi's loads with the bounds check they leave to the caller, because Aemi checks only in debug and disk bytes are
 hostile. Info.plists are property lists, so `PropertyListSerialization` writes them, not a JSON library.
