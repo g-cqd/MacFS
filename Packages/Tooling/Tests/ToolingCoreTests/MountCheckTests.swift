@@ -18,8 +18,7 @@ import ToolingCore
             runner: runner,
             root: "/repo",
             mountPoint: { "/tmp/mounts/\($0.image)" },
-            compare: { _, _, _ in problems },
-            writeRefused: { _ in refused }
+            verification: MountVerification(compare: { _, _, _ in problems }, writeRefused: { _ in refused })
         )
     }
 

@@ -33,7 +33,8 @@ let package = Package(
         .target(
             name: "ToolingCore",
             dependencies: [
-                .product(name: "Formats", package: "FSCore"), .product(name: "AemiRegex", package: "AemiRegex")
+                .product(name: "Formats", package: "FSCore"), .product(name: "AppSupport", package: "FSCore"),
+                .product(name: "AemiRegex", package: "AemiRegex")
             ],
             swiftSettings: strictSettings
         ),

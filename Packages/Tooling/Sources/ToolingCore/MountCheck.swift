@@ -41,21 +41,18 @@ public struct MountCheck: Sendable {
     let runner: any ProcessRunning
     let root: String
     let mountPoint: @Sendable (Target) -> String
-    let compare: @Sendable (String, String, Set<String>) throws -> [String]
-    let writeRefused: @Sendable (String) -> Bool
+    let verification: MountVerification
 
     public init(
         runner: any ProcessRunning,
         root: String,
         mountPoint: @escaping @Sendable (Target) -> String,
-        compare: @escaping @Sendable (String, String, Set<String>) throws -> [String],
-        writeRefused: @escaping @Sendable (String) -> Bool
+        verification: MountVerification
     ) {
         self.runner = runner
         self.root = root
         self.mountPoint = mountPoint
-        self.compare = compare
-        self.writeRefused = writeRefused
+        self.verification = verification
     }
 
     public func run(_ target: Target) -> Outcome {
@@ -70,10 +67,7 @@ public struct MountCheck: Sendable {
         let point = mountPoint(target)
         let mount = try? runner.run(Command("/sbin/mount", ["-F", "-t", target.type, "-o", "rdonly", device, point]))
         if let mount, mount.status == 0 {
-            do { problems += try compare(point, "\(image).manifest", target.extra) } catch {
-                problems.append("compare: \(error)")
-            }
-            if !writeRefused(point) { problems.append("a write was accepted on a read-only mount") }
+            problems += verification.problems(at: point, manifest: "\(image).manifest", extra: target.extra)
             _ = try? runner.run(Command("/sbin/umount", [point]))
         } else {
             problems.append("mount -t \(target.type): \(mount?.output ?? "did not run")")

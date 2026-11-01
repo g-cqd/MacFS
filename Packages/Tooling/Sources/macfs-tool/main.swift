@@ -91,6 +91,9 @@ func mounts(_ options: Options) -> Int32 {
             print(
                 "TestImages/\(target.image).img: attach, mount -F -t \(target.type), compare, refuse a write, release"
             )
+            print(
+                "TestImages/\(target.image).img: clone, mount through MacFS's agent, compare, refuse a write, unmount"
+            )
         }
         return 0
     }
@@ -103,26 +106,36 @@ func mounts(_ options: Options) -> Int32 {
             try? FileManager.default.createDirectory(atPath: point, withIntermediateDirectories: true)
             return point
         },
-        compare: { point, manifest, extra in
-            try TreeComparison.problems(
-                root: point,
-                manifest: try String(contentsOfFile: manifest, encoding: .utf8),
-                extra: extra
-            )
-        },
-        writeRefused: MountCheck.refusesWrites(at:)
+        verification: .manifest
+    )
+    // The agent path (roadmap 0039): the installed app mounts a clone in its container through its agent.
+    let container = NSHomeDirectory() + "/Library/Containers/dev.gcqd.MacFS/Data/tmp"
+    let app = AppLaunch(
+        runner: SystemProcessRunner(capture: true),
+        app: "/Applications/MacFS.app",
+        resultFile: container + "/agentcheck-result.txt"
+    )
+    let agent = AgentMountCheck(
+        runner: SystemProcessRunner(capture: true),
+        root: options.root,
+        container: container,
+        launch: app.run,
+        verification: .manifest
     )
     var failed = false
-    for target in MountCheck.targets {
-        let outcome = check.run(target)
+    func report(_ outcome: MountCheck.Outcome, _ path: String) {
+        let target = outcome.target
         if outcome.problems.isEmpty {
-            print("[OK]   \(target.image) (\(target.type))")
+            print("[OK]   \(target.image) (\(target.type), \(path))")
         } else {
             failed = true
-            print("[FAIL] \(target.image) (\(target.type))")
+            print("[FAIL] \(target.image) (\(target.type), \(path))")
             outcome.problems.prefix(10).forEach { print("       \($0)") }
         }
     }
+    for target in MountCheck.targets { report(check.run(target), "FSKit") }
+    try? FileManager.default.createDirectory(atPath: container, withIntermediateDirectories: true)
+    for target in MountCheck.targets { report(agent.run(target), "agent") }
     try? FileManager.default.removeItem(atPath: base)
     return failed ? 1 : 0
 }

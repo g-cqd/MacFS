@@ -114,6 +114,9 @@ documentation law and one type per file under 250 lines. Accept a finding where 
 - **`SMAppService.register` from a shell-launched app is "Operation not permitted"**: launch through `open -a MacFS --args ...`
   and read `/usr/bin/log show --predicate 'subsystem == "dev.gcqd.MacFS"'` (zsh's `log` is a reserved word).
 - **Assigning a `RawSpan` into an `XPCDictionary` crashes the Swift 6.4 compiler**: `XPCDictionary.setBytes(_:for:)` uses the C API.
+- **`open -W` does not reliably wait for an app that exits at once**: it returns 0 ("Unable to block on application") or fails
+  with status 1 ("initial call to kevent() failed: No such process") while the app still runs. Scripted app commands write
+  `--result FILE` atomically and the caller waits for the file (`AppLaunch`).
 - **One owner per registry**: a sweep unmounts what its own process does not serve. The agent uses `registry.pb`,
   `macfs-nfsd --mount` uses `registry-cli.pb`.
 - **The agent answers only binaries of team NP94WB3P75** (`isFromSameTeam`, both ways). The local Apple Development identities

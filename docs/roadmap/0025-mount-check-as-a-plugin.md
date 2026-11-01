@@ -17,3 +17,6 @@ through their modules, compared with their manifests by `TreeComparison` (FileMa
 refused a write, unmounted and detached, the volume released whatever failed. The sequence is tested on the recording runner,
 the comparison on a real directory, the system runner's capture with one real process. Not in the gates: it needs the app
 installed with its modules enabled. ext4-gpt (two devices on attach) and btrfs-zstd (0013) are left out.
+
+Since 0039 it runs every image twice: through its FSKit module, and through the app's agent (an NFS proxy mount), with the same
+verification (`MountVerification`).

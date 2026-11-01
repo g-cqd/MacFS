@@ -30,4 +30,8 @@ its container. The status pane has the agent's line (registered, waiting for app
 Mount and a Mounts list with Unmount. Checked live through the installed app: registration, a mount of an image in the app's
 container (unreadable to the agent by path), the mount read against the reference manifest after the app quit, an unmount.
 
-Open: a repeatable check of agent mounts in the `mounts` plugin; mount points outside the agent's container.
+The `mounts` plugin checks the agent path too: each image cloned (`cp -c`) into the app's container, mounted by the installed
+app (`MacFS --mount-image CLONE --result FILE`), compared with its manifest, refused a write, unmounted through the app, the clone
+removed (`AgentMountCheck`, `AppLaunch`, `AutomationResult`); 18/18 beside the 18 FSKit mounts, three runs in a row.
+
+Open: mount points outside the agent's container; the Login Items approval path.
