@@ -44,6 +44,7 @@ public enum ModulePlist {
             "FSRequiresSecurityScopedPathURLResources": false,
             "FSVolumeAlwaysIgnoreOwnership": true,
             "FSActivateOptionSyntax": ["shortOptions": "o:"],
+            "FSCheckOptionSyntax": ["shortOptions": "fnpqy"],
             "FSPersonalities": [format.displayName: personality],
             "FSMediaTypes": mediaTypes(for: format)
         ]

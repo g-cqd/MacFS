@@ -101,7 +101,10 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   `container list --all` and remove what is left.
 - **After a restart**, the agent path of `macfs-tool mounts` failed until `MacFS.app/Contents/MacOS/MacFS --register-agent`
   (the agent was "enabled" but not reachable). The mount check's last case writes (`WriteCheck`) and needs the checkers' image.
-- **Writable FSKit mounts** (roadmap 0046): `mount -F -t ext4 /dev/diskN point` without `rdonly`; an automount stays read-only.
+- **Writable FSKit mounts** (roadmap 0046): asked by name, `mount -F -t ext4 -o rw /dev/diskN point`, or Disk Arbitration's
+  mount argument `writable` (it drops a bare `rw`); anything else is read-only, automounts included. Disk Arbitration runs the
+  module's check (`fsck_fskit -t <type> -q|-y`) before every mount of a writable device; the first mount after an install may
+  be refused with 0xf8da000c (a stale FSKit connection): retry.
   Writes go through the kernel-offloaded block map, never FSKit's write handler for mappable files: through it, a write of 256
   KiB or more never reached the module and left the writer stuck in the kernel (state `U`) until a restart. Never read
   `completeIO`'s `status` (a null `any Error`; reading it crashed the module). A second image with the same volume UUID as one

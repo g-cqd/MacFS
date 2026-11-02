@@ -7,9 +7,11 @@ import os
 /// One FSKit module per format, all read-only: the format is the only difference (ADR-0006).
 final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unchecked Sendable {
     // FSKit calls the operations serially on its own queue; `volume` is only touched there.
-    private let format: DiskFormat
+    let format: DiskFormat
     private var volume: ReadOnlyVolume?
-    private let log: Logger
+    /// The device of the last probe or load: the one a check is for.
+    var device: FSBlockDeviceResource?
+    let log: Logger
 
     init(format: DiskFormat) {
         self.format = format
@@ -19,6 +21,7 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
 
     func probeResource(resource: FSResource, replyHandler: @escaping (FSProbeResult?, (any Error)?) -> Void) {
         guard let device = resource as? FSBlockDeviceResource else { return replyHandler(.notRecognized, nil) }
+        self.device = device
         let description = format.probe(BlockDeviceSource(device))
         switch ProbeAnswer(description) {
             case .notRecognized:
@@ -35,6 +38,7 @@ final class ReadOnlyModule: FSUnaryFileSystem, FSUnaryFileSystemOperations, @unc
         replyHandler: @escaping (FSVolume?, (any Error)?) -> Void
     ) {
         guard let device = resource as? FSBlockDeviceResource else { return replyHandler(nil, ModuleError.invalid) }
+        self.device = device
         do throws(DiskError) {
             let fileSystem = try format.open(BlockDeviceSource(device))
             let tree = try MountedTree(fileSystem)

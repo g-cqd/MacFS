@@ -22,4 +22,11 @@ public protocol ReadOnlyFileSystem: Sendable {
 
     /// The target of a symbolic link, as stored.
     func readLink(_ id: UInt64) throws(DiskError) -> [UInt8]
+
+    /// The inconsistencies the volume records about itself (a format's "not clean", "errors"), for a check: none by default.
+    func consistencyProblems() throws(DiskError) -> [String]
+}
+
+extension ReadOnlyFileSystem {
+    public func consistencyProblems() throws(DiskError) -> [String] { [] }
 }

@@ -16,6 +16,16 @@ import ToolingCore
         #expect((attributes["FSMediaTypes"] as? [String: Any])?.isEmpty == false)
     }
 
+    /// The check's options as `fsck_fskit` parses them (roadmap 0046): Disk Arbitration's `-q` and `-y`, fsck's `-n`, `-p`
+    /// and `-f`. Without `q`, `fsck_fskit -q` was refused while parsing (measured).
+    @Test(arguments: DiskFormat.allCases)
+    func theCheckDeclaresTheOptionsDiskArbitrationAndFsckPass(_ format: DiskFormat) throws {
+        let plist = ModulePlist.dictionary(for: format)
+        let attributes = try #require(plist["EXAppExtensionAttributes"] as? [String: Any])
+        let syntax = try #require(attributes["FSCheckOptionSyntax"] as? [String: String])
+        #expect(Set(try #require(syntax["shortOptions"])) == Set("fnpqy"))
+    }
+
     @Test func eachFormatHasItsOwnModuleDirectory() {
         let directories = DiskFormat.allCases.map(ModulePlist.directory(for:))
         #expect(Set(directories).count == DiskFormat.allCases.count)

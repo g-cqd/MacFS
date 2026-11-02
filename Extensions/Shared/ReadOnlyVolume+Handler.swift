@@ -59,9 +59,10 @@ extension ReadOnlyVolume: FSVolume.Handler {
     func activateVolume(options: FSTaskOptions, replyHandler reply: @escaping (FSActivateResult?, (any Error)?) -> Void)
     {
         log.info("activate, options: \(options.taskOptions, privacy: .public)")
-        // Writable only when asked: no `rdonly` among the options, a writable device, a format that writes and accepts this
-        // volume. Refused, the volume stays read-only and says why; asking to write never fails a mount (ADR-0018).
-        if !Self.isReadOnly(options.taskOptions), device.isWritable,
+        // Writable only when asked by name (`-o rw` or `-o writable`; an automount asks for nothing), on a writable device,
+        // for a format that writes and accepts this volume. Refused, the volume stays read-only and says why; asking to write
+        // never fails a mount (ADR-0018).
+        if WriteRequest.asksToWrite(options.taskOptions), device.isWritable,
             let writable = tree.fileSystem as? any WritableFileSystem
         {
             do throws(DiskError) {
@@ -97,13 +98,6 @@ extension ReadOnlyVolume: FSVolume.Handler {
         }
     }
 
-    /// Whether the task options ask for a read-only mount: `rdonly` (or `ro`) in an `-o` list.
-    static func isReadOnly(_ options: [String]) -> Bool {
-        zip(options, options.dropFirst())
-            .contains { flag, value in
-                flag == "-o" && value.split(separator: ",").contains { $0 == "rdonly" || $0 == "ro" }
-            }
-    }
     func mount(options: FSTaskOptions, replyHandler reply: @escaping ((any Error)?) -> Void) {
         log.info("mount, options: \(options.taskOptions, privacy: .public)")
         reply(nil)

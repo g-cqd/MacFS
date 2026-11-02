@@ -105,3 +105,18 @@ Measured while making the ext2 writer reach Finder (diary 2026-11-01-18):
   failed one leaves only zeroed blocks inside the size.
 - The volume asks for read-write only once its writer began (FSKit asks after activation); an automount's `rdonly` never
   begins one.
+
+## Amendment (2026-11-02): writes are asked for by name; the modules' check
+
+Measured (diary 2026-11-02-02):
+
+- Once the modules declare a check (`FSCheckOptionSyntax`, `FSManageableResourceMaintenanceOperations`), Disk Arbitration runs it
+  before every mount of a writable device, automounts included: `-q`, then `-y` when `-q` fails, and it refuses the mount when
+  the repair fails too. It then mounts without `rdonly` (`-o nodev,noowners,nosuid,nofollow`): the earlier "automounts pass
+  `rdonly`" held only while the modules had no check.
+- So "no `rdonly`" no longer asks to write. A volume writes only when its options name it: `rw` (a mount by hand) or `writable`
+  (Disk Arbitration keeps it among its mount arguments and drops a bare `rw`); `rdonly`/`ro` wins. This replaces decision 1's
+  "a mount without `rdonly`".
+- The check (`VolumeCheck`) only reads. `-q` passes a readable volume and names what it records (not clean, errors): the
+  module writes no such volume, so it mounts read-only, as before the check existed. A full check (`-n`, `-y`, `-p`) fails such a
+  volume. Nothing is repaired; a repair fails, naming the format's own tool. A volume that cannot be read fails every mode.

@@ -5,33 +5,45 @@
 \* the segment that contains the closure.
 EXTENDS Naturals
 CONSTANTS Procs, Opaque
-VARIABLES volume, pc
-vars == <<volume, pc>>
+VARIABLES volume, device, pc
+vars == <<volume, device, pc>>
 
 Dom_volume == Opaque \cup {"nil"}
+Dom_device == Opaque \cup {"nil"}
 PCs == {"idle"}
 
 TypeOK ==
     /\ pc \in [Procs -> PCs]
     /\ volume \in Dom_volume
+    /\ device \in Dom_device
 
 Init ==
     /\ pc = [p \in Procs |-> "idle"]
     /\ volume = CHOOSE v \in Dom_volume : TRUE
+    /\ device = CHOOSE v \in Dom_device : TRUE
 
-\* loadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:32
+\* probeResource(resource:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:22
+probeResource_0(p) ==
+    /\ pc[p] = "idle"
+    /\ device' \in Dom_device
+    /\ pc' = [pc EXCEPT ![p] = "idle"]
+    /\ UNCHANGED <<volume>>
+
+\* loadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:35
 loadResource_0(p) ==
     /\ pc[p] = "idle"
+    /\ device' \in Dom_device
     /\ volume' \in Dom_volume
     /\ pc' = [pc EXCEPT ![p] = "idle"]
 
-\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:55
+\* unloadResource(resource:options:replyHandler:), segment 1 of 1, /Users/gc/Developer/MacFS/Extensions/Shared/ReadOnlyModule.swift:59
 unloadResource_0(p) ==
     /\ pc[p] = "idle"
     /\ volume' = "nil"
     /\ pc' = [pc EXCEPT ![p] = "idle"]
+    /\ UNCHANGED <<device>>
 
-Next == \E p \in Procs : loadResource_0(p) \/ unloadResource_0(p)
+Next == \E p \in Procs : probeResource_0(p) \/ loadResource_0(p) \/ unloadResource_0(p)
 
 Spec == Init /\ [][Next]_vars
 ====

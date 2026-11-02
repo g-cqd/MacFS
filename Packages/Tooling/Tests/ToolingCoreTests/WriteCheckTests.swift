@@ -51,13 +51,12 @@ import ToolingCore
             commands
                 == [
                     Command("/usr/bin/hdiutil", ["attach", "-nomount", "/tmp/w/ext2.img"]),
-                    Command("/sbin/mount", ["-F", "-t", "ext4", "/dev/disk42", "/tmp/w/point"])
+                    Command("/sbin/mount", ["-F", "-t", "ext4", "-o", "rw", "/dev/disk42", "/tmp/w/point"])
                 ] + operations + [
                     Command("/sbin/umount", ["/tmp/w/point"]),
                     Command("/usr/bin/hdiutil", ["detach", "/dev/disk42"])
                 ]
         )
-        #expect(!commands[1].arguments.contains("rdonly"))
         #expect(checked.list == ["ext2 /tmp/w/ext2.img [\"/renamed/moved.bin\", \"/short.bin\"]"])
     }
 

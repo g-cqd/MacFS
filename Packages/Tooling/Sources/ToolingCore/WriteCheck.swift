@@ -2,7 +2,7 @@ import CryptoKit
 public import Foundation
 
 /// The live write check (roadmap 0046): a copy of a test image with its own volume identity (a copy sharing an attached
-/// image's would not mount), attached writable, mounted through its FSKit module without `rdonly`, changed in every way the
+/// image's would not mount), attached writable, mounted through its FSKit module with `-o rw`, changed in every way the
 /// writer supports, unmounted, detached, then judged by the format's own checker on Linux: consistent, and holding what was
 /// written. Each change is a command with a deadline: a write stuck in the kernel leaves a child behind, not this tool.
 public struct WriteCheck: Sendable {
@@ -64,7 +64,7 @@ public struct WriteCheck: Sendable {
             image: workspace.image,
             attach: [],
             type: target.type,
-            mount: [],
+            mount: ["-o", "rw"],
             at: workspace.point
         ) {
             for command in Self.operations(point: workspace.point, payload: workspace.payload) {
@@ -87,6 +87,7 @@ public struct WriteCheck: Sendable {
         let rows: [[String]] = [
             ["/bin/cp", payload, at("written.bin")], ["/usr/bin/cmp", payload, at("written.bin")],
             ["/bin/mkdir", at("folder")], ["/bin/mv", at("written.bin"), at("folder/moved.bin")],
+            // @dl:accept -- a table of commands, one change per row; their likeness is the table's
             ["/bin/ln", "-s", "moved.bin", at("folder/link")], ["/bin/ln", at("folder/moved.bin"), at("hard.bin")],
             ["/bin/cp", payload, at("gone.bin")], ["/bin/rm", at("gone.bin")],
             ["/bin/cp", payload, at("short.bin")], ["/usr/bin/truncate", "-s", "100", at("short.bin")],

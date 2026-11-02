@@ -14,7 +14,10 @@ func mounts(_ options: Options) -> Int32 {
         }
         for target in WriteCheck.targets {
             print(
-                "TestImages/\(target.image).img: copy, mount -F -t \(target.type) writable, change, release, check on Linux"
+                "TestImages/\(target.image).img: copy, attach it the ordinary way, its automount refuses a write, detach"
+            )
+            print(
+                "TestImages/\(target.image).img: copy, mount -F -t \(target.type) -o rw, change, release, check on Linux"
             )
         }
         return 0
@@ -59,15 +62,35 @@ func mounts(_ options: Options) -> Int32 {
     for target in MountCheck.targets { report(check.run(target), "FSKit") }
     try? FileManager.default.createDirectory(atPath: container, withIntermediateDirectories: true)
     for target in MountCheck.targets { report(agent.run(target), "agent") }
+    writeChecks(options, in: base, report: report)
+    try? FileManager.default.removeItem(atPath: base)
+    return failed ? 1 : 0
+}
+
+/// The writable formats' sessions (roadmap 0046), each on a fresh copy: its automount refuses a write, then a writable FSKit
+/// mount is changed and judged on Linux.
+func writeChecks(_ options: Options, in base: String, report: (MountCheck.Outcome, String) -> Void) {
     // Writes (roadmap 0046): a copy changed through its writable FSKit mount, then judged on Linux.
     let writes = WriteCheck(
         runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
         pause: { Thread.sleep(forTimeInterval: Double($0.components.seconds)) },
         checker: LinuxVerdict.problems
     )
+    let automounts = AutomountCheck(
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
+        writeRefused: MountCheck.refusesWrites(at:)
+    )
     for target in WriteCheck.targets {
         do {
             let workspace = try WriteCheck.prepare(target, root: options.root, in: base + "/write-" + target.image)
+            let automount = automounts.run(image: workspace.image)
+            report(
+                MountCheck.Outcome(
+                    target: .init(image: target.image, type: target.type, extra: []),
+                    problems: automount
+                ),
+                "automount, read-only"
+            )
             report(writes.run(target, in: workspace), "FSKit, writable")
         } catch {
             report(
@@ -79,6 +102,4 @@ func mounts(_ options: Options) -> Int32 {
             )
         }
     }
-    try? FileManager.default.removeItem(atPath: base)
-    return failed ? 1 : 0
 }
