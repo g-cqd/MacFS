@@ -1,4 +1,4 @@
-import FSCore
+public import FSCore
 public import MountKit
 import Synchronization
 
@@ -9,11 +9,23 @@ public final class NFSDispatcher: Sendable {
     let handles: FileHandles
     let attributes: NFSAttributes
     let export: NFSExport
+    /// The volume's writer when the export is writable (roadmap 0046); nil answers every change NFS3ERR_ROFS.
+    let writer: (any WritableFileSystem)?
+    /// WRITE's and COMMIT's `writeverf3`: new for each server, so a client sends again what a restart may have lost.
+    let writeVerifier: [UInt8]
     private let mounted = Atomic<Bool>(false)
 
-    public init(tree: MountedTree, owner: (uid: UInt32, gid: UInt32), export: NFSExport) {
+    public init(
+        tree: MountedTree,
+        owner: (uid: UInt32, gid: UInt32),
+        export: NFSExport,
+        writer: (any WritableFileSystem)? = nil
+    ) {
         self.tree = tree
         self.export = export
+        self.writer = writer
+        var generator = SystemRandomNumberGenerator()
+        writeVerifier = (0 ..< 8).map { _ in UInt8.random(in: 0 ... 255, using: &generator) }
         let volume = tree.fileSystem.volume
         handles = FileHandles(volume: volume, export: export)
         var fsid: UInt64 = 0

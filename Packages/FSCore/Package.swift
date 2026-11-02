@@ -182,7 +182,7 @@ let package = Package(
         ),
         .testTarget(
             name: "NFSProxyTests",
-            dependencies: ["NFSProxy", "MountKit", "FSCore"],
+            dependencies: ["NFSProxy", "MountKit", "FSCore", "ExtFS", "CrashTesting"],
             swiftSettings: strictSettings
         )
     ]

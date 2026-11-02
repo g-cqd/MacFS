@@ -32,3 +32,8 @@ after writes made through it.
    by name (`WriteRequest`: `rw` or `writable`). Live: DA with `writable` mounts a clean copy read-write; DA without it, an
    automount, and a not-clean copy (with or without) mount read-only; the mount check adds "automount refuses a write", 38 of
    38. Not yet: the app's "Mount writable" (0021's Disks section), the NFS proxy, WebDAV, File Provider.
+4. **The NFS proxy answers changes (2026-11-02, library):** `NFSDispatcher` takes the volume's writer; with it, SETATTR (with
+   its guard), WRITE (FILE_SYNC when asked, a per-server write verifier), CREATE (unchecked, guarded, exclusive with the
+   verifier in the times), MKDIR, SYMLINK, REMOVE, RMDIR, RENAME, LINK and COMMIT go to it, and ACCESS grants modify, extend and
+   delete; MKNOD is NFS3ERR_NOTSUPP. Without one, as before, NFS3ERR_ROFS. Tested over RPC on a copy of the ext2 image, then
+   e2fsck. Not yet: the agent's mount passing the writer and `rw` (the mount request's opt-in), and a live mount.

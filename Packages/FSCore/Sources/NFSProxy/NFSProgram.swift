@@ -1,7 +1,8 @@
 import FSCore
 import MountKit
 
-/// NFS version 3 (RFC 1813), read-only: every procedure that would change the volume answers NFS3ERR_ROFS.
+/// NFS version 3 (RFC 1813). Without a writer every procedure that would change the volume answers NFS3ERR_ROFS; with one,
+/// they go to it (`NFSProgram+Changes`, roadmap 0046), but MKNOD, which is not supported.
 struct NFSProgram {
     static let number: UInt32 = 100_003
     static let maximumRead: UInt32 = 1 << 20
@@ -21,7 +22,8 @@ struct NFSProgram {
         var results = XDRWriter()
         if procedure == 0 { return results }
         if let falses = Self.refusalBodies[procedure] {
-            results.u32(NFSStatus.readOnly)
+            if let writer = dispatcher.writer, procedure != 11 { return try change(procedure, &arguments, writer) }
+            results.u32(dispatcher.writer == nil ? NFSStatus.readOnly : NFSStatus.notSupported)
             for _ in 0 ..< falses { results.bool(false) }
             return results
         }
@@ -99,11 +101,11 @@ struct NFSProgram {
         dispatcher.attributes.postOp(directory, into: &results)
     }
 
-    /// Read, look up and execute are granted as far as the caller asked; modify, extend and delete never.
+    /// Read, look up and execute are granted as far as the caller asked; modify, extend and delete only with a writer.
     private func access(_ id: UInt64, _ requested: UInt32, _ results: inout XDRWriter) {
         results.u32(NFSStatus.ok)
         dispatcher.attributes.postOp(id, into: &results)
-        results.u32(requested & (0x01 | 0x02 | 0x20))
+        results.u32(requested & (dispatcher.writer == nil ? 0x01 | 0x02 | 0x20 : 0x3F))
     }
 
     private func readlink(_ id: UInt64, _ results: inout XDRWriter) {
