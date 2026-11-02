@@ -15,3 +15,7 @@ Read Btrfs, NTFS, ext2/3/4 and XFS volumes on macOS, natively and read-only.
 Hot loops are SIMD kernels: CRC-32C (PMULL folds with scalar streams beside them), NEON bit count and UTF-16 narrowing from aemi, and
 the NTFS fixups in arm64 assembly; each is tested against a reference, at inaccessible page edges, and benchmarked (ADR-0012). See [docs/WHITE-PAPER.md](docs/WHITE-PAPER.md), [docs/DESIGN.md](docs/DESIGN.md) and
 [AGENTS.md](AGENTS.md).
+
+## License
+
+MIT; see [LICENSE](LICENSE).
