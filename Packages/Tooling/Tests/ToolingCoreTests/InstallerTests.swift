@@ -1,3 +1,4 @@
+import Darwin
 import Synchronization
 import Testing
 import ToolingCore
@@ -104,7 +105,7 @@ import ToolingCore
             Command(lsregister, ["-u", Self.built]),
             Command(lsregister, ["-u", "/tmp/MacFS.app.previous"]),
             Command("/bin/rm", ["-rf", Self.built]),
-            Command("/usr/bin/pkill", ["-9", "-f", "/Contents/Extensions/[^/]*\\.appex/|/Contents/MacOS/macfs-agent"]),
+            Command("/usr/bin/pkill", ["-9", "-f", Installer.staleProcesses]),
             Command("/usr/bin/codesign", ["--verify", "--deep", "--strict", "/Applications/MacFS.app"]),
             Command("/usr/bin/pluginkit", ["-mAv", "-p", "com.apple.fskit.fsmodule"]),
             Command("/usr/bin/plutil", ["-p", Self.enabledModules])
@@ -264,5 +265,21 @@ import ToolingCore
                 "/Applications/MacFS.app: signature: code has no resources but signature indicates they must be present"
             ]
         )
+    }
+
+    /// The processes the installer stops, matched as `pkill -f` matches them (POSIX extended expressions on the command line):
+    /// launchd starts the agent as `Contents/MacOS/macfs-agent`, relative, and a pattern with a leading slash left the old agent
+    /// serving after every install (measured, diary 2026-11-02-04). The app itself is never stopped.
+    @Test func theStaleProcessPatternMatchesTheAgentAsLaunchdStartsIt() {
+        func matches(_ line: String) -> Bool {
+            var expression = regex_t()
+            guard regcomp(&expression, Installer.staleProcesses, REG_EXTENDED | REG_NOSUB) == 0 else { return false }
+            defer { regfree(&expression) }
+            return regexec(&expression, line, 0, nil, 0) == 0
+        }
+        #expect(matches("Contents/MacOS/macfs-agent"))
+        #expect(matches("/Applications/MacFS.app/Contents/MacOS/macfs-agent"))
+        #expect(matches("/Applications/MacFS.app/Contents/Extensions/ExtFSModule.appex/Contents/MacOS/ExtFSModule"))
+        #expect(!matches("/Applications/MacFS.app/Contents/MacOS/MacFS"))
     }
 }

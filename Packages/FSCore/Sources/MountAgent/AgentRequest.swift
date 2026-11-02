@@ -18,4 +18,6 @@ import AemiProtobuf
     @ProtoField(4) var kind: Int32 = 0
     @ProtoField(5) var mountPoint: String = ""
     @ProtoField(6) var id: String = ""
+    /// A mount asked writable (roadmap 0046); absent, as from an older app, is read-only.
+    @ProtoField(7) var writable: Bool = false
 }

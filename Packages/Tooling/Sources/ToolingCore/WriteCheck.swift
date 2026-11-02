@@ -66,18 +66,21 @@ public struct WriteCheck: Sendable {
             type: target.type,
             mount: ["-o", "rw"],
             at: workspace.point
-        ) {
-            for command in Self.operations(point: workspace.point, payload: workspace.payload) {
-                let result = try? runner.run(command)
-                guard let result, result.status == 0 else {
-                    let what = ([command.executable] + command.arguments).joined(separator: " ")
-                    return ["\(what): \(result.map { "\($0.status) \($0.output)" } ?? "did not finish")"]
-                }
-            }
-            return []
-        }
+        ) { Self.change(at: workspace.point, payload: workspace.payload, runner: runner) }
         guard mounted else { return outcome(problems) }
         return outcome(problems + checker(target, workspace.image, workspace.expected))
+    }
+
+    /// The operations run on the mount at `point`, stopping at the first that fails: its problem, or none.
+    static func change(at point: String, payload: String, runner: any ProcessRunning) -> [String] {
+        for command in operations(point: point, payload: payload) {
+            let result = try? runner.run(command)
+            guard let result, result.status == 0 else {
+                let what = ([command.executable] + command.arguments).joined(separator: " ")
+                return ["\(what): \(result.map { "\($0.status) \($0.output)" } ?? "did not finish")"]
+            }
+        }
+        return []
     }
 
     /// The changes, in order, on the mount at `point`; `payload` is a host file. Ends with the files the checker hashes:

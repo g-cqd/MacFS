@@ -20,14 +20,16 @@ public struct AgentClient: Sendable {
         source: String,
         kind: MountBackendKind,
         at mountPoint: String,
-        descriptor: Int32? = nil
+        descriptor: Int32? = nil,
+        writable: Bool = false
     ) throws(MountError) -> MountRecord {
         let reply = try call(
             AgentRequest(
                 operation: AgentRequest.Operation.mount.rawValue,
                 source: source,
                 kind: kind.rawValue,
-                mountPoint: mountPoint
+                mountPoint: mountPoint,
+                writable: writable
             ),
             descriptor: descriptor
         )

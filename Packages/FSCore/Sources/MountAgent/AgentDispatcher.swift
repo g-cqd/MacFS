@@ -49,7 +49,8 @@ public struct AgentDispatcher: Sendable {
                         source: request.source,
                         kind: MountBackendKind(rawValue: request.kind),
                         at: point,
-                        descriptor: descriptor
+                        descriptor: descriptor,
+                        writable: request.writable
                     )
                     return AgentReply(records: [RecordMessage(record)])
                 case .unmount:

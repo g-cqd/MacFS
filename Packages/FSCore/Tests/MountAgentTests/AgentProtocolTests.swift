@@ -47,6 +47,13 @@ import Testing
         #expect(log.all.filter { !$0.hasPrefix("save") } == ["mount nfs /m/a", "unmount nfs /m/a"])
     }
 
+    /// The writable opt-in crosses the agent (roadmap 0046): read-only unless the app asks.
+    @Test func theWritableOptInCrossesTheAgent() throws {
+        _ = try client.mount(source: "/i/a.img", kind: .nfs, at: "/m/a")
+        _ = try client.mount(source: "/i/b.img", kind: .nfs, at: "/m/b", writable: true)
+        #expect(nfs.requests.withLock { $0.map(\.writable) } == [false, true])
+    }
+
     /// The service's errors arrive as the same errors on the app's side.
     @Test func errorsCrossTheBoundaryIntact() throws {
         #expect(throws: MountError.unavailable(.webDAV, "not built yet")) {

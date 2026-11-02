@@ -21,6 +21,10 @@ public struct Installer: Sendable {
         var built: String { "\(derivedData)/Build/Products/Release/MacFS.app" }
     }
 
+    /// The processes an install stops, so the next use starts the installed code: the modules and the agent (as launchd starts
+    /// it, `Contents/MacOS/macfs-agent`, with no leading slash), never the app.
+    public static let staleProcesses = "/Contents/Extensions/[^/]*\\.appex/|Contents/MacOS/macfs-agent$"
+
     static let lsregister =
         "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
@@ -96,7 +100,7 @@ public struct Installer: Sendable {
         _ = run(Self.lsregister, ["-u", paths.built])
         _ = run(Self.lsregister, ["-u", paths.previous])
         _ = run("/bin/rm", ["-rf", paths.built])
-        _ = run("/usr/bin/pkill", ["-9", "-f", "/Contents/Extensions/[^/]*\\.appex/|/Contents/MacOS/macfs-agent"])
+        _ = run("/usr/bin/pkill", ["-9", "-f", Self.staleProcesses])
 
         var installed: [String] = []
         let signature = run("/usr/bin/codesign", ["--verify", "--deep", "--strict", paths.installed])

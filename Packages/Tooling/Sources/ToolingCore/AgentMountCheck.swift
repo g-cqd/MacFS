@@ -50,12 +50,7 @@ public struct AgentMountCheck: Sendable {
                 )
         }
         var problems = verification.problems(at: mounted.point, manifest: "\(image).manifest", extra: target.extra)
-        switch launch(["--unmount", mounted.id]) {
-            case .done?: break
-            case .failed(let text)?: problems.append("unmount: \(text)")
-            case .mounted?: problems.append("unmount: MacFS answered with a mount")
-            case nil: problems.append("unmount: MacFS gave no result")
-        }
+        problems += AutomationResult.unmountProblems(launch(["--unmount", mounted.id]))
         return MountCheck.Outcome(target: target, problems: problems)
     }
 

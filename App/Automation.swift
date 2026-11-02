@@ -11,7 +11,7 @@ import OSLog
 /// sandboxed app opened, sent to the agent.
 ///
 ///     MacFS.app/Contents/MacOS/MacFS --register-agent      registers the agent, prints its status
-///     MacFS.app/Contents/MacOS/MacFS --mount-image PATH     mounts PATH through the agent, prints the record
+///     MacFS.app/Contents/MacOS/MacFS --mount-image PATH [--writable]   mounts PATH through the agent, prints the record
 ///     MacFS.app/Contents/MacOS/MacFS --list-mounts | --unmount ID
 ///
 /// `--result PATH` after any of them writes what it came to as one `AutomationResult` line, for the mount check: `open` loses
@@ -40,7 +40,7 @@ enum Automation {
                 say("agent: \(state)")
                 result = state == .enabled ? .done : .failed("agent: \(state)")
             case "--mount-image", "--list-mounts", "--unmount":
-                result = agent(command, argument)
+                result = agent(command, argument, writable: arguments.contains("--writable"))
             default:
                 return
         }
@@ -55,19 +55,26 @@ enum Automation {
         exit(0)
     }
 
-    private static func agent(_ command: String, _ argument: String) -> AutomationResult {
+    /// `writable`: the image opened for writing, and the mount asked writable (roadmap 0046).
+    private static func agent(_ command: String, _ argument: String, writable: Bool) -> AutomationResult {
         do throws(MountError) {
             return try AgentConnection.withClient { client throws(MountError) -> AutomationResult in
                 switch command {
                     case "--mount-image":
-                        let fd = open(argument, O_RDONLY)
+                        let fd = open(argument, writable ? O_RDWR : O_RDONLY)
                         guard fd >= 0 else {
                             let problem = "open \(argument): errno \(errno)"
                             say(problem)
                             return .failed(problem)
                         }
                         defer { close(fd) }
-                        let record = try client.mount(source: argument, kind: .nfs, at: "", descriptor: fd)
+                        let record = try client.mount(
+                            source: argument,
+                            kind: .nfs,
+                            at: "",
+                            descriptor: fd,
+                            writable: writable
+                        )
                         say("mounted \(record.source) at \(record.mountPoint) (\(record.id))")
                         return .mounted(id: record.id, mountPoint: record.mountPoint)
                     case "--unmount":

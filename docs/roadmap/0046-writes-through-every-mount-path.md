@@ -43,5 +43,11 @@ after writes made through it.
    stops. `macfs-nfsd IMAGE --mount DIR --writable`. Live through macOS's NFS client: the write check's operations, then
    e2fsck clean and debugfs hashes identical. Its first run lost data silently (`cp` kept 917,504 of 4,195,638 bytes, exit 0):
    the client keeps several WRITEs in flight, and the ext writer's changes raced; they are serialized now (`changeLock`).
-   Not yet: the agent's XPC request and the app carrying `writable`, a live NFS case in `macfs-tool mounts`, WebDAV, File
-   Provider. A soft mount may fail a WRITE when the proxy dies (ADR-0014's trade-off; the proxy lives in the same process).
+   Not yet then: the agent and the app (step 6). A soft mount may fail a WRITE when the proxy dies (ADR-0014's trade-off; the proxy lives in the same process).
+6. **Through the agent and the app (2026-11-02):** the agent's request carries `writable` (protobuf field 7; absent is
+   read-only), `AgentClient.mount(…, writable:)`, and `MacFS --mount-image PATH --writable` opens the image read-write and asks
+   for it. `macfs-tool mounts` gains "agent, writable" (`AgentWriteCheck`): a fresh copy in the app's container, mounted by the
+   installed app through its agent, the write check's operations, unmounted through the app, then e2fsck and debugfs: 39 of
+   39. Its first run found the installer never restarted the agent (launchd starts it as `Contents/MacOS/macfs-agent`, and the
+   stop pattern wanted a leading slash), so every install kept the old agent. Not yet: a "Mount writable" control in the window
+   (0021's Disks section), WebDAV, File Provider.

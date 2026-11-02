@@ -1,3 +1,4 @@
+import AppSupport
 import Foundation
 import ToolingCore
 
@@ -18,6 +19,9 @@ func mounts(_ options: Options) -> Int32 {
             )
             print(
                 "TestImages/\(target.image).img: copy, mount -F -t \(target.type) -o rw, change, release, check on Linux"
+            )
+            print(
+                "TestImages/\(target.image).img: copy, mount writable through the agent, change, unmount, check on Linux"
             )
         }
         return 0
@@ -62,14 +66,20 @@ func mounts(_ options: Options) -> Int32 {
     for target in MountCheck.targets { report(check.run(target), "FSKit") }
     try? FileManager.default.createDirectory(atPath: container, withIntermediateDirectories: true)
     for target in MountCheck.targets { report(agent.run(target), "agent") }
-    writeChecks(options, in: base, report: report)
+    writeChecks(options, in: base, container: container, launch: app.run, report: report)
     try? FileManager.default.removeItem(atPath: base)
     return failed ? 1 : 0
 }
 
 /// The writable formats' sessions (roadmap 0046), each on a fresh copy: its automount refuses a write, then a writable FSKit
-/// mount is changed and judged on Linux.
-func writeChecks(_ options: Options, in base: String, report: (MountCheck.Outcome, String) -> Void) {
+/// mount, and a writable mount through the app's agent (its copy in the app's container), are changed and judged on Linux.
+func writeChecks(
+    _ options: Options,
+    in base: String,
+    container: String,
+    launch: @escaping @Sendable ([String]) -> AutomationResult?,
+    report: (MountCheck.Outcome, String) -> Void
+) {
     // Writes (roadmap 0046): a copy changed through its writable FSKit mount, then judged on Linux.
     let writes = WriteCheck(
         runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
@@ -80,7 +90,14 @@ func writeChecks(_ options: Options, in base: String, report: (MountCheck.Outcom
         runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
         writeRefused: MountCheck.refusesWrites(at:)
     )
+    let agentWrites = AgentWriteCheck(
+        runner: SystemProcessRunner(capture: true, timeout: Deadline.mountStep),
+        launch: launch,
+        checker: LinuxVerdict.problems
+    )
     for target in WriteCheck.targets {
+        let agentWork = container + "/write-" + target.image
+        defer { try? FileManager.default.removeItem(atPath: agentWork) }
         do {
             let workspace = try WriteCheck.prepare(target, root: options.root, in: base + "/write-" + target.image)
             let automount = automounts.run(image: workspace.image)
@@ -92,6 +109,8 @@ func writeChecks(_ options: Options, in base: String, report: (MountCheck.Outcom
                 "automount, read-only"
             )
             report(writes.run(target, in: workspace), "FSKit, writable")
+            let agentWorkspace = try WriteCheck.prepare(target, root: options.root, in: agentWork)
+            report(agentWrites.run(target, in: agentWorkspace), "agent, writable")
         } catch {
             report(
                 MountCheck.Outcome(
