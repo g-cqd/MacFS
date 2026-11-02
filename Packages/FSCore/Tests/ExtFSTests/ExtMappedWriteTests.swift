@@ -48,6 +48,23 @@ import Testing
         try await ExtNamespaceTests.e2fsck(device)
     }
 
+    /// The kernel maps its next write before the last one completes (measured: `cat >>` in 1 MiB writes from offset 100 lost
+    /// the 924 bytes after each boundary). The size is then behind data already written, and making the next range must not
+    /// zero that data as a gap after the old end.
+    @Test func aRangeMappedBeforeTheLastWriteCompletedKeepsThatWrite() throws {
+        let (device, volume) = try ExtNamespaceTests.open()
+        let hello = try ExtHtreeTests.path(volume, "hello.txt")
+        let first = (0 ..< 5_000).map { UInt8(truncatingIfNeeded: 1 + $0 % 251) }
+        let second = (0 ..< 3_000).map { UInt8(truncatingIfNeeded: 7 + $0 % 241) }
+        let firstMap = try volume.mapForWriting(hello, offset: 12, length: UInt64(first.count))
+        try Self.kernelWrites(first, at: 12, through: firstMap, to: device)
+        let secondMap = try volume.mapForWriting(hello, offset: 12 + 5_000, length: UInt64(second.count))
+        try Self.kernelWrites(second, at: 12 + 5_000, through: secondMap, to: device)
+        try volume.completeWrite(hello, offset: 12, length: UInt64(first.count))
+        try volume.completeWrite(hello, offset: 12 + 5_000, length: UInt64(second.count))
+        #expect(try volume.read(hello, at: 12, count: 8_000) == first + second)
+    }
+
     /// The new blocks are zeroed before they are linked: a crash before the kernel's write, then e2fsck growing the size to
     /// the blocks, never shows another file's old bytes.
     @Test func newBlocksAreZeroedBeforeTheyAreLinked() throws {

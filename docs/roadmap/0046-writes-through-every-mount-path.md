@@ -21,4 +21,9 @@ after writes made through it.
    kernel and completes them, synchronizes, and closes the writer at unmount. Live on a copy of the ext2 image: writes of 4 KiB
    to 4 MiB, a 3 MB copy byte for byte, create, append, mkdir, mv (a directory to another parent too), symlink, hard link, rm,
    truncate, chmod; then `e2fsck -fn` clean, and Linux's `debugfs` reads the files back. Not yet: the FSKit check (for Disk
-   Arbitration's writable mounts and the app's "Mount writable"), a live check in `macfs-tool mounts`, the other paths.
+   Arbitration's writable mounts and the app's "Mount writable"), the other paths.
+2. **The live write check (2026-11-02):** `macfs-tool mounts` ends with each writable format's session (`WriteCheck`): a copy
+   of the image with its own volume UUID, attached writable, mounted without `rdonly`, changed by commands with deadlines (a
+   4 MiB + 1234 byte copy and `cmp`, mkdir, mv of a file and of a directory, symlink, link, rm, truncate, append, chmod),
+   unmounted, detached, then on Linux `e2fsck -fn` and `debugfs` hashes of the files against the host's. Its first run found
+   a lost append (next diary entry); 37 of 37 after the fix.

@@ -19,6 +19,10 @@ public struct MountCheck: Sendable {
     public struct Outcome: Sendable {
         public let target: Target
         public let problems: [String]
+        public init(target: Target, problems: [String]) {
+            self.target = target
+            self.problems = problems
+        }
     }
 
     /// Every test image a module reads whole. Not here: ext4-gpt (its attach yields the disk and its partition).
@@ -61,31 +65,15 @@ public struct MountCheck: Sendable {
 
     public func run(_ target: Target) -> Outcome {
         let image = "\(root)/TestImages/\(target.image)"
-        guard
-            let attach = try? runner.run(
-                Command("/usr/bin/hdiutil", ["attach", "-nomount", "-readonly", "\(image).img"])
-            ),
-            attach.status == 0, let device = Self.device(attach.output)
-        else { return Outcome(target: target, problems: ["attach: no device for \(image).img"]) }
-        var problems: [String] = []
         let point = mountPoint(target)
-        let command = Command("/sbin/mount", ["-F", "-t", target.type, "-o", "rdonly", device, point])
-        var mount = try? runner.run(command)
-        // FSKit stops a module's process after its volume unmounts; a mount arriving while it lingers finds no helper (diary
-        // 2026-11-01-11). Retried once, for that answer only.
-        if let failed = mount, failed.status != 0,
-            failed.output.contains("Couldn’t communicate with a helper application")
-        {
-            pause(.seconds(5))
-            mount = try? runner.run(command)
-        }
-        if let mount, mount.status == 0 {
-            problems += verification.problems(at: point, manifest: "\(image).manifest", extra: target.extra)
-            _ = try? runner.run(Command("/sbin/umount", [point]))
-        } else {
-            problems.append("mount -t \(target.type): \(mount?.output ?? "did not run")")
-        }
-        _ = try? runner.run(Command("/usr/bin/hdiutil", ["detach", device]))
+        let session = MountSession(runner: runner, pause: pause)
+        let (problems, _) = session.run(
+            image: "\(image).img",
+            attach: ["-readonly"],
+            type: target.type,
+            mount: ["-o", "rdonly"],
+            at: point
+        ) { verification.problems(at: point, manifest: "\(image).manifest", extra: target.extra) }
         return Outcome(target: target, problems: problems)
     }
 

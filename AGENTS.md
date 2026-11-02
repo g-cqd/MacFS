@@ -99,6 +99,8 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   it and stops it when the test process exits, if it started it; runs are `--rm`, one at a time, through `SystemCommandRunner`.
   After building an image, `container builder stop` and `container system stop`; after an interrupted run,
   `container list --all` and remove what is left.
+- **After a restart**, the agent path of `macfs-tool mounts` failed until `MacFS.app/Contents/MacOS/MacFS --register-agent`
+  (the agent was "enabled" but not reachable). The mount check's last case writes (`WriteCheck`) and needs the checkers' image.
 - **Writable FSKit mounts** (roadmap 0046): `mount -F -t ext4 /dev/diskN point` without `rdonly`; an automount stays read-only.
   Writes go through the kernel-offloaded block map, never FSKit's write handler for mappable files: through it, a write of 256
   KiB or more never reached the module and left the writer stuck in the kernel (state `U`) until a restart. Never read

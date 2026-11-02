@@ -58,8 +58,11 @@ extension ExtFileSystem {
                 try device.write(at: block * blockSize, content)
             }
         }
-        // A gap after the old end: the rest of the old last block reads as zeros.
-        if offset > inode.size, inode.size % blockSize != 0, let stored = physical(inode.size / blockSize) {
+        // A gap after the old end: the rest of the old last block reads as zeros. Not for a range mapped for the kernel: it
+        // maps its next write before the last completes, so past the size may be its data (the past-the-end bytes of a last
+        // block are zeros already: truncation zeroes them, new blocks are zeroed).
+        if bytes != nil, offset > inode.size, inode.size % blockSize != 0, let stored = physical(inode.size / blockSize)
+        {
             let from = inode.size % blockSize
             let to = min(blockSize, offset - inode.size / blockSize * blockSize)
             if to > from {

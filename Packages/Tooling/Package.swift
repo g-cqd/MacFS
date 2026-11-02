@@ -40,7 +40,11 @@ let package = Package(
             ],
             swiftSettings: strictSettings
         ),
-        .executableTarget(name: "macfs-tool", dependencies: ["ToolingCore"], swiftSettings: strictSettings),
+        .executableTarget(
+            name: "macfs-tool",
+            dependencies: ["ToolingCore", .product(name: "CrashTesting", package: "FSCore")],
+            swiftSettings: strictSettings
+        ),
         .testTarget(name: "ToolingCoreTests", dependencies: ["ToolingCore"], swiftSettings: strictSettings),
         .plugin(
             name: "Images",
