@@ -36,4 +36,12 @@ after writes made through it.
    its guard), WRITE (FILE_SYNC when asked, a per-server write verifier), CREATE (unchecked, guarded, exclusive with the
    verifier in the times), MKDIR, SYMLINK, REMOVE, RMDIR, RENAME, LINK and COMMIT go to it, and ACCESS grants modify, extend and
    delete; MKNOD is NFS3ERR_NOTSUPP. Without one, as before, NFS3ERR_ROFS. Tested over RPC on a copy of the ext2 image, then
-   e2fsck. Not yet: the agent's mount passing the writer and `rw` (the mount request's opt-in), and a live mount.
+   e2fsck.
+5. **Writable proxy mounts (2026-11-02):** `MountRequest.writable` (the service's `mount(…, writable:)`) reaches the NFS backend,
+   whose `open` returns the tree and, when asked and the format's writer began, the writer (`OpenedVolume`); the proxy then
+   serves it, `mount_nfs` drops `rdonly` (and writes in 128 KiB), and the writer closes, the volume clean, after the proxy
+   stops. `macfs-nfsd IMAGE --mount DIR --writable`. Live through macOS's NFS client: the write check's operations, then
+   e2fsck clean and debugfs hashes identical. Its first run lost data silently (`cp` kept 917,504 of 4,195,638 bytes, exit 0):
+   the client keeps several WRITEs in flight, and the ext writer's changes raced; they are serialized now (`changeLock`).
+   Not yet: the agent's XPC request and the app carrying `writable`, a live NFS case in `macfs-tool mounts`, WebDAV, File
+   Provider. A soft mount may fail a WRITE when the proxy dies (ADR-0014's trade-off; the proxy lives in the same process).

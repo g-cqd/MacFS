@@ -16,6 +16,9 @@ public final class FileBlockSource: WritableBlockSource {
     /// The descriptor writes go to; nil when opened read-only.
     private let writable: PosixFile?
 
+    /// Whether it was opened for writing.
+    public var isWritable: Bool { writable != nil }
+
     /// Opens `path`, read-only unless `writable`.
     public convenience init(path: String, writable: Bool = false) throws(DiskError) {
         let file: PosixFile

@@ -6,7 +6,7 @@ import MountKit
 import NFSProxy
 
 // macfs-nfsd <image-or-device> [--port N]
-// macfs-nfsd <image-or-device> --mount <directory> [--registry PATH]
+// macfs-nfsd <image-or-device> --mount <directory> [--writable] [--registry PATH]
 // macfs-nfsd --sweep [--registry PATH]
 //
 // Serves a Btrfs, NTFS, ext or XFS volume read-only over NFSv3 on 127.0.0.1 and prints the command that mounts it
@@ -23,11 +23,14 @@ if arguments.first == "--sweep" {
     exit(0)
 }
 guard let path = arguments.first else {
-    print("usage: macfs-nfsd <image-or-device> [--port N] | <image-or-device> --mount DIR [--registry PATH] | --sweep")
+    print(
+        "usage: macfs-nfsd <image-or-device> [--port N] | <image-or-device> --mount DIR [--writable] [--registry PATH] | --sweep"
+    )
     exit(64)
 }
 if let index = arguments.firstIndex(of: "--mount"), index + 1 < arguments.count {
-    do { try MountMode.mount(path, at: arguments[index + 1], registry: registry) } catch {
+    let writable = arguments.contains("--writable")
+    do { try MountMode.mount(path, at: arguments[index + 1], registry: registry, writable: writable) } catch {
         print("macfs-nfsd: \(error)")
         exit(1)
     }

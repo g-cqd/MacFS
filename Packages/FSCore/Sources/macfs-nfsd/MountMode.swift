@@ -24,11 +24,11 @@ enum MountMode {
     }
 
     /// Mounts `image` at `directory`, then waits for SIGINT or SIGTERM and unmounts.
-    static func mount(_ image: String, at directory: String, registry: String) throws -> Never {
+    static func mount(_ image: String, at directory: String, registry: String, writable: Bool) throws -> Never {
         let service = try service(registry: registry)
         let swept = service.sweep()
         if !swept.unmounted.isEmpty || !swept.forgotten.isEmpty { print("swept: \(describe(swept))") }
-        let record = try service.mount(source: image, kind: .nfs, at: directory)
+        let record = try service.mount(source: image, kind: .nfs, at: directory, writable: writable)
         print("mounted \(image) at \(record.mountPoint) from \(record.mountedFrom) (record \(record.id))")
         fflush(stdout)
         signal(SIGPIPE, SIG_IGN)

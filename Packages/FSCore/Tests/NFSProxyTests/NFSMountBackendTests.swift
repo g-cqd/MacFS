@@ -53,7 +53,7 @@ final class FakeSystem: CommandRunning, MountTable {
         .path
     var backend: NFSMountBackend {
         NFSMountBackend(runner: system, table: system, owner: (501, 20)) { _ in
-            try MountedTree(InMemoryFileSystem(root: 5, files: 3))
+            OpenedVolume(try MountedTree(InMemoryFileSystem(root: 5, files: 3)))
         }
     }
 
@@ -259,7 +259,7 @@ final class FakeSystem: CommandRunning, MountTable {
         let opened = Mutex<[Int32?]>([])
         let backend = NFSMountBackend(runner: system, table: system, owner: (501, 20)) { request in
             opened.withLock { $0.append(request.descriptor) }
-            return try MountedTree(InMemoryFileSystem(root: 5, files: 3))
+            return OpenedVolume(try MountedTree(InMemoryFileSystem(root: 5, files: 3)))
         }
         let probe = DescriptorProbe()
         let request = MountRequest(

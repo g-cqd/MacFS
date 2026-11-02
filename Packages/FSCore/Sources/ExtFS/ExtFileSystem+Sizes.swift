@@ -5,73 +5,77 @@ import Synchronization
 /// its last block, flushed, then frees the blocks: a crash leaves at worst blocks marked used that nothing points to.
 extension ExtFileSystem {
     public func setSize(_ id: UInt64, to size: UInt64) throws(DiskError) {
-        let device = try openDevice()
-        let inode = try regularFile(id, "sizing")
-        guard inode.flags & ExtInode.extentsFlag == 0 else {
-            throw .unsupported("sizing an extent-mapped file (a later slice)")
-        }
-        let blockSize = UInt64(superblock.blockSize)
-        try freeCounts.withLock { (free) throws(DiskError) in
-            var allocation = try allocation(for: inode, on: device, free: free ?? initialFreeCounts)
-            var freed: [UInt64] = []
-            var changed: [(UInt64, [UInt8])] = []
-            if size < inode.size {
-                let keep = (size + blockSize - 1) / blockSize
-                for index in 0 ..< 12 where UInt64(index) >= keep && allocation.pointers[index] != 0 {
-                    freed.append(UInt64(allocation.pointers[index]))
-                    allocation.pointers[index] = 0
-                }
-                var base: UInt64 = 12
-                var span = blockSize / 4
-                for slot in 12 ... 14 {
-                    let top = UInt64(allocation.pointers[slot])
-                    if top != 0,
-                        try prune(top, depth: slot - 11, base: base, keep: keep, freed: &freed, changed: &changed)
-                    {
-                        allocation.pointers[slot] = 0
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            let inode = try regularFile(id, "sizing")
+            guard inode.flags & ExtInode.extentsFlag == 0 else {
+                throw .unsupported("sizing an extent-mapped file (a later slice)")
+            }
+            let blockSize = UInt64(superblock.blockSize)
+            try freeCounts.withLock { (free) throws(DiskError) in
+                var allocation = try allocation(for: inode, on: device, free: free ?? initialFreeCounts)
+                var freed: [UInt64] = []
+                var changed: [(UInt64, [UInt8])] = []
+                if size < inode.size {
+                    let keep = (size + blockSize - 1) / blockSize
+                    for index in 0 ..< 12 where UInt64(index) >= keep && allocation.pointers[index] != 0 {
+                        freed.append(UInt64(allocation.pointers[index]))
+                        allocation.pointers[index] = 0
                     }
-                    base += span
-                    span *= blockSize / 4
+                    var base: UInt64 = 12
+                    var span = blockSize / 4
+                    for slot in 12 ... 14 {
+                        let top = UInt64(allocation.pointers[slot])
+                        if top != 0,
+                            try prune(top, depth: slot - 11, base: base, keep: keep, freed: &freed, changed: &changed)
+                        {
+                            allocation.pointers[slot] = 0
+                        }
+                        base += span
+                        span *= blockSize / 4
+                    }
                 }
+                // The rest of the new last block reads as zeros, whether the file shrinks to it or grows past it.
+                try zeroTail(of: inode, from: min(size, inode.size), on: device)
+                for (block, bytes) in changed { try device.write(at: block * blockSize, bytes) }
+                let sectors = inode.sectors - UInt64(freed.count) * blockSize / 512
+                try touchMapping(inode, pointers: allocation.pointers, size: size, sectors: sectors, on: device)
+                if !freed.isEmpty {
+                    try device.flush()
+                    for block in freed { try allocation.free(block: block) }
+                    try writeAllocation(allocation, on: device)
+                }
+                for (block, _) in changed { blocks.invalidate(block) }
+                for block in allocation.metadata.keys { blocks.invalidate(block) }
+                mappings.invalidate(id)
+                free = allocation.free
             }
-            // The rest of the new last block reads as zeros, whether the file shrinks to it or grows past it.
-            try zeroTail(of: inode, from: min(size, inode.size), on: device)
-            for (block, bytes) in changed { try device.write(at: block * blockSize, bytes) }
-            let sectors = inode.sectors - UInt64(freed.count) * blockSize / 512
-            try touchMapping(inode, pointers: allocation.pointers, size: size, sectors: sectors, on: device)
-            if !freed.isEmpty {
-                try device.flush()
-                for block in freed { try allocation.free(block: block) }
-                try writeAllocation(allocation, on: device)
-            }
-            for (block, _) in changed { blocks.invalidate(block) }
-            for block in allocation.metadata.keys { blocks.invalidate(block) }
-            mappings.invalidate(id)
-            free = allocation.free
         }
     }
 
     public func setAttributes(_ id: UInt64, _ changes: AttributeChanges) throws(DiskError) {
-        let device = try openDevice()
-        let inode = try inode(id)
-        var times: [(Timestamp, Int, Int)] = []
-        if let accessed = changes.accessed { times.append((accessed, 0x08, 0x8C)) }
-        if let modified = changes.modified { times.append((modified, 0x10, 0x88)) }
-        let extraSize = inode.extraSize
-        try touch(inode, on: device, times: [(0x0C, 0x84)]) { raw in
-            if let mode = changes.mode { Self.put16(inode.mode & 0o170000 | mode & 0o7777, at: 0x00, in: &raw) }
-            if let uid = changes.uid {
-                Self.put16(UInt16(truncatingIfNeeded: uid), at: 0x02, in: &raw)
-                Self.put16(UInt16(truncatingIfNeeded: uid >> 16), at: 0x78, in: &raw)
-            }
-            if let gid = changes.gid {
-                Self.put16(UInt16(truncatingIfNeeded: gid), at: 0x18, in: &raw)
-                Self.put16(UInt16(truncatingIfNeeded: gid >> 16), at: 0x7A, in: &raw)
-            }
-            for (time, field, extraField) in times {
-                let (low, extra) = Self.stamp(time)
-                Self.put32(low, at: field, in: &raw)
-                if 128 + extraSize >= extraField + 4 { Self.put32(extra, at: extraField, in: &raw) }
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            let inode = try inode(id)
+            var times: [(Timestamp, Int, Int)] = []
+            if let accessed = changes.accessed { times.append((accessed, 0x08, 0x8C)) }
+            if let modified = changes.modified { times.append((modified, 0x10, 0x88)) }
+            let extraSize = inode.extraSize
+            try touch(inode, on: device, times: [(0x0C, 0x84)]) { raw in
+                if let mode = changes.mode { Self.put16(inode.mode & 0o170000 | mode & 0o7777, at: 0x00, in: &raw) }
+                if let uid = changes.uid {
+                    Self.put16(UInt16(truncatingIfNeeded: uid), at: 0x02, in: &raw)
+                    Self.put16(UInt16(truncatingIfNeeded: uid >> 16), at: 0x78, in: &raw)
+                }
+                if let gid = changes.gid {
+                    Self.put16(UInt16(truncatingIfNeeded: gid), at: 0x18, in: &raw)
+                    Self.put16(UInt16(truncatingIfNeeded: gid >> 16), at: 0x7A, in: &raw)
+                }
+                for (time, field, extraField) in times {
+                    let (low, extra) = Self.stamp(time)
+                    Self.put32(low, at: field, in: &raw)
+                    if 128 + extraSize >= extraField + 4 { Self.put32(extra, at: extraField, in: &raw) }
+                }
             }
         }
     }

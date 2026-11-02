@@ -1,4 +1,5 @@
 import Darwin
+import FSCore
 import Foundation
 public import MountKit
 import Synchronization
@@ -15,16 +16,18 @@ public final class NFSMountBackend: MountBackend {
     private let runner: any CommandRunning
     private let table: any MountTable
     private let owner: (uid: UInt32, gid: UInt32)
-    private let open: @Sendable (MountRequest) throws -> MountedTree
+    private let open: @Sendable (MountRequest) throws -> OpenedVolume
     private let servers = Mutex<[String: LoopbackServer]>([:])
     /// Descriptors handed with a request, closed once their mount is gone.
     private let descriptors = Mutex<[String: Int32]>([:])
+    /// Writers of writable mounts, closed (the volume clean again) once their proxy stopped.
+    private let writers = Mutex<[String: any WritableFileSystem]>([:])
 
     public init(
         runner: any CommandRunning,
         table: any MountTable,
         owner: (uid: UInt32, gid: UInt32),
-        open: @escaping @Sendable (MountRequest) throws -> MountedTree
+        open: @escaping @Sendable (MountRequest) throws -> OpenedVolume
     ) {
         self.runner = runner
         self.table = table
@@ -44,15 +47,27 @@ public final class NFSMountBackend: MountBackend {
             if let descriptor = request.descriptor { close(descriptor) }
             return error
         }
-        let tree: MountedTree
-        do { tree = try open(request) } catch { throw fail(.backend("\(request.source): \(error)")) }
+        let opened: OpenedVolume
+        do { opened = try open(request) } catch { throw fail(.backend("\(request.source): \(error)")) }
+        // Writable only when asked and the writer began; a writer is closed on every way out but a live mount.
+        let writer = request.writable ? opened.writer : nil
+        if writer == nil { try? opened.writer?.close() }
         let export = NFSExport.random()
         let server: LoopbackServer
         do {
-            server = try LoopbackServer(dispatcher: NFSDispatcher(tree: tree, owner: owner, export: export), port: 0)
-        } catch { throw fail(.backend("the proxy did not start: \(error)")) }
+            let dispatcher = NFSDispatcher(tree: opened.tree, owner: owner, export: export, writer: writer)
+            server = try LoopbackServer(dispatcher: dispatcher, port: 0)
+        } catch {
+            try? writer?.close()
+            throw fail(.backend("the proxy did not start: \(error)"))
+        }
         try? FileManager.default.createDirectory(atPath: request.mountPoint, withIntermediateDirectories: true)
-        let command = NFSMountCommand(port: server.port, export: export, mountPoint: request.mountPoint)
+        let command = NFSMountCommand(
+            port: server.port,
+            export: export,
+            mountPoint: request.mountPoint,
+            writable: writer != nil
+        )
         let result = runner.run(command.executable, command.arguments, timeout: Self.mountDeadline)
         let from = "127.0.0.1:\(export.path)"
         guard result.status == 0 else {
@@ -62,10 +77,12 @@ public final class NFSMountBackend: MountBackend {
                 _ = runner.run("/sbin/umount", ["-f", request.mountPoint], timeout: Self.unmountDeadline)
             }
             server.stop()
+            try? writer?.close()
             _ = unsafe rmdir(request.mountPoint)
             throw fail(.backend("mount_nfs exited \(result.status): \(result.output)"))
         }
         servers.withLock { $0[request.id] = server }
+        if let writer { writers.withLock { $0[request.id] = writer } }
         if let descriptor = request.descriptor { descriptors.withLock { $0[request.id] = descriptor } }
         return from
     }
@@ -88,9 +105,11 @@ public final class NFSMountBackend: MountBackend {
         _ = unsafe rmdir(record.mountPoint)  // only if empty, as a mount point left by us is
     }
 
-    /// Stops the record's proxy, then closes the descriptor it read through (never before: the proxy may be mid-read).
+    /// Stops the record's proxy, then closes its writer (the volume clean again) and the descriptor it read through (never
+    /// before: the proxy may be mid-read or mid-write).
     private func release(_ record: MountRecord) {
         servers.withLock { $0.removeValue(forKey: record.id) }?.stop()
+        try? writers.withLock { $0.removeValue(forKey: record.id) }?.close()
         if let descriptor = descriptors.withLock({ $0.removeValue(forKey: record.id) }) { close(descriptor) }
     }
 

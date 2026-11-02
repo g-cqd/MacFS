@@ -20,6 +20,9 @@ public final class ExtFileSystem: ReadOnlyFileSystem {
     /// The volume's free blocks as this session's writes left them (nil until one allocates), written at `close`. Its lock
     /// also makes writes one at a time.
     let freeCounts = Mutex<ExtFreeCounts?>(nil)
+    /// Every change runs alone (roadmap 0046): macOS's NFS client keeps several writes in flight, and two that each read,
+    /// grow and write back one inode lost each other's blocks. No change calls another, so one plain lock.
+    let changeLock = Mutex(())
     let mappings = BoundedCache<UInt64, [ExtRun]>(capacity: 512)
     let listings = BoundedCache<UInt64, [ExtDirectoryBlock.Entry]>(capacity: 256)
 

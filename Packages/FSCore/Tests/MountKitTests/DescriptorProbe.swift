@@ -12,6 +12,12 @@ final class DescriptorProbe {
         descriptor = ends[0]
         writeEnd = ends[1]
         _ = fcntl(writeEnd, F_SETNOSIGPIPE, 1)
+        // Close-on-exec: a process another test spawns meanwhile would otherwise inherit the read end and keep it open.
+        for end in ends { _ = fcntl(end, F_SETFD, FD_CLOEXEC) }
+        // Close-on-exec: a process another test spawns meanwhile would otherwise inherit the read end and keep it open.
+        for end in ends { _ = fcntl(end, F_SETFD, FD_CLOEXEC) }
+        // Close-on-exec: a process another test spawns meanwhile would otherwise inherit the read end and keep it open.
+        for end in ends { _ = fcntl(end, F_SETFD, FD_CLOEXEC) }
     }
 
     var isClosed: Bool {

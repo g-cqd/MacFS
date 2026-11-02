@@ -28,16 +28,17 @@ public final class MountService: Sendable {
 
     public func records() -> [MountRecord] { state.withLock { $0 } }
 
-    /// Mounts `source` with the backend of `kind`. A `descriptor` of the source is handed to the backend, which owns it from
-    /// then on; a request refused before any backend has it closes the descriptor here.
+    /// Mounts `source` with the backend of `kind`, writable only when asked. A `descriptor` of the source is handed to the
+    /// backend, which owns it from then on; a request refused before any backend has it closes the descriptor here.
     public func mount(
         source: String,
         kind: MountBackendKind,
         at mountPoint: String,
-        descriptor: Int32? = nil
+        descriptor: Int32? = nil,
+        writable: Bool = false
     ) throws(MountError) -> MountRecord {
         try state.withLock { (records) throws(MountError) -> MountRecord in
-            try mount(source: source, kind: kind, at: mountPoint, descriptor: descriptor, &records)
+            try mount(source: source, kind: kind, at: mountPoint, descriptor: descriptor, writable: writable, &records)
         }
     }
 
@@ -50,7 +51,14 @@ public final class MountService: Sendable {
         try state.withLock { (records) throws(MountError) -> MountChange in
             guard let old = records.first(where: { $0.id == id }) else { throw .notFound(id) }
             guard old.isRecognized else { throw .unrecognized(id) }
-            let new = try mount(source: old.source, kind: kind, at: mountPoint, descriptor: nil, &records)
+            let new = try mount(
+                source: old.source,
+                kind: kind,
+                at: mountPoint,
+                descriptor: nil,
+                writable: false,
+                &records
+            )
             do {
                 try unmount(id: id, &records)
                 return MountChange(record: new, oldUnmounted: true)
@@ -111,6 +119,7 @@ public final class MountService: Sendable {
         kind: MountBackendKind,
         at path: String,
         descriptor: Int32?,
+        writable: Bool,
         _ records: inout [MountRecord]
     ) throws(MountError) -> MountRecord {
         // Until a backend has it, the descriptor is the service's to close.
@@ -120,7 +129,13 @@ public final class MountService: Sendable {
         }
         guard let backend = backends[kind] else { throw refuse(.noBackend(kind)) }
         let mountPoint = table.canonical(path)
-        let request = MountRequest(id: newID(), source: source, mountPoint: mountPoint, descriptor: descriptor)
+        let request = MountRequest(
+            id: newID(),
+            source: source,
+            mountPoint: mountPoint,
+            descriptor: descriptor,
+            writable: writable
+        )
         if case .unavailable(let reason) = backend.availability(of: request) {
             throw refuse(.unavailable(kind, reason))
         }

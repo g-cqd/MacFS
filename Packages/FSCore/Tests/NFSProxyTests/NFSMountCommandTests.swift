@@ -36,6 +36,20 @@ import Testing
         #expect(options.contains("rsize=131072"))
     }
 
+    /// Writable only when asked (roadmap 0046): read-only by default, and a writable mount writes in the read size.
+    @Test func aWritableMountDropsRdonlyAndWritesInTheReadSize() {
+        #expect(options.contains("rdonly") && !command.writable)
+        let writable = NFSMountCommand(
+            port: 4_049,
+            export: NFSExport(token: Array(0 ..< 24)),
+            mountPoint: "/m",
+            writable: true
+        )
+        let list = writable.options.split(separator: ",").map(String.init)
+        #expect(!list.contains("rdonly"))
+        #expect(list.contains("wsize=131072") && list.contains("soft"))
+    }
+
     /// ADR-0014's numbers: ten seconds before a dead proxy is unmounted, 128 KiB reads.
     @Test func theNumbersAreADR0014s() {
         #expect(NFSMountCommand.deadTimeout == 10)

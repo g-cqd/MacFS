@@ -37,6 +37,8 @@ final class FakeBackend: MountBackend {
         self.unavailable = unavailable
     }
 
+    /// Every request the backend was asked to mount.
+    let requests = Mutex<[MountRequest]>([])
     /// Descriptors the backend was handed, which it owns from then on.
     let descriptors = Mutex<[Int32]>([])
 
@@ -46,6 +48,7 @@ final class FakeBackend: MountBackend {
 
     func mount(_ request: MountRequest) throws(MountError) -> String {
         log.add("mount \(kind) \(request.mountPoint)")
+        requests.withLock { $0.append(request) }
         if let descriptor = request.descriptor { descriptors.withLock { $0.append(descriptor) } }
         duringMount.withLock { $0 }?()
         if failMount.withLock({ $0 }) { throw .backend("\(kind) refused") }

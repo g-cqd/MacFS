@@ -7,11 +7,14 @@ public struct MountRequest: Hashable, Sendable {
     public let source: String
     public let mountPoint: String
     public let descriptor: Int32?
+    /// Whether the user asked for a writable mount (roadmap 0046); a backend still mounts read-only what it cannot write.
+    public let writable: Bool
 
-    public init(id: String, source: String, mountPoint: String, descriptor: Int32? = nil) {
+    public init(id: String, source: String, mountPoint: String, descriptor: Int32? = nil, writable: Bool = false) {
         self.id = id
         self.source = source
         self.mountPoint = mountPoint
         self.descriptor = descriptor
+        self.writable = writable
     }
 }

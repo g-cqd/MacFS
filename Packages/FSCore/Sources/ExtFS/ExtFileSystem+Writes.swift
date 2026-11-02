@@ -28,54 +28,60 @@ extension ExtFileSystem: WritableFileSystem {
     /// maintain, then marks the volume not clean. A mount path calls it at activation, when the mount was not asked to be
     /// read-only. Once only.
     public func beginWriting(on device: any WritableBlockSource) throws(DiskError) {
-        guard writingDevice.withLock({ $0 == nil }), !closed.withLock({ $0 }) else {
-            throw .unsupported("this volume already writes, or was closed")
+        try serialized { () throws(DiskError) in
+            guard writingDevice.withLock({ $0 == nil }), !closed.withLock({ $0 }) else {
+                throw .unsupported("this volume already writes, or was closed")
+            }
+            // A device opened read-only refuses the mount's first write: ``DiskError/readOnly``.
+            let bytes = DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
+            if try bytes.u32(0x5C) & 0x0004 != 0 || superblock.incompat & 0x0004 != 0 {
+                throw .unsupported("writing a volume with a journal (ext3/ext4)")
+            }
+            if superblock.hasMetadataChecksums { throw .unsupported("writing a volume with metadata checksums") }
+            if superblock.incompat & 0x0100 != 0 {
+                throw .unsupported("writing a volume with multiple-mount protection")
+            }
+            let roCompat = try bytes.u32(0x64)
+            let unknown = roCompat & ~Self.writableROCompat
+            guard unknown == 0 else {
+                throw .unsupported("writing a volume with read-only features 0x\(String(unknown, radix: 16))")
+            }
+            let state = try bytes.u16(0x3A)
+            guard state & Self.validState != 0, state & Self.errorState == 0 else {
+                throw .unsupported("writing a volume not cleanly unmounted: run e2fsck")
+            }
+            // The mount: not clean until `close`, one more mount, its time; durable before any change.
+            let mounts = UInt16(truncatingIfNeeded: Int(try bytes.u16(0x34)) + 1)
+            try markSuperblock(on: device, state: state & ~Self.validState, time: 0x2C) {
+                Self.put16(mounts, at: 0x34, in: &$0)
+            }
+            writingDevice.withLock { $0 = device }
         }
-        // A device opened read-only refuses the mount's first write: ``DiskError/readOnly``.
-        let bytes = DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size))
-        if try bytes.u32(0x5C) & 0x0004 != 0 || superblock.incompat & 0x0004 != 0 {
-            throw .unsupported("writing a volume with a journal (ext3/ext4)")
-        }
-        if superblock.hasMetadataChecksums { throw .unsupported("writing a volume with metadata checksums") }
-        if superblock.incompat & 0x0100 != 0 { throw .unsupported("writing a volume with multiple-mount protection") }
-        let roCompat = try bytes.u32(0x64)
-        let unknown = roCompat & ~Self.writableROCompat
-        guard unknown == 0 else {
-            throw .unsupported("writing a volume with read-only features 0x\(String(unknown, radix: 16))")
-        }
-        let state = try bytes.u16(0x3A)
-        guard state & Self.validState != 0, state & Self.errorState == 0 else {
-            throw .unsupported("writing a volume not cleanly unmounted: run e2fsck")
-        }
-        // The mount: not clean until `close`, one more mount, its time; durable before any change.
-        let mounts = UInt16(truncatingIfNeeded: Int(try bytes.u16(0x34)) + 1)
-        try markSuperblock(on: device, state: state & ~Self.validState, time: 0x2C) {
-            Self.put16(mounts, at: 0x34, in: &$0)
-        }
-        writingDevice.withLock { $0 = device }
     }
 
     public func write(_ id: UInt64, at offset: UInt64, _ bytes: [UInt8]) throws(DiskError) {
-        let device = try openDevice()
-        let inode = try regularFile(id, "writing")
-        guard !bytes.isEmpty else { return }
-        let end = offset + UInt64(bytes.count)
-        let blockSize = UInt64(superblock.blockSize)
-        let runs = try runs(inode, through: (end - 1) / blockSize)
-        if end <= inode.size, let pieces = Self.pieces(of: runs, from: offset, to: end, blockSize: blockSize) {
-            for piece in pieces { try device.write(at: piece.at, Array(bytes[piece.from ..< piece.to])) }
-            try touch(inode, on: device)
-            return
-        }
-        try freeCounts.withLock { (free) throws(DiskError) in
-            free = try allocatingWrite(
-                inode,
-                at: offset,
-                bytes,
-                length: UInt64(bytes.count),
-                on: device,
-                free: free ?? initialFreeCounts
-            )
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            let inode = try regularFile(id, "writing")
+            guard !bytes.isEmpty else { return }
+            let end = offset + UInt64(bytes.count)
+            let blockSize = UInt64(superblock.blockSize)
+            let runs = try runs(inode, through: (end - 1) / blockSize)
+            if end <= inode.size, let pieces = Self.pieces(of: runs, from: offset, to: end, blockSize: blockSize) {
+                for piece in pieces { try device.write(at: piece.at, Array(bytes[piece.from ..< piece.to])) }
+                try touch(inode, on: device)
+                return
+            }
+            try freeCounts.withLock { (free) throws(DiskError) in
+                free = try allocatingWrite(
+                    inode,
+                    at: offset,
+                    bytes,
+                    length: UInt64(bytes.count),
+                    on: device,
+                    free: free ?? initialFreeCounts
+                )
+            }
         }
     }
 
@@ -102,24 +108,28 @@ extension ExtFileSystem: WritableFileSystem {
     }
 
     public func synchronize() throws(DiskError) {
-        try openDevice().flush()
+        try serialized { () throws(DiskError) in
+            try openDevice().flush()
+        }
     }
 
     public func close() throws(DiskError) {
-        let device = try openDevice()
-        // Every change durable before the volume says clean.
-        try device.flush()
-        let state = try DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).u16(0x3A)
-        let free = freeCounts.withLock { $0 }
-        let wide = superblock.is64Bit
-        try markSuperblock(on: device, state: state | Self.validState, time: 0x30) { raw in
-            // The free counts the session's changes left, as Linux writes them: lazily, at the unmount.
-            guard let free else { return }
-            Self.put32(UInt32(truncatingIfNeeded: free.blocks), at: 0x0C, in: &raw)
-            if wide { Self.put32(UInt32(truncatingIfNeeded: free.blocks >> 32), at: 0x158, in: &raw) }
-            Self.put32(free.inodes, at: 0x10, in: &raw)
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            // Every change durable before the volume says clean.
+            try device.flush()
+            let state = try DiskBytes(try device.read(at: ExtSuperblock.offset, count: ExtSuperblock.size)).u16(0x3A)
+            let free = freeCounts.withLock { $0 }
+            let wide = superblock.is64Bit
+            try markSuperblock(on: device, state: state | Self.validState, time: 0x30) { raw in
+                // The free counts the session's changes left, as Linux writes them: lazily, at the unmount.
+                guard let free else { return }
+                Self.put32(UInt32(truncatingIfNeeded: free.blocks), at: 0x0C, in: &raw)
+                if wide { Self.put32(UInt32(truncatingIfNeeded: free.blocks >> 32), at: 0x158, in: &raw) }
+                Self.put32(free.inodes, at: 0x10, in: &raw)
+            }
+            closed.withLock { $0 = true }
         }
-        closed.withLock { $0 = true }
     }
 
     /// The superblock with `s_state` set to `state` and the time at `time` (`s_mtime` at the mount, `s_wtime` at the unmount),

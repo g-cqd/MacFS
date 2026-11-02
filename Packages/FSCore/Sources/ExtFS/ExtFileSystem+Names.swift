@@ -15,8 +15,12 @@ extension ExtFileSystem {
         mode: UInt16,
         owner: (uid: UInt32, gid: UInt32)
     ) throws(DiskError) -> UInt64 {
-        guard kind == .regular || kind == .directory else { throw .unsupported("creating a \(kind) (a later slice)") }
-        return try makeNode(name, kind: kind, in: directory, mode: mode, owner: owner, target: [])
+        try serialized { () throws(DiskError) -> UInt64 in
+            guard kind == .regular || kind == .directory else {
+                throw .unsupported("creating a \(kind) (a later slice)")
+            }
+            return try makeNode(name, kind: kind, in: directory, mode: mode, owner: owner, target: [])
+        }
     }
 
     public func createSymlink(
@@ -25,9 +29,11 @@ extension ExtFileSystem {
         in directory: UInt64,
         owner: (uid: UInt32, gid: UInt32)
     ) throws(DiskError) -> UInt64 {
-        guard !target.isEmpty, !target.contains(0) else { throw .invalidName }
-        guard target.count < superblock.blockSize else { throw .nameTooLong }
-        return try makeNode(name, kind: .symlink, in: directory, mode: 0o777, owner: owner, target: target)
+        try serialized { () throws(DiskError) -> UInt64 in
+            guard !target.isEmpty, !target.contains(0) else { throw .invalidName }
+            guard target.count < superblock.blockSize else { throw .nameTooLong }
+            return try makeNode(name, kind: .symlink, in: directory, mode: 0o777, owner: owner, target: target)
+        }
     }
 
     /// A file, a directory or a symbolic link (to `target`) made and named.
@@ -95,16 +101,12 @@ extension ExtFileSystem {
     }
 
     public func remove(_ name: [UInt8], from directory: UInt64) throws(DiskError) {
-        let device = try openDevice()
-        try Self.validate(name)
-        let parent = try changeableDirectory(directory)
-        let entry = try lookup(name, in: directory)
-        let target = try inode(entry.id)
-        let isDirectory = target.kind == .directory
-        if isDirectory, !(try listing(entry.id).isEmpty) { throw .notEmpty }
-        guard target.xattrBlock == 0 else { throw .unsupported("removing a node with an extended-attribute block") }
-        try freeCounts.withLock { (free) throws(DiskError) in
-            var allocation = try allocation(for: parent, on: device, free: free ?? initialFreeCounts)
+        try changingName(name, in: directory) { (device, parent, allocation) throws(DiskError) in
+            let entry = try lookup(name, in: directory)
+            let target = try inode(entry.id)
+            let isDirectory = target.kind == .directory
+            if isDirectory, !(try listing(entry.id).isEmpty) { throw .notEmpty }
+            guard target.xattrBlock == 0 else { throw .unsupported("removing a node with an extended-attribute block") }
             let blockSize = UInt64(superblock.blockSize)
             // Phase one: the node loses this name, and goes once it has none.
             try giveUp(target, allocation: &allocation, on: device)
@@ -119,7 +121,9 @@ extension ExtFileSystem {
                     break
                 }
             }
-            guard let (block, bytes) = removed else { throw .corrupt("\(directory): the name found is in no block") }
+            guard let (block, bytes) = removed else {
+                throw .corrupt("\(directory): the name found is in no block")
+            }
             try device.write(at: block * blockSize, bytes)
             try touch(parent, on: device) { raw in
                 if isDirectory { Self.put16(parent.linkCount - 1, at: 0x1A, in: &raw) }
@@ -127,7 +131,25 @@ extension ExtFileSystem {
             forget(allocation, directory: directory, block: block)
             listings.invalidate(entry.id)
             mappings.invalidate(entry.id)
-            free = allocation.free
+        }
+    }
+
+    /// A change to a name in `directory`, alone: the device, the name checked, the directory, and an allocation over the free
+    /// counts, which keep what it left once `body` returns.
+    func changingName(
+        _ name: [UInt8],
+        in directory: UInt64,
+        _ body: (any WritableBlockSource, ExtInode, inout ExtAllocation) throws(DiskError) -> Void
+    ) throws(DiskError) {
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            try Self.validate(name)
+            let parent = try changeableDirectory(directory)
+            try freeCounts.withLock { (free) throws(DiskError) in
+                var allocation = try allocation(for: parent, on: device, free: free ?? initialFreeCounts)
+                try body(device, parent, &allocation)
+                free = allocation.free
+            }
         }
     }
 

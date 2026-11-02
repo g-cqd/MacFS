@@ -45,6 +45,13 @@ import Testing
         #expect(store.records.withLock { $0 } == [record])
     }
 
+    /// Writable only when asked (roadmap 0046): the request carries the opt-in to the backend, read-only by default.
+    @Test func theWritableOptInReachesTheBackend() throws {
+        _ = try service.mount(source: "/i/a.img", kind: .nfs, at: "/m/a")
+        _ = try service.mount(source: "/i/b.img", kind: .nfs, at: "/m/b", writable: true)
+        #expect(nfs.requests.withLock { $0.map(\.writable) } == [false, true])
+    }
+
     @Test func aFailedMountLeavesNoRecord() throws {
         nfs.failMount.withLock { $0 = true }
         #expect(throws: MountError.backend("nfs refused")) {

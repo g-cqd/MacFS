@@ -13,31 +13,35 @@ extension ExtFileSystem {
         to newName: [UInt8],
         in newDirectory: UInt64
     ) throws(DiskError) {
-        let device = try openDevice()
-        try Self.validate(name)
-        try Self.validate(newName)
-        let source = try changeableDirectory(directory)
-        let target = newDirectory == directory ? source : try changeableDirectory(newDirectory)
-        let moving = try inode(try lookup(name, in: directory).id)
-        let existing = try? lookup(newName, in: newDirectory)
-        // Onto itself, or onto another name of the same node: nothing to do (POSIX).
-        if existing?.id == moving.number { return }
-        let replaced = try existing.map { (entry) throws(DiskError) -> ExtInode in try replaceable(entry, by: moving) }
-        if moving.kind == .directory, newDirectory != directory { try requireOutside(moving.number, newDirectory) }
-        if newDirectory == directory, replaced == nil,
-            try renameInOneBlock(name, to: newName, moving: moving, in: source, on: device)
-        {
-            return
+        try serialized { () throws(DiskError) in
+            let device = try openDevice()
+            try Self.validate(name)
+            try Self.validate(newName)
+            let source = try changeableDirectory(directory)
+            let target = newDirectory == directory ? source : try changeableDirectory(newDirectory)
+            let moving = try inode(try lookup(name, in: directory).id)
+            let existing = try? lookup(newName, in: newDirectory)
+            // Onto itself, or onto another name of the same node: nothing to do (POSIX).
+            if existing?.id == moving.number { return }
+            let replaced = try existing.map { (entry) throws(DiskError) -> ExtInode in
+                try replaceable(entry, by: moving)
+            }
+            if moving.kind == .directory, newDirectory != directory { try requireOutside(moving.number, newDirectory) }
+            if newDirectory == directory, replaced == nil,
+                try renameInOneBlock(name, to: newName, moving: moving, in: source, on: device)
+            {
+                return
+            }
+            let move = Move(
+                name: name,
+                newName: newName,
+                moving: moving,
+                source: source,
+                target: target,
+                replaced: replaced
+            )
+            try renameInPhases(move, on: device)
         }
-        let move = Move(
-            name: name,
-            newName: newName,
-            moving: moving,
-            source: source,
-            target: target,
-            replaced: replaced
-        )
-        try renameInPhases(move, on: device)
     }
 
     /// What a phased rename changes.
@@ -158,21 +162,23 @@ extension ExtFileSystem {
     }
 
     public func link(_ id: UInt64, as name: [UInt8], in directory: UInt64) throws(DiskError) {
-        let device = try openDevice()
-        try Self.validate(name)
-        let parent = try changeableDirectory(directory)
-        let node = try inode(id)
-        guard node.kind != .directory else { throw .isDirectory }
-        if (try? lookup(name, in: directory)) != nil { throw .exists }
-        guard node.linkCount < 32_000 else { throw .unsupported("a node with 32000 links") }
-        try freeCounts.withLock { (free) throws(DiskError) in
-            var allocation = try allocation(for: parent, on: device, free: free ?? initialFreeCounts)
+        try changingName(name, in: directory) { (device, parent, allocation) throws(DiskError) in
+            let node = try inode(id)
+            guard node.kind != .directory else { throw .isDirectory }
+            if (try? lookup(name, in: directory)) != nil { throw .exists }
+            guard node.linkCount < 32_000 else { throw .unsupported("a node with 32000 links") }
             // The count first: a crash before the name leaves one too many, which preen counts again.
             try setLinks(node, by: 1, on: device)
             try device.flush()
-            let block = try addName(name, inode: id, kind: node.kind, in: parent, allocation: &allocation, on: device)
+            let block = try addName(
+                name,
+                inode: id,
+                kind: node.kind,
+                in: parent,
+                allocation: &allocation,
+                on: device
+            )
             forget(allocation, directory: directory, block: block)
-            free = allocation.free
         }
     }
 
