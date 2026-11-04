@@ -21,7 +21,7 @@ TLA+), with decision 6 replaced:
 
 6. **Proxy mounts belong to a sandboxed launch agent**, `macfs-agent` in `Contents/MacOS`, registered by the app with
    `SMAppService.agent` from `Contents/Library/LaunchAgents`. Its entitlements: the App Sandbox, network server and client
-   (loopback), the app's group. It is reached over XPC at `NP94WB3P75.dev.gcqd.MacFS.agent`; both ends require a peer of the same
+   (loopback), the app's group. It is reached over XPC at `<team-id>.dev.gcqd.MacFS.agent`; both ends require a peer of the same
    team. The app opens the image the user chose and sends its descriptor; the agent reads through it and never opens the path.
    Its registry and its mount points live in its container (`~/Library/Containers/dev.gcqd.MacFS.agent`).
 

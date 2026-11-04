@@ -15,7 +15,7 @@ pane reports the agent's registration and approval like the modules'.
 
 Built, red first: the protocol in `MountAgent` (protobuf `AgentRequest`/`AgentReply`, `AgentDispatcher` over `MountService`,
 `AgentClient` over any byte transport; unknown operations refused by number, every `MountError` crossing intact), and
-`macfs-agent`: an `XPCListener` on `NP94WB3P75.dev.gcqd.MacFS.agent` (the app group as prefix, which a sandboxed app may look up)
+`macfs-agent`: an `XPCListener` on `<team-id>.dev.gcqd.MacFS.agent` (the app group as prefix, which a sandboxed app may look up)
 that accepts only peers of the same team, sweeping its registry at start, and a `call` client. Checked live through launchd: a mount
 outlives the client that asked for it; an ad-hoc-signed client is refused; after `kill -9` the next call starts a new agent whose
 sweep unmounts the dead proxy's mount.

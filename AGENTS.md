@@ -157,7 +157,7 @@ documentation law and one type per file under 250 lines. Accept a finding where 
   `--result FILE` atomically and the caller waits for the file (`AppLaunch`).
 - **One owner per registry**: a sweep unmounts what its own process does not serve. The agent uses `registry.pb`,
   `macfs-nfsd --mount` uses `registry-cli.pb`.
-- **The agent answers only binaries of team NP94WB3P75** (`isFromSameTeam`, both ways). The local Apple Development identities
+- **The agent answers only binaries of team <team-id>** (`isFromSameTeam`, both ways). The local Apple Development identities
   "cannot be used for signing code"; sign test binaries with the Developer ID identity. An unsigned or ad-hoc agent has no team,
   so every connection is interrupted.
 - **Hand-written TLA+ goes in `Gates.specifications`**, beside the modeler-generated `modelledTypes`.
