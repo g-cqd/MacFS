@@ -1,12 +1,12 @@
 {
-  "originHash" : "00aa464044a698c7ef9dbc6c05518515224c46ea1af7bf88e91e77214645f088",
+  "originHash" : "58d0a52f3389bebce9092deae1d09a1031cd772cba4a503e6b8b415583f6d20a",
   "pins" : [
     {
       "identity" : "aemi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Aemi-Studio/aemi.git",
       "state" : {
-        "revision" : "8475434abab0493d9bda746f78e33087899391c3"
+        "revision" : "e30aad82377cbea62171cc722a88041e97021db2"
       }
     },
     {
@@ -14,7 +14,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiJSON.git",
       "state" : {
-        "revision" : "1a79d011bc9def418e6f64ab74191465e4062348"
+        "revision" : "aec8895f1bc9bdaf2104b0d0ebe91e4a93b3c374"
       }
     },
     {
@@ -22,7 +22,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiProtobuf.git",
       "state" : {
-        "revision" : "7b7dbc551b4d8289640fb8b4d6870c698232cbba"
+        "revision" : "4492e961a533d46783ff7b433b075451856055af"
       }
     },
     {
@@ -30,7 +30,16 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
       "state" : {
-        "revision" : "15003076346975031fe2974fb4c3c496265c80a4"
+        "revision" : "e07516ddd7ea3bcedd055dfe66f67ffb06fb5a82"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
       }
     },
     {
@@ -40,6 +49,15 @@
       "state" : {
         "revision" : "f96b909e1a9e469620bc5037c1e24e00153f376f",
         "version" : "1.7.5"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "f8fad2f95ad67b45f6340c0960e2396094d67e07",
+        "version" : "5.1.1"
       }
     },
     {
