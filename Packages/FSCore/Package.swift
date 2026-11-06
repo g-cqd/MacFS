@@ -44,16 +44,16 @@ let package = Package(
     ],
     dependencies: [
         // Pinned to one revision, the one AemiRegex pins (ADR-0004).
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "409c647a91736065ac53c1877abe2cf4840f7617"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "0bae2edb1a89bd3d931fb3122c2184cc5c368834"),
         // The mount registry's and the agent's encoding (ADR-0015); it pins the same aemi.
         .package(
             url: "https://github.com/g-cqd/AemiProtobuf.git",
-            revision: "ef41c42b6114419933ceb32040735241e9769de7"
+            revision: "fca129de94fa8a131ca2cddcbd47765c060dc467"
         ),
         // The agent's commands: deadlines, process-group teardown, bounded output (ADR-0017). Exact, like the pins above.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.2"),
         // The tests' recorded fixtures: the revision AemiProtobuf pins.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "8b7bfe373d2b36dbfe8e7ec068478b1aea65b12a")
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "5aa84e0eca14c344f4fc0b313dbb907dc1446b9e")
     ],
     targets: [
         // The format-specific kernels (NTFS fixups, LZNT1) in arm64 assembly, with portable C versions that double as the
